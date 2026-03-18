@@ -256,6 +256,19 @@ a{color:var(--accent);text-decoration:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 .gen-text{font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--accent);letter-spacing:1px}
 .gen-sub{font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--muted)}
+
+/* Grade Book */
+.grade-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.grade-table th{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:8px 12px;border-bottom:2px solid var(--border);text-align:left;white-space:nowrap}
+.grade-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.grade-table tr:hover td{background:rgba(255,255,255,.02)}
+.grade-pill{font-family:'IBM Plex Mono',monospace;font-size:.7rem;font-weight:600;padding:3px 9px;border-radius:12px;display:inline-block}
+.grade-a{background:rgba(58,170,102,.15);color:var(--cl);border:1px solid var(--correct)}
+.grade-b{background:rgba(74,158,255,.13);color:var(--blue);border:1px solid rgba(74,158,255,.3)}
+.grade-c{background:rgba(240,165,0,.12);color:var(--accent);border:1px solid rgba(240,165,0,.3)}
+.grade-f{background:rgba(204,68,68,.12);color:var(--wl);border:1px solid var(--wrong)}
+.expiry-warn{font-family:'IBM Plex Mono',monospace;font-size:.58rem;color:var(--wl)}
+.expiry-ok{font-family:'IBM Plex Mono',monospace;font-size:.58rem;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -418,6 +431,18 @@ a{color:var(--accent);text-decoration:none}
         <div class="stat-box"><div class="stat-val" id="cdpAvg">—</div><div class="stat-lbl">Avg Score</div></div>
       </div>
       <div id="cdProgressList"><div class="empty-state">Select a quiz to view progress.</div></div>
+
+      <!-- GRADE BOOK -->
+      <div class="card" style="margin-top:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:.63rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent)">
+            📊 Grade Book — Completed Scores (retained 100 days)
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="exportGrades()">Export CSV</button>
+        </div>
+        <div id="gradeBook"><div class="empty-state">Select a quiz to view grades.</div></div>
+      </div>
+
       <div class="card" style="margin-top:16px">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:.63rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px"><span class="live-dot"></span>Activity Feed</div>
         <div class="feed" id="cdFeed"><div class="empty-state">No activity yet.</div></div>
@@ -651,15 +676,24 @@ async function doEmailAuth(){
   if(!email || !password){ showErr(errEl,'Please fill in all fields.'); return; }
 
   try{
+    let u;
     if(authMode === 'login'){
-      await auth.signInWithEmailAndPassword(email, password);
+      const cred = await auth.signInWithEmailAndPassword(email, password);
+      u = cred.user;
     } else {
       const name = document.getElementById('authDisplayName').value.trim();
       if(!name){ showErr(errEl,'Please enter your name.'); return; }
       const cred = await auth.createUserWithEmailAndPassword(email, password);
       await cred.user.updateProfile({ displayName: name });
       await dbSet(`instructors/${cred.user.uid}`, { name, email, createdAt: ts() });
+      u = cred.user;
     }
+    // Directly transition after sign-in
+    instUser = u;
+    instProfile = (await dbGet(`instructors/${u.uid}`)) || { name: u.displayName||u.email, email: u.email };
+    hideAll();
+    show('instApp');
+    initInstApp();
   } catch(e){
     showErr(errEl, friendlyAuthError(e.code));
   }
@@ -682,9 +716,16 @@ async function doOAuthSignIn(provider){
     if(!existing){
       await dbSet(`instructors/${u.uid}`, { name: u.displayName||u.email, email: u.email, createdAt: ts() });
     }
+    // Directly transition — don't wait for onAuthStateChanged
+    instUser = u;
+    instProfile = (await dbGet(`instructors/${u.uid}`)) || { name: u.displayName||u.email, email: u.email };
+    hideAll();
+    show('instApp');
+    initInstApp();
   } catch(e){
     const errEl = document.getElementById('authErr');
-    showErr(errEl, friendlyAuthError(e.code));
+    if(errEl) showErr(errEl, friendlyAuthError(e.code));
+    console.error('OAuth error:', e);
   }
 }
 
@@ -708,12 +749,20 @@ function doSignOut(){
   showLanding();
 }
 
-// Listen for auth state
+// Listen for auth state — fires on page load AND after sign-in
 auth.onAuthStateChanged(async user => {
-  if(user && document.getElementById('instAuthScreen') && !document.getElementById('instAuthScreen').classList.contains('hidden')){
+  if(user){
+    // Already in the instructor app — do nothing (prevents re-init on tab switch)
+    if(!document.getElementById('instApp').classList.contains('hidden')) return;
+    // Student session active — do nothing
+    if(stuSession) return;
     instUser = user;
     const profile = await dbGet(`instructors/${user.uid}`);
     instProfile = profile || { name: user.displayName || user.email, email: user.email };
+    // Ensure profile saved for new OAuth users
+    if(!profile){
+      await dbSet(`instructors/${user.uid}`, { name: user.displayName||user.email, email: user.email, createdAt: ts() });
+    }
     hideAll();
     show('instApp');
     initInstApp();
@@ -1317,6 +1366,7 @@ async function loadClassroomProgress(){
     document.getElementById('cdpDone').textContent = done.length;
     document.getElementById('cdpAvg').textContent = avg!==null?avg+'%':'—';
     renderStudentProgressList(students, 'cdProgressList');
+    renderGradeBook(students, quizId);
   });
 
   // Feed
@@ -1326,6 +1376,87 @@ async function loadClassroomProgress(){
     const events = Object.values(data).filter(e=>!e.classroomId||e.classroomId===selectedClassId).sort((a,b)=>new Date(b.time)-new Date(a.time));
     renderFeedList(events, 'cdFeed');
   });
+}
+
+function renderGradeBook(students, quizId){
+  const el = document.getElementById('gradeBook');
+  if(!el) return;
+  const finished = students.filter(s => s.finished);
+  if(!finished.length){
+    el.innerHTML = '<div class="empty-state">No completed grades yet. Grades will appear here when students finish the quiz.</div>';
+    return;
+  }
+
+  // Sort by score descending
+  finished.sort((a,b) => (b.correctCount/b.totalCount) - (a.correctCount/a.totalCount));
+
+  // Store for CSV export
+  window._currentGrades = { students: finished, quizId };
+
+  const rows = finished.map(s => {
+    const pct = Math.round((s.correctCount / s.totalCount) * 100);
+    const grade = pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
+    const gradeClass = pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
+
+    // Expiry info
+    let expiryHtml = '';
+    if(s.expiresAt){
+      const daysLeft = Math.ceil((new Date(s.expiresAt) - Date.now()) / (1000*60*60*24));
+      if(daysLeft <= 14){
+        expiryHtml = `<div class="expiry-warn">⚠ Expires in ${daysLeft}d</div>`;
+      } else {
+        expiryHtml = `<div class="expiry-ok">Expires in ${daysLeft}d</div>`;
+      }
+    } else {
+      expiryHtml = `<div class="expiry-ok">Retained 100 days</div>`;
+    }
+
+    return `<tr>
+      <td style="font-weight:600">${esc(s.name)}</td>
+      <td style="font-family:'IBM Plex Mono',monospace">${s.correctCount} / ${s.totalCount}</td>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;max-width:120px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div>
+        </div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:.72rem">${pct}%</span>
+      </div></td>
+      <td><span class="grade-pill ${gradeClass}">${grade}</span></td>
+      <td>${s.finishedAt ? fmtDate(s.finishedAt) : '—'}</td>
+      <td>${expiryHtml}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<table class="grade-table">
+    <thead><tr>
+      <th>Student</th><th>Score</th><th>Percent</th><th>Grade</th><th>Completed</th><th>Record Expires</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function exportGrades(){
+  if(!window._currentGrades || !window._currentGrades.students.length){
+    alert('No grades to export yet.'); return;
+  }
+  const { students } = window._currentGrades;
+  const lines = ['Student,Score,Total,Percent,Grade,Completed,Expires'];
+  students.forEach(s => {
+    const pct = Math.round((s.correctCount/s.totalCount)*100);
+    const grade = pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
+    const completed = s.finishedAt ? new Date(s.finishedAt).toLocaleDateString() : '';
+    const expires = s.expiresAt ? new Date(s.expiresAt).toLocaleDateString() : '100 days from completion';
+    lines.push(`"${s.name}",${s.correctCount},${s.totalCount},${pct}%,${grade},"${completed}","${expires}"`);
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'quiz_grades.csv';
+  a.click();
+}
+
+function fmtDate(iso){
+  if(!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 }
 
 function renderStudentProgressList(students, elId){
@@ -1579,9 +1710,16 @@ async function stuSaveProgress(finishing=false){
   const existing = await dbGet(`quizProgress/${stuSession.classroomId}/${activeQuiz.id}/${stuKey}`);
   const wasFinished = existing?.finished||false;
 
+  // Calculate 100-day expiry when quiz is first finished
+  const finishedTime = finished ? (existing?.finishedAt || ts()) : null;
+  const expiresAt = (finished && !existing?.expiresAt)
+    ? new Date(Date.now() + 100*24*60*60*1000).toISOString()
+    : (existing?.expiresAt || null);
+
   await dbUpdate(`quizProgress/${stuSession.classroomId}/${activeQuiz.id}/${stuKey}`, {
     answeredCount:answered, correctCount:correct, totalCount:TQ,
-    finished, finishedAt:finished?(existing?.finishedAt||ts()):null,
+    finished, finishedAt:finishedTime,
+    expiresAt,
     lastActive:ts(), answers:stuAnswers.map(a=>a===null?-1:a), lastQuestion:stuCur,
     classroomId:stuSession.classroomId
   });
