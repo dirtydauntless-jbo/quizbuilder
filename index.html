@@ -490,10 +490,7 @@ a{color:var(--accent);text-decoration:none}
     <div id="cd-tab-progress" class="tab-pane" style="padding:20px 22px">
       <div style="margin-bottom:14px">
         <label class="label">Select Quiz</label>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <select class="select" id="cdProgressQuizPicker" onchange="loadClassroomProgress()" style="max-width:320px"></select>
-          <button class="btn btn-ghost btn-sm" onclick="grantRetakeAll(selectedClassId, window._currentProgressQuizId)" title="Allow all students to retake the selected quiz" style="white-space:nowrap">Allow All Retake</button>
-        </div>
+        <select class="select" id="cdProgressQuizPicker" onchange="loadClassroomProgress()" style="max-width:360px"></select>
       </div>
       <div class="stats-row" style="margin-bottom:16px">
         <div class="stat-box"><div class="stat-val" id="cdpTotal">0</div><div class="stat-lbl">Students</div></div>
@@ -506,10 +503,17 @@ a{color:var(--accent);text-decoration:none}
       <!-- GRADE BOOK -->
       <div class="card" style="margin-top:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:.63rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent)">
-            📊 Grade Book -- Completed Scores (retained 100 days)
+                    <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:.8rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent)">Grade Book</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:2px">Scores, progress, and retake controls for all students</div>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="exportGrades()">Export CSV</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="grantRetakeAll(selectedClassId,window._currentProgressQuizId)" style="white-space:nowrap">Allow All Retake</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportGrades()">Export CSV</button>
+          </div>
+        </div>
         </div>
         <div id="gradeBook"><div class="empty-state">Select a quiz to view grades.</div></div>
       </div>
@@ -1238,9 +1242,17 @@ async function loadClassroomStudents(classId){
   window._stuMap = window._stuMap || {};
   students.forEach(s => { window._stuMap[safeKey(s.name)] = s; });
 
+  // Use uid as key if available, otherwise name-based key
+  const allData = data; // keep raw object for uid-keyed removal
   el.innerHTML = students.map(s => {
-    const stuMapKey = safeKey(s.name);
-    const initials = s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    const displayName = s.name || s.email || 'Unknown';
+    const stuMapKey = safeKey(displayName);
+    // Store by both name key and uid for lookup
+    window._stuMap[stuMapKey] = s;
+    if(s.uid) window._stuMap[s.uid] = s;
+    // The Firebase record key (for deletion) is uid or name-based
+    const firebaseKey = Object.keys(allData).find(k => allData[k] === s) || stuMapKey;
+    const initials = displayName.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
     return `<div class="student-row"
         style="cursor:pointer;border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:8px;background:var(--bg);transition:border-color .2s"
         onmouseover="this.style.borderColor='var(--accent)'"
@@ -1248,11 +1260,18 @@ async function loadClassroomStudents(classId){
         onclick="openStudentProfileByKey('${stuMapKey}', '${classId}')">
       <div class="stu-avatar" style="background:rgba(74,158,255,.15);color:var(--blue)">${esc(initials)}</div>
       <div class="stu-info" style="flex:1">
-        <div class="stu-name">${esc(s.name)}</div>
+        <div class="stu-name">${esc(displayName)}</div>
         <div class="stu-meta">${s.email ? esc(s.email)+' . ' : ''}Joined ${fmtTime(s.joinedAt)}</div>
       </div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--accent);background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.25);border-radius:3px;padding:5px 12px;flex-shrink:0">
-        View Profile ->
+      <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:var(--accent);background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.25);border-radius:3px;padding:5px 10px">
+          View Profile
+        </div>
+        <button class="btn btn-danger btn-sm" style="font-size:.65rem;padding:5px 9px"
+          onclick="event.stopPropagation();removeStudentFromClass('${classId}','${firebaseKey}','${esc(displayName)}')"
+          title="Remove student from classroom">
+          Remove
+        </button>
       </div>
     </div>`;
   }).join('');
@@ -1263,6 +1282,15 @@ async function openStudentProfileByKey(stuKey, classId){
   const student = window._stuMap && window._stuMap[stuKey];
   if(!student){ console.error('Student not found in map:', stuKey); return; }
   await openStudentProfile(student, classId);
+}
+
+async function removeStudentFromClass(classId, studentKey, studentName){
+  if(!confirm(`Remove ${studentName} from this classroom? Their quiz progress will be kept but they will no longer appear in the student list.`)) return;
+  await dbSet(`classroomStudents/${classId}/${studentKey}`, null);
+  // Update student count
+  const remaining = await dbGet(`classroomStudents/${classId}`) || {};
+  document.getElementById('cdStudentCount').textContent = Object.keys(remaining).length;
+  loadClassroomStudents(classId);
 }
 
 async function loadAssignedQuizzes(classId){
@@ -1930,54 +1958,83 @@ async function loadClassroomProgress(){
 function renderGradeBook(students, quizId){
   const el = document.getElementById('gradeBook');
   if(!el) return;
-  const finished = students.filter(s => s.finished);
-  if(!finished.length){
-    el.innerHTML = '<div class="empty-state">No completed grades yet. Grades will appear here when students finish the quiz.</div>';
+  if(!students || !students.length){
+    el.innerHTML = '<div class="empty-state">No student activity yet. Students will appear here once they start the quiz.</div>';
     return;
   }
 
-  // Sort by score descending
-  finished.sort((a,b) => (b.correctCount/b.totalCount) - (a.correctCount/a.totalCount));
-
-  // Store for CSV export
-  window._currentGrades = { students: finished, quizId };
-
-  const rows = finished.map(s => {
-    const pct = Math.round((s.correctCount / s.totalCount) * 100);
-    const grade = pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
-    const gradeClass = pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
-
-    // Expiry info
-    let expiryHtml = '';
-    if(s.expiresAt){
-      const daysLeft = Math.ceil((new Date(s.expiresAt) - Date.now()) / (1000*60*60*24));
-      if(daysLeft <= 14){
-        expiryHtml = `<div class="expiry-warn">! Expires in ${daysLeft}d</div>`;
-      } else {
-        expiryHtml = `<div class="expiry-ok">Expires in ${daysLeft}d</div>`;
-      }
-    } else {
-      expiryHtml = `<div class="expiry-ok">Retained 100 days</div>`;
+  // Sort: finished (best score first), then in-progress, then not started
+  const sorted = [...students].sort((a,b)=>{
+    if(a.finished && b.finished){
+      const tot = x => x.totalCount||x.answeredCount||1;
+      return (b.correctCount/tot(b)) - (a.correctCount/tot(a));
     }
+    if(a.finished) return -1;
+    if(b.finished) return 1;
+    return (b.answeredCount||0) - (a.answeredCount||0);
+  });
 
-    return `<tr>
-      <td style="font-weight:600">${esc(s.name)}</td>
-      <td style="font-family:'IBM Plex Mono',monospace">${s.correctCount} / ${s.totalCount}</td>
-      <td><div style="display:flex;align-items:center;gap:8px">
-        <div style="flex:1;max-width:120px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div>
-        </div>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:.72rem">${pct}%</span>
-      </div></td>
-      <td><span class="grade-pill ${gradeClass}">${grade}</span></td>
-      <td>${s.finishedAt ? fmtDate(s.finishedAt) : '--'}</td>
-      <td>${expiryHtml}</td>
-    </tr>`;
+  // Store finished for CSV
+  window._currentGrades = { students: sorted.filter(s=>s.finished), quizId };
+
+  const rows = sorted.map(s => {
+    const name = s.name || s.uid || 'Unknown';
+    const tot = s.totalCount || s.answeredCount || 1;
+    const stuKey = s.uid || safeKey(name);
+
+    if(s.finished){
+      const pct = Math.round((s.correctCount/tot)*100);
+      const grade = pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
+      const gradeClass = pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
+      const daysLeft = s.expiresAt ? Math.ceil((new Date(s.expiresAt)-Date.now())/(864e5)) : null;
+      return `<tr>
+        <td style="font-weight:600;font-size:.9rem">${esc(name)}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:${pct>=70?'var(--cl)':'var(--wl)'}">${s.correctCount}/${tot}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div>
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:.75rem">${pct}%</span>
+          </div>
+        </td>
+        <td><span class="grade-pill ${gradeClass}">${grade}</span></td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:.75rem">${s.finishedAt?fmtDate(s.finishedAt):'--'}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:${daysLeft&&daysLeft<=14?'var(--wl)':'var(--muted)'}">${daysLeft?daysLeft+'d left':'100 days'}</td>
+        <td><button class="btn btn-sm" style="font-size:.65rem;padding:3px 8px;background:rgba(240,165,0,.1);color:var(--accent);border:1px solid rgba(240,165,0,.3);white-space:nowrap" onclick="grantRetake('${selectedClassId||''}','${stuKey}','${esc(name)}')">Allow Retake</button></td>
+      </tr>`;
+    } else if(s.answeredCount > 0){
+      const prog = Math.round((s.answeredCount/tot)*100);
+      return `<tr style="opacity:.75">
+        <td style="font-weight:600;font-size:.9rem">${esc(name)}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;color:var(--accent)">In Progress</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${prog}%;background:var(--accent)"></div>
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:.75rem">${prog}%</span>
+          </div>
+        </td>
+        <td colspan="4" style="font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:var(--muted)">Q${s.answeredCount} of ${tot} answered</td>
+      </tr>`;
+    } else {
+      return `<tr style="opacity:.45">
+        <td style="font-weight:600;font-size:.9rem">${esc(name)}</td>
+        <td colspan="6" style="font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:var(--muted)">Not started</td>
+      </tr>`;
+    }
   }).join('');
 
   el.innerHTML = `<table class="grade-table">
     <thead><tr>
-      <th>Student</th><th>Score</th><th>Percent</th><th>Grade</th><th>Completed</th><th>Record Expires</th>
+      <th>Student</th>
+      <th>Score</th>
+      <th>Percent</th>
+      <th>Grade</th>
+      <th>Completed</th>
+      <th>Expires</th>
+      <th>Retake</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -2010,27 +2067,51 @@ function fmtDate(iso){
 
 function renderStudentProgressList(students, elId){
   const el = document.getElementById(elId);
-  if(!students.length){ el.innerHTML='<div class="empty-state">No students have started this quiz yet.</div>'; return; }
-  el.innerHTML = students.map(s=>{
-    const total = s.totalCount || s.answeredCount || 1;
-    const pct = Math.round((s.answeredCount/total)*100);
-    const acc = s.answeredCount>0 ? Math.round((s.correctCount/s.answeredCount)*100) : null;
-    const initials = s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-    let dc,bc,bt,barC;
-    if(s.finished){dc='sdot-done';bc='sb-done';barC='var(--cl)';bt=`${s.correctCount}/${s.totalCount||s.answeredCount||1} . ${Math.round(s.correctCount/(s.totalCount||s.answeredCount||1)*100)}%`;}
-    else if(s.answeredCount>0){dc='sdot-prog';bc='sb-prog';barC='var(--accent)';bt=`Q${s.answeredCount+1}/${s.totalCount}`;}
-    else{dc='sdot-wait';bc='sb-wait';barC='var(--muted)';bt='Not started';}
-    const stuRowKey = s.uid || safeKey(s.name);
-    return `<div class="student-row">
-      <div class="stu-avatar">${esc(initials)}</div>
-      <div class="stu-info"><div class="stu-name"><span class="sdot ${dc}"></span>${esc(s.name)}</div>
-        <div class="stu-meta">Joined ${fmtTime(s.joinedAt)}${acc!==null?` . ${acc}% accuracy`:''}</div></div>
-      <div class="stu-prog">
-        <div class="stu-prog-bar"><div class="stu-prog-fill" style="width:${pct}%;background:${barC}"></div></div>
-        <div class="stu-prog-lbl"><span>${pct}%</span><span>${s.answeredCount}/${s.totalCount||'?'}</span></div>
+  if(!el) return;
+  if(!students.length){
+    el.innerHTML = '<div class="empty-state">No students have activity on this quiz yet.</div>';
+    return;
+  }
+  // Sort: in-progress first, then finished, then not started
+  const sorted = [...students].sort((a,b)=>{
+    const rank = s => s.finished ? 2 : s.answeredCount > 0 ? 0 : 1;
+    if(rank(a) !== rank(b)) return rank(a) - rank(b);
+    return new Date(b.lastActive||0) - new Date(a.lastActive||0);
+  });
+  el.innerHTML = sorted.map(s => {
+    const name = s.name || s.uid || 'Unknown Student';
+    const tot = s.totalCount || s.answeredCount || 1;
+    const pct = Math.round((s.answeredCount / tot) * 100);
+    const initials = name.split(' ').map(w => w[0]||'').join('').toUpperCase().slice(0,2) || '??';
+    const stuKey = s.uid || safeKey(name);
+    let statusColor, statusLabel, barColor;
+    if(s.finished){
+      const score = Math.round((s.correctCount/tot)*100);
+      statusColor = score>=70 ? 'var(--cl)' : 'var(--wl)';
+      statusLabel = `${s.correctCount}/${tot} (${score}%)`;
+      barColor = score>=70 ? 'var(--cl)' : 'var(--wl)';
+    } else if(s.answeredCount > 0){
+      statusColor = 'var(--accent)';
+      statusLabel = `Q${s.answeredCount}/${tot} In Progress`;
+      barColor = 'var(--accent)';
+    } else {
+      statusColor = 'var(--muted)';
+      statusLabel = 'Not started';
+      barColor = 'var(--muted)';
+    }
+    return `<div class="student-row" style="flex-wrap:wrap">
+      <div class="stu-avatar" style="background:rgba(74,158,255,.12);color:var(--blue);flex-shrink:0">${esc(initials)}</div>
+      <div style="flex:1;min-width:120px">
+        <div style="font-weight:600;font-size:.9rem">${esc(name)}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:${statusColor};margin-top:2px">${statusLabel}</div>
       </div>
-      <div class="stu-badge ${bc}">${bt}</div>
-      ${s.finished ? `<button class="btn btn-sm" style="background:rgba(240,165,0,.1);color:var(--accent);border:1px solid rgba(240,165,0,.3);font-size:.65rem;padding:4px 10px;white-space:nowrap" onclick="event.stopPropagation();grantRetake('${selectedClassId||''}','${stuRowKey}','${esc(s.name)}')" title="Allow this student to retake">Allow Retake</button>` : ''}
+      <div style="flex:1;min-width:100px;max-width:200px">
+        <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:3px">
+          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .3s"></div>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--muted);text-align:right">${pct}%</div>
+      </div>
+      ${s.finished ? `<button class="btn btn-sm" style="font-size:.65rem;padding:4px 9px;background:rgba(240,165,0,.1);color:var(--accent);border:1px solid rgba(240,165,0,.3);flex-shrink:0;white-space:nowrap" onclick="grantRetake('${selectedClassId||''}','${stuKey}','${esc(name)}')">Allow Retake</button>` : ''}
     </div>`;
   }).join('');
 }
