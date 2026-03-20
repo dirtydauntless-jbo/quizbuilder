@@ -443,12 +443,12 @@ a{color:var(--accent);text-decoration:none}
   </div>
 
   <!-- CLASSROOMS TAB -->
-  <div id="inst-tab-classrooms" class="tab-pane active" style="padding:22px;max-width:900px;margin:0 auto">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+  <div id="inst-tab-classrooms" class="tab-pane active" style="padding:22px 24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;max-width:1100px">
       <div class="section-head" style="margin:0">My Classrooms</div>
       <button class="btn btn-primary" onclick="showCreateClassroomModal()">+ New Classroom</button>
     </div>
-    <div id="classroomGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+    <div id="classroomGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;max-width:1100px">
       <div class="empty-state" style="grid-column:1/-1">No classrooms yet. Create one to get started!</div>
     </div>
   </div>
@@ -1215,6 +1215,7 @@ function cdSwitchTab(tab){
     b.classList.toggle('active',['students','quizzes','progress','instructors'][i]===tab);
   });
   if(tab === 'instructors') loadClassroomInstructors(selectedClassId);
+  if(tab === 'progress') { loadAssignedQuizzes(selectedClassId); }
 }
 
 async function loadClassroomStudents(classId){
@@ -1273,9 +1274,10 @@ async function loadAssignedQuizzes(classId){
 
   const quizEntries = await Promise.all(Object.entries(assigned).map(async ([qid, info]) => {
     // Try the instructorId stored in the assignment first, then fall back to current user
-    const instructorId = info.instructorId || instUser.uid;
+    const instructorId = info.instructorId || (instUser && instUser.uid) || '';
+    if(!instructorId) return null;
     let q = await dbGet(`quizzes/${instructorId}/${qid}`);
-    if(!q && instructorId !== instUser.uid) q = await dbGet(`quizzes/${instUser.uid}/${qid}`);
+    if(!q && instUser && instructorId !== instUser.uid) q = await dbGet(`quizzes/${instUser.uid}/${qid}`);
     return q ? { ...info, quiz: q, quizId: qid, instructorId } : null;
   }));
 
@@ -1292,11 +1294,16 @@ async function loadAssignedQuizzes(classId){
       <button class="btn btn-danger btn-sm" onclick="removeAssignment('${classId}','${e.quizId}')">Remove</button>
     </div>`).join('');
 
-  // Also populate progress quiz picker
+  // Also populate progress quiz picker and auto-load first quiz
   const picker = document.getElementById('cdProgressQuizPicker');
-  picker.innerHTML = quizEntries.filter(Boolean).map(e =>
+  const validEntries = quizEntries.filter(Boolean);
+  picker.innerHTML = validEntries.map(e =>
     `<option value="${e.quizId}">${esc(e.quiz.title)}</option>`
   ).join('');
+  // Auto-trigger progress load for first quiz in list
+  if(validEntries.length) {
+    loadClassroomProgress();
+  }
 }
 
 async function removeAssignment(classId, quizId){
@@ -1884,7 +1891,11 @@ async function loadGlobalDashboard(){
 
 async function loadClassroomProgress(){
   const quizId = document.getElementById('cdProgressQuizPicker').value;
-  if(!quizId||!selectedClassId) return;
+  if(!selectedClassId) return;
+  if(!quizId){
+    document.getElementById('cdProgressList').innerHTML = '<div class="empty-state">No quiz selected. Assign a quiz to this classroom first.</div>';
+    return;
+  }
   if(cdProgressListener){ cdProgressListener.off(); cdProgressListener=null; }
 
   const ref = db.ref(`quizProgress/${selectedClassId}/${quizId}`);
