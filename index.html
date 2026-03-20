@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- AMT Classroom v4.5 - Fix: modal display and click-outside-to-close -->
+<!-- AMT Classroom v4.6 - Fix: student profile null crash -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2822,8 +2822,8 @@ function renderSpAssigned(){
     const isFinished = progress?.finished;
     const inProg = progress && progress.answeredCount > 0 && !isFinished;
     const pct = progress ? Math.round((progress.answeredCount / (progress.totalCount||1)) * 100) : 0;
-    const total5 = progress.totalCount || progress.answeredCount || 1;
-      const score = isFinished ? `${progress.correctCount}/${total5} . ${Math.round(progress.correctCount/total5*100)}%` : null;
+    const total5 = progress?.totalCount || progress?.answeredCount || 1;
+    const score = isFinished ? `${progress.correctCount}/${total5} . ${Math.round(progress.correctCount/total5*100)}%` : null;
     const statusCls = isFinished ? 'completed' : inProg ? 'assigned' : 'not-started';
     const statusLabel = isFinished
       ? `<span class="tag tag-active">Completed</span>`
