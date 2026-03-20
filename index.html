@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- AMT Classroom v4.4 - Fix: student profile modal -->
+<!-- AMT Classroom v4.6 - Fix: student profile null crash -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -661,7 +661,7 @@ a{color:var(--accent);text-decoration:none}
 
 <!-- ============== MODALS ============== -->
 <!-- Create Classroom -->
-<div id="createClassroomModal" class="modal-overlay hidden">
+<div id="createClassroomModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('createClassroomModal')">
   <div class="modal">
     <div class="modal-title">New Classroom</div>
     <label class="label">Classroom Name</label>
@@ -677,7 +677,7 @@ a{color:var(--accent);text-decoration:none}
 </div>
 
 <!-- Assign Quiz Modal -->
-<div id="assignModal" class="modal-overlay hidden">
+<div id="assignModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('assignModal')">
   <div class="modal" style="max-width:560px">
     <div class="modal-title">Assign Quiz</div>
     <label class="label">Select Quiz</label>
@@ -697,7 +697,7 @@ a{color:var(--accent);text-decoration:none}
 </div>
 
 <!-- Student Profile Modal -->
-<div id="studentProfileModal" class="modal-overlay hidden">
+<div id="studentProfileModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('studentProfileModal')">
   <div class="stu-modal">
     <div class="stu-modal-header">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -742,7 +742,7 @@ a{color:var(--accent);text-decoration:none}
 </div>
 
 <!-- Add Co-Instructor Modal -->
-<div id="addCoInstructorModal" class="modal-overlay hidden">
+<div id="addCoInstructorModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('addCoInstructorModal')">
   <div class="modal">
     <div class="modal-title">Add Co-Instructor</div>
     <div style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:18px;line-height:1.6">
@@ -2822,8 +2822,8 @@ function renderSpAssigned(){
     const isFinished = progress?.finished;
     const inProg = progress && progress.answeredCount > 0 && !isFinished;
     const pct = progress ? Math.round((progress.answeredCount / (progress.totalCount||1)) * 100) : 0;
-    const total5 = progress.totalCount || progress.answeredCount || 1;
-      const score = isFinished ? `${progress.correctCount}/${total5} . ${Math.round(progress.correctCount/total5*100)}%` : null;
+    const total5 = progress?.totalCount || progress?.answeredCount || 1;
+    const score = isFinished ? `${progress.correctCount}/${total5} . ${Math.round(progress.correctCount/total5*100)}%` : null;
     const statusCls = isFinished ? 'completed' : inProg ? 'assigned' : 'not-started';
     const statusLabel = isFinished
       ? `<span class="tag tag-active">Completed</span>`
@@ -3142,9 +3142,9 @@ function show(id){
   const el=document.getElementById(id);
   if(!el) return;
   el.classList.remove('hidden');
-  // Determine correct display value based on element
   if(el.classList.contains('landing')) el.style.display='flex';
   else if(id==='stuApp'||id==='instApp') el.style.display='block';
+  else if(el.classList.contains('modal-overlay')) el.style.display='flex';
   else el.style.display='';
 }
 function hide(id){const el=document.getElementById(id);if(el){el.classList.add('hidden');}}
