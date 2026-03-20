@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- AMT Classroom v2.4 - Remove Student + Grade Book + Retake -->
+<!-- AMT Classroom v2.5 - Fix: instUser null on page refresh -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -904,11 +904,38 @@ let pendingAuthRole = null;
 
 auth.onAuthStateChanged(async user => {
   if(user){
-    // Already in the instructor app -- do nothing
-    if(!document.getElementById('instApp').classList.contains('hidden')) return;
     // Student session active -- do nothing
     if(stuSession) return;
-    // Only act if user explicitly chose a role -- never auto-redirect from landing
+
+    // If instructor app is already visible (e.g. page refresh while logged in),
+    // just make sure instUser is set so tabs work correctly
+    if(!document.getElementById('instApp').classList.contains('hidden')){
+      if(!instUser){
+        instUser = user;
+        const profile = await dbGet(`instructors/${user.uid}`);
+        instProfile = profile || { name: user.displayName || user.email, email: user.email };
+        // Re-init the current tab so it loads fresh
+        const activeTab = document.querySelector('#instApp .tab-btn.active');
+        if(activeTab) {
+          const tabName = activeTab.textContent.trim().toLowerCase().replace(' ', '');
+          if(tabName === 'quizbank') loadQuizBank();
+          else if(tabName === 'dashboard') initGlobalDashboard();
+          else loadClassrooms();
+        } else {
+          loadClassrooms();
+          loadQuizBank();
+        }
+      }
+      return;
+    }
+
+    // Student auth screens -- do nothing here
+    if(!document.getElementById('stuAuthScreen').classList.contains('hidden') ||
+       !document.getElementById('stuJoinScreen').classList.contains('hidden')){
+      return;
+    }
+
+    // Only auto-redirect if user explicitly chose a role
     if(!pendingAuthRole) return;
 
     // If we're on the student auth screen, handle student sign-in
@@ -1089,7 +1116,8 @@ function stuLogout(){
 // INSTRUCTOR APP INIT
 // ===============================================
 function initInstApp(){
-  document.getElementById('instUserName').textContent = instProfile.name;
+  if(!instUser) { console.error('initInstApp called without instUser'); return; }
+  document.getElementById('instUserName').textContent = (instProfile && instProfile.name) || (instUser.displayName) || instUser.email || 'Instructor';
   instSwitchTab('classrooms');
   loadClassrooms();
   loadQuizBank();
@@ -1103,6 +1131,8 @@ function instSwitchTab(tab){
     b.classList.toggle('active', ['classrooms','quizzes','dashboard'][i]===tab);
   });
   if(tab==='dashboard') initGlobalDashboard();
+  if(tab==='quizzes') loadQuizBank();
+  if(tab==='classrooms' && instUser) loadClassrooms();
 }
 
 // ===============================================
