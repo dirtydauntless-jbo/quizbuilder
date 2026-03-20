@@ -503,10 +503,14 @@ a{color:var(--accent);text-decoration:none}
       <!-- GRADE BOOK -->
       <div class="card" style="margin-top:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:.63rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent)">
-            📊 Grade Book -- Completed Scores (retained 100 days)
+                    <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--accent)">Grade Book</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:3px">All students -- scores, progress, and retake controls</div>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="exportGrades()">Export CSV</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" style="white-space:nowrap" onclick="grantRetakeAll(selectedClassId, window._currentProgressQuizId)">Allow All Retake</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportGrades()">Export CSV</button>
+          </div>
         </div>
         <div id="gradeBook"><div class="empty-state">Select a quiz to view grades.</div></div>
       </div>
@@ -631,7 +635,7 @@ a{color:var(--accent);text-decoration:none}
       <div class="result-label">TOTAL SCORE</div>
       <div style="margin-bottom:24px"><div class="label" style="text-align:left;margin-bottom:10px">Section Breakdown</div><div id="aqBreakdown"></div></div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="retakeActiveQuiz()">Retake</button>
+        <button class="btn btn-primary" id="stuRetakeBtn" style="display:none" onclick="retakeActiveQuiz()">Retake Quiz</button>
         <button class="btn btn-ghost" onclick="exitActiveQuiz()">← All Quizzes</button>
       </div>
     </div>
@@ -1891,6 +1895,7 @@ async function loadGlobalDashboard(){
 
 async function loadClassroomProgress(){
   const quizId = document.getElementById('cdProgressQuizPicker').value;
+  window._currentProgressQuizId = quizId;  // track for grantRetake
   if(!selectedClassId) return;
   if(!quizId){
     document.getElementById('cdProgressList').innerHTML = '<div class="empty-state">No quiz selected. Assign a quiz to this classroom first.</div>';
@@ -1926,54 +1931,79 @@ async function loadClassroomProgress(){
 function renderGradeBook(students, quizId){
   const el = document.getElementById('gradeBook');
   if(!el) return;
-  const finished = students.filter(s => s.finished);
-  if(!finished.length){
-    el.innerHTML = '<div class="empty-state">No completed grades yet. Grades will appear here when students finish the quiz.</div>';
+  if(!students.length){
+    el.innerHTML = '<div class="empty-state">No students have activity on this quiz yet.</div>';
     return;
   }
 
-  // Sort by score descending
-  finished.sort((a,b) => (b.correctCount/b.totalCount) - (a.correctCount/a.totalCount));
-
-  // Store for CSV export
-  window._currentGrades = { students: finished, quizId };
-
-  const rows = finished.map(s => {
-    const pct = Math.round((s.correctCount / s.totalCount) * 100);
-    const grade = pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
-    const gradeClass = pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
-
-    // Expiry info
-    let expiryHtml = '';
-    if(s.expiresAt){
-      const daysLeft = Math.ceil((new Date(s.expiresAt) - Date.now()) / (1000*60*60*24));
-      if(daysLeft <= 14){
-        expiryHtml = `<div class="expiry-warn">! Expires in ${daysLeft}d</div>`;
-      } else {
-        expiryHtml = `<div class="expiry-ok">Expires in ${daysLeft}d</div>`;
-      }
-    } else {
-      expiryHtml = `<div class="expiry-ok">Retained 100 days</div>`;
+  // Show ALL students -- finished with grades, in-progress with progress bar, not-started greyed
+  const sorted = [...students].sort((a,b) => {
+    // Finished first, then in-progress, then not started; within finished sort by score
+    if(a.finished && !b.finished) return -1;
+    if(!a.finished && b.finished) return 1;
+    if(a.finished && b.finished){
+      const tot = x => x.totalCount || x.answeredCount || 1;
+      return (b.correctCount/tot(b)) - (a.correctCount/tot(a));
     }
+    return (b.answeredCount||0) - (a.answeredCount||0);
+  });
 
-    return `<tr>
-      <td style="font-weight:600">${esc(s.name)}</td>
-      <td style="font-family:'IBM Plex Mono',monospace">${s.correctCount} / ${s.totalCount}</td>
-      <td><div style="display:flex;align-items:center;gap:8px">
-        <div style="flex:1;max-width:120px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div>
-        </div>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:.72rem">${pct}%</span>
-      </div></td>
-      <td><span class="grade-pill ${gradeClass}">${grade}</span></td>
-      <td>${s.finishedAt ? fmtDate(s.finishedAt) : '--'}</td>
-      <td>${expiryHtml}</td>
-    </tr>`;
+  // Store finished students for CSV export
+  window._currentGrades = { students: sorted.filter(s=>s.finished), quizId };
+
+  const rows = sorted.map(s => {
+    const displayName = s.name || s.uid || 'Unknown';
+    const stuKey = s.uid || safeKey(displayName);
+    const tot = s.totalCount || s.answeredCount || 1;
+
+    if(s.finished){
+      const pct = Math.round((s.correctCount / tot) * 100);
+      const grade = pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
+      const gradeClass = pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
+      const daysLeft = s.expiresAt ? Math.ceil((new Date(s.expiresAt)-Date.now())/(1000*60*60*24)) : null;
+      const expiryHtml = daysLeft !== null
+        ? `<div class="${daysLeft<=14?'expiry-warn':'expiry-ok'}">${daysLeft<=14?'! ':''}${daysLeft}d left</div>`
+        : '<div class="expiry-ok">100 day record</div>';
+      return `<tr>
+        <td style="font-weight:600">${esc(displayName)}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-weight:600;color:${pct>=70?'var(--cl)':'var(--wl)'}">${s.correctCount} / ${tot}</td>
+        <td><div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;max-width:120px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:.72rem">${pct}%</span>
+        </div></td>
+        <td><span class="grade-pill ${gradeClass}">${grade}</span></td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:.72rem">${s.finishedAt ? fmtDate(s.finishedAt) : '--'}</td>
+        <td>${expiryHtml}</td>
+        <td><button class="btn btn-sm" style="background:rgba(240,165,0,.1);color:var(--accent);border:1px solid rgba(240,165,0,.3);font-size:.62rem;padding:3px 8px;white-space:nowrap" onclick="grantRetake('${selectedClassId||''}','${stuKey}','${esc(displayName)}')">Allow Retake</button></td>
+      </tr>`;
+    } else if(s.answeredCount > 0){
+      const pct = Math.round((s.answeredCount/tot)*100);
+      return `<tr style="opacity:.8">
+        <td style="font-weight:600">${esc(displayName)}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;color:var(--muted)">In Progress</td>
+        <td><div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;max-width:120px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:var(--accent)"></div>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:.72rem">${pct}%</span>
+        </div></td>
+        <td><span style="font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--muted)">--</span></td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted)">Q${s.answeredCount}/${tot}</td>
+        <td></td><td></td>
+      </tr>`;
+    } else {
+      return `<tr style="opacity:.5">
+        <td style="font-weight:600">${esc(displayName)}</td>
+        <td colspan="6" style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted)">Not started</td>
+      </tr>`;
+    }
   }).join('');
 
   el.innerHTML = `<table class="grade-table">
     <thead><tr>
-      <th>Student</th><th>Score</th><th>Percent</th><th>Grade</th><th>Completed</th><th>Record Expires</th>
+      <th>Student</th><th>Score</th><th>Progress</th><th>Grade</th><th>Completed / Status</th><th>Record</th><th>Retake</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -2011,20 +2041,24 @@ function renderStudentProgressList(students, elId){
     const total = s.totalCount || s.answeredCount || 1;
     const pct = Math.round((s.answeredCount/total)*100);
     const acc = s.answeredCount>0 ? Math.round((s.correctCount/s.answeredCount)*100) : null;
-    const initials = s.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    const displayName = s.name || s.uid || 'Unknown';
+    const initials = displayName.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
     let dc,bc,bt,barC;
-    if(s.finished){dc='sdot-done';bc='sb-done';barC='var(--cl)';bt=`${s.correctCount}/${s.totalCount} . ${Math.round(s.correctCount/s.totalCount*100)}%`;}
+    const tot2 = s.totalCount||s.answeredCount||1;
+    if(s.finished){dc='sdot-done';bc='sb-done';barC='var(--cl)';bt=`${s.correctCount}/${tot2} . ${Math.round(s.correctCount/tot2*100)}%`;}
     else if(s.answeredCount>0){dc='sdot-prog';bc='sb-prog';barC='var(--accent)';bt=`Q${s.answeredCount+1}/${s.totalCount}`;}
     else{dc='sdot-wait';bc='sb-wait';barC='var(--muted)';bt='Not started';}
+    const stuRowKey = s.uid || safeKey(s.name);
     return `<div class="student-row">
       <div class="stu-avatar">${esc(initials)}</div>
-      <div class="stu-info"><div class="stu-name"><span class="sdot ${dc}"></span>${esc(s.name)}</div>
+      <div class="stu-info"><div class="stu-name"><span class="sdot ${dc}"></span>${esc(displayName)}</div>
         <div class="stu-meta">Joined ${fmtTime(s.joinedAt)}${acc!==null?` . ${acc}% accuracy`:''}</div></div>
       <div class="stu-prog">
         <div class="stu-prog-bar"><div class="stu-prog-fill" style="width:${pct}%;background:${barC}"></div></div>
         <div class="stu-prog-lbl"><span>${pct}%</span><span>${s.answeredCount}/${s.totalCount||'?'}</span></div>
       </div>
       <div class="stu-badge ${bc}">${bt}</div>
+      ${s.finished ? `<button class="btn btn-sm" style="background:rgba(240,165,0,.1);color:var(--accent);border:1px solid rgba(240,165,0,.3);font-size:.65rem;padding:4px 10px;white-space:nowrap" onclick="event.stopPropagation();grantRetake('${selectedClassId||''}','${stuRowKey}','${esc(s.name)}')" title="Allow this student to retake">Allow Retake</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -2284,17 +2318,79 @@ async function stuSaveProgress(finishing=false){
 
   if(finished&&!wasFinished){
     await dbPush('feed',{type:'finished',name:stuSession.name,score:`${correct}/${TQ}`,time:ts(),classroomId:stuSession.classroomId,quizId:activeQuiz.id});
+
+    // Archive this attempt so history is preserved across retakes
+    const attemptSnap = await dbGet(`quizProgress/${stuSession.classroomId}/${activeQuiz.id}/${stuKey}/attempts`);
+    const existingAttempts = attemptSnap ? Object.keys(attemptSnap).length : 0;
+    const attemptNum = existingAttempts + 1;
+    await dbSet(`quizProgress/${stuSession.classroomId}/${activeQuiz.id}/${stuKey}/attempts/attempt_${attemptNum}`, {
+      attemptNumber: attemptNum,
+      correctCount: correct,
+      totalCount: TQ,
+      answeredCount: answered,
+      answers: stuAnswers.map(a => a === null ? -1 : a),
+      finishedAt: ts(),
+      score: `${correct}/${TQ}`
+    });
+  }
+
+  // Show or hide retake button based on instructor permission
+  if(finished){
+    const retakeBtn = document.getElementById('stuRetakeBtn');
+    if(retakeBtn){
+      const stuUid = stuSession.uid || safeKey(stuSession.name);
+      const assignInfo = await dbGet(`classrooms/${stuSession.classroomId}/assignedQuizzes/${activeQuiz.id}`);
+      const retakeAllowed = assignInfo && (
+        assignInfo.retakeAll === true ||
+        (assignInfo.retakeFor && assignInfo.retakeFor[stuUid])
+      );
+      retakeBtn.style.display = retakeAllowed ? '' : 'none';
+    }
   }
 }
 
 async function retakeActiveQuiz(){
   const TQ = activeQuiz.questions.length;
-  const stuKey = safeKey(stuSession.name);
+  const stuKey = stuSession.uid || safeKey(stuSession.name);
+  const stuUid = stuSession.uid || safeKey(stuSession.name);
   stuAnswers=new Array(TQ).fill(null); stuCur=0;
+
+  // Save current finished attempt to history BEFORE resetting
+  // (in case it wasn't auto-archived, e.g. legacy records)
+  const existingProg = await dbGet(`quizProgress/${stuSession.classroomId}/${activeQuiz.id}/${stuKey}`);
+  if(existingProg && existingProg.finished){
+    const existingAttempts = existingProg.attempts ? Object.keys(existingProg.attempts).length : 0;
+    if(existingAttempts === 0){
+      // Archive legacy record as attempt 1
+      await dbSet(`quizProgress/${stuSession.classroomId}/${activeQuiz.id}/${stuKey}/attempts/attempt_1`, {
+        attemptNumber: 1,
+        correctCount: existingProg.correctCount || 0,
+        totalCount: existingProg.totalCount || TQ,
+        answeredCount: existingProg.answeredCount || 0,
+        answers: existingProg.answers || new Array(TQ).fill(-1),
+        finishedAt: existingProg.finishedAt || ts(),
+        score: `${existingProg.correctCount||0}/${existingProg.totalCount||TQ}`
+      });
+    }
+  }
+
+  // Reset progress record (preserve attempts sub-tree)
   await dbUpdate(`quizProgress/${stuSession.classroomId}/${activeQuiz.id}/${stuKey}`,{
-    answeredCount:0,correctCount:0,finished:false,finishedAt:null,
+    answeredCount:0,correctCount:0,finished:false,finishedAt:null,expiresAt:null,
     lastActive:ts(),answers:new Array(TQ).fill(-1),lastQuestion:0
   });
+
+  // Clear the retake permission so it can only be used once
+  await dbSet(`classrooms/${stuSession.classroomId}/assignedQuizzes/${activeQuiz.id}/retakeFor/${stuUid}`, null);
+  // If retakeAll was set, clear it too (it was meant for one round)
+  const assignInfo = await dbGet(`classrooms/${stuSession.classroomId}/assignedQuizzes/${activeQuiz.id}`);
+  if(assignInfo && assignInfo.retakeAll){
+    await dbSet(`classrooms/${stuSession.classroomId}/assignedQuizzes/${activeQuiz.id}/retakeAll`, null);
+  }
+
+  // Hide retake button and resume quiz
+  const retakeBtn = document.getElementById('stuRetakeBtn');
+  if(retakeBtn) retakeBtn.style.display = 'none';
   document.getElementById('aqResultsPanel').classList.remove('show');
   document.getElementById('aqQArea').style.display='block';
   renderStuQ();
@@ -2426,6 +2522,44 @@ async function removeCoInstructor(classId, coUid){
   loadClassroomInstructors(classId);
 }
 
+// ================================================================
+// RETAKE PERMISSIONS
+// ================================================================
+
+// Grant retake for one student from the progress list
+async function grantRetakeFromProfile(quizId){
+  if(!spCurrentStudent || !spCurrentClassId) return;
+  const stuKey = spCurrentStudent.uid || safeKey(spCurrentStudent.name);
+  const stuName = spCurrentStudent.name;
+  if(!confirm(`Allow ${stuName} to retake this quiz? Their previous score will be cleared when they start.`)) return;
+  await dbSet(`classrooms/${spCurrentClassId}/assignedQuizzes/${quizId}/retakeFor/${stuKey}`, true);
+  alert(`Retake granted for ${stuName}.`);
+}
+
+async function grantRetake(classId, stuKey, stuName){
+  const quizId = window._currentProgressQuizId;
+  if(!classId || !quizId){
+    alert('Please select a quiz in the Progress tab first.');
+    return;
+  }
+  if(!confirm(`Allow ${stuName} to retake this quiz? Their previous score will be cleared when they start.`)) return;
+
+  await dbSet(`classrooms/${classId}/assignedQuizzes/${quizId}/retakeFor/${stuKey}`, true);
+  alert(`Retake granted for ${stuName}. They will see a Retake button next time they open the quiz.`);
+}
+
+// Grant retake for all students on a quiz (called from assign quiz flow or progress tab)
+async function grantRetakeAll(classId, quizId){
+  if(!classId || !quizId){
+    alert('Please select a quiz in the Progress tab first.');
+    return;
+  }
+  if(!confirm('Allow ALL students to retake this quiz? Each student previous score will be cleared when they start their retake.')) return;
+
+  await dbSet(`classrooms/${classId}/assignedQuizzes/${quizId}/retakeAll`, true);
+  alert('Retake granted for all students on this quiz.');
+}
+
 function copyCode(code){
   navigator.clipboard.writeText(code).then(()=>{
     // Brief visual feedback
@@ -2480,7 +2614,14 @@ async function openStudentProfile(student, classId){
     // Try UID key first, then name-based key for legacy records
     let progress = await dbGet(`quizProgress/${classId}/${qid}/${stuKey}`);
     if(!progress && altKey !== stuKey) progress = await dbGet(`quizProgress/${classId}/${qid}/${altKey}`);
-    return { qid, quiz, info, progress: progress || null };
+    // Also load attempt history
+    let attempts = null;
+    if(progress){
+      const attSnap = await dbGet(`quizProgress/${classId}/${qid}/${stuKey}/attempts`) ||
+                      (altKey !== stuKey ? await dbGet(`quizProgress/${classId}/${qid}/${altKey}/attempts`) : null);
+      if(attSnap) attempts = Object.values(attSnap).sort((a,b) => a.attemptNumber - b.attemptNumber);
+    }
+    return { qid, quiz, info, progress: progress || null, attempts: attempts || [] };
   }));
   spCurrentQuizzes = spCurrentQuizzes.filter(Boolean);
 
@@ -2558,6 +2699,7 @@ function renderSpAssigned(){
         <div class="stu-prog-lbl"><span>${pct}% complete</span><span>${progress.answeredCount}/${progress.totalCount} answered</span></div>
       </div>` : ''}
       ${isFinished ? '<div style="font-family:IBM Plex Mono,monospace;font-size:.6rem;color:var(--accent);margin-top:8px">Click to review answers -></div>' : ''}
+      ${isFinished ? `<button class="btn btn-sm" style="margin-top:6px;background:rgba(240,165,0,.1);color:var(--accent);border:1px solid rgba(240,165,0,.3);font-size:.65rem;padding:4px 10px" onclick="event.stopPropagation();grantRetakeFromProfile('${qid}')">Allow Retake</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -2567,47 +2709,192 @@ function renderSpHistory(){
   hide('spAnswerReview');
   showEl('spHistoryList');
 
-  const finished = spCurrentQuizzes.filter(q => q.progress?.finished);
-  if(!finished.length){
+  // Include quizzes that are finished OR have attempt history
+  const withHistory = spCurrentQuizzes.filter(q => q.progress?.finished || q.attempts?.length > 0);
+  if(!withHistory.length){
     el.innerHTML = '<div class="empty-state">No completed quizzes yet for this student.</div>';
     return;
   }
-  // Sort newest first
-  finished.sort((a,b) => new Date(b.progress.finishedAt) - new Date(a.progress.finishedAt));
 
-  el.innerHTML = finished.map(({qid, quiz, progress}) => {
-    const pct = Math.round((progress.correctCount / (progress.totalCount || progress.answeredCount || 1)) * 100);
-    const grade = pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
-    const gradeClass = pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
-    const daysLeft = progress.expiresAt
+  el.innerHTML = withHistory.map(({qid, quiz, progress, attempts}) => {
+    // Merge: archived attempts + current record if finished
+    const allAttempts = [...(attempts || [])];
+
+    // If current record is finished and not already in attempts, show it too
+    if(progress && progress.finished){
+      const alreadyArchived = allAttempts.some(a =>
+        a.finishedAt === progress.finishedAt || a.finishedAt === progress.finishedAt
+      );
+      if(!alreadyArchived){
+        allAttempts.push({
+          attemptNumber: allAttempts.length + 1,
+          correctCount: progress.correctCount,
+          totalCount: progress.totalCount || progress.answeredCount,
+          answeredCount: progress.answeredCount,
+          answers: progress.answers,
+          finishedAt: progress.finishedAt,
+          score: `${progress.correctCount}/${progress.totalCount || progress.answeredCount}`,
+          isCurrent: true
+        });
+      }
+    }
+
+    // Sort oldest to newest so Attempt 1 is at top
+    allAttempts.sort((a,b) => new Date(a.finishedAt) - new Date(b.finishedAt));
+    // Re-number after sort
+    allAttempts.forEach((a,i) => a.attemptNumber = i+1);
+
+    const latest = allAttempts[allAttempts.length - 1];
+    const bestAttempt = allAttempts.reduce((best, a) => {
+      const pct = (a.correctCount / (a.totalCount || 1)) * 100;
+      const bestPct = (best.correctCount / (best.totalCount || 1)) * 100;
+      return pct > bestPct ? a : best;
+    }, allAttempts[0] || {correctCount:0,totalCount:1});
+
+    const latestPct = latest ? Math.round((latest.correctCount / (latest.totalCount||1)) * 100) : 0;
+    const bestPct = Math.round((bestAttempt.correctCount / (bestAttempt.totalCount||1)) * 100);
+    const grade = latestPct>=90?'A':latestPct>=80?'B':latestPct>=70?'C':latestPct>=60?'D':'F';
+    const gradeClass = latestPct>=90?'grade-a':latestPct>=80?'grade-b':latestPct>=70?'grade-c':'grade-f';
+
+    const attemptsHtml = allAttempts.map(a => {
+      const aPct = Math.round((a.correctCount / (a.totalCount||1)) * 100);
+      const aGrade = aPct>=90?'A':aPct>=80?'B':aPct>=70?'C':aPct>=60?'D':'F';
+      const aGradeClass = aPct>=90?'grade-a':aPct>=80?'grade-b':aPct>=70?'grade-c':'grade-f';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);margin-top:6px;cursor:pointer;transition:border-color .15s"
+          onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'"
+          onclick="event.stopPropagation();spOpenAttemptReview('${qid}',${a.attemptNumber-1})">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--muted);min-width:72px">Attempt ${a.attemptNumber}</div>
+        <div style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--muted)">${fmtDate(a.finishedAt)}</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${aPct>=70?'var(--cl)':'var(--wl)'};margin-right:4px">${a.correctCount}/${a.totalCount||a.answeredCount}</div>
+        <span class="grade-pill ${aGradeClass}" style="font-size:.62rem;padding:2px 7px">${aGrade}</span>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--accent)">Review -></div>
+      </div>`;
+    }).join('');
+
+    const daysLeft = progress?.expiresAt
       ? Math.ceil((new Date(progress.expiresAt) - Date.now()) / (1000*60*60*24))
       : null;
 
-    return `<div class="quiz-history-item completed" onclick="spOpenReview('${qid}')">
+    return `<div class="quiz-history-item completed" style="cursor:default">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div style="flex:1">
-          <div style="font-weight:600;font-size:.88rem;margin-bottom:4px">${esc(quiz.title)}</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--muted)">
-            Completed ${fmtDate(progress.finishedAt)}
-            ${daysLeft ? ` . Record expires in ${daysLeft} days` : ''}
+          <div style="font-weight:600;font-size:.92rem;margin-bottom:3px">${esc(quiz.title)}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap">
+            <span>${allAttempts.length} attempt${allAttempts.length!==1?'s':''}</span>
+            ${allAttempts.length > 1 ? `<span>Best: ${bestPct}%</span>` : ''}
+            ${daysLeft !== null ? `<span>Expires in ${daysLeft}d</span>` : ''}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
           <span class="grade-pill ${gradeClass}">${grade}</span>
           <div style="text-align:right">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:${pct>=70?'var(--cl)':'var(--wl)'}">${progress.correctCount}/${progress.totalCount}</div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--muted)">${pct}%</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:${latestPct>=70?'var(--cl)':'var(--wl)'}">${latest?.correctCount||0}/${latest?.totalCount||latest?.answeredCount||0}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--muted)">Latest</div>
           </div>
         </div>
       </div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--accent);margin-top:8px">Click to review answers -></div>
+      <div style="margin-top:10px">${attemptsHtml}</div>
     </div>`;
   }).join('');
 }
 
+// Review a specific attempt by index
+async function spOpenAttemptReview(quizId, attemptIndex){
+  const entry = spCurrentQuizzes.find(q => q.qid === quizId);
+  if(!entry) return;
+
+  const { quiz, progress, attempts } = entry;
+  const questions = quiz.questions || [];
+
+  // Build full attempts list (same logic as renderSpHistory)
+  const allAttempts = [...(attempts || [])];
+  if(progress && progress.finished){
+    const alreadyArchived = allAttempts.some(a => a.finishedAt === progress.finishedAt);
+    if(!alreadyArchived){
+      allAttempts.push({
+        attemptNumber: allAttempts.length + 1,
+        correctCount: progress.correctCount,
+        totalCount: progress.totalCount || progress.answeredCount,
+        answeredCount: progress.answeredCount,
+        answers: progress.answers,
+        finishedAt: progress.finishedAt
+      });
+    }
+  }
+  allAttempts.sort((a,b) => new Date(a.finishedAt) - new Date(b.finishedAt));
+  allAttempts.forEach((a,i) => a.attemptNumber = i+1);
+
+  const attempt = allAttempts[attemptIndex];
+  if(!attempt) return;
+
+  const rawAnswers = attempt.answers || [];
+  const answers = rawAnswers.length ? rawAnswers : new Array(questions.length).fill(-1);
+
+  hide('spHistoryList');
+  hide('spAssignedList');
+  show('spAnswerReview');
+
+  const total = attempt.totalCount || attempt.answeredCount || questions.length || 1;
+  const pct = Math.round((attempt.correctCount / total) * 100);
+  document.getElementById('spReviewTitle').textContent = `${quiz.title} - Attempt ${attempt.attemptNumber}`;
+  document.getElementById('spReviewScore').textContent =
+    `Score: ${attempt.correctCount}/${total} (${pct}%) - Completed ${fmtDate(attempt.finishedAt)}`;
+
+  // Build answer items (reuse existing logic)
+  const items = questions.map((q, i) => {
+    const rawAns = answers[i] !== undefined ? answers[i] : -1;
+    const studentAns = rawAns === -1 ? null : rawAns;
+    const isCorrect = studentAns !== null && (
+      q.type === 'mc'
+        ? studentAns === q.correct
+        : String(studentAns).toLowerCase().replace(/[^a-z0-9]/g,' ').trim() ===
+          String(q.answer||'').toLowerCase().replace(/[^a-z0-9]/g,' ').trim()
+    );
+    const skipped = studentAns === null;
+    let answerHtml = '';
+    if(q.type === 'mc'){
+      answerHtml = (q.options||[]).map((opt,j) => {
+        const isCorrectOpt = j === q.correct;
+        const isStudentPick = j === studentAns;
+        let cls = 'ar-ans-neutral';
+        let prefix = 'ABC'[j]+'.';
+        if(isCorrectOpt && isStudentPick){cls='ar-ans-correct';prefix='v '+prefix;}
+        else if(isCorrectOpt){cls='ar-ans-correct';prefix='v '+prefix;}
+        else if(isStudentPick){cls='ar-ans-wrong';prefix='x '+prefix;}
+        return `<div class="ar-ans ${cls}">${prefix} ${esc(opt)}</div>`;
+      }).join('');
+    } else {
+      answerHtml = (studentAns
+        ? `<div class="ar-ans ${isCorrect?'ar-ans-correct':'ar-ans-wrong'}">${isCorrect?'v':'x'} Student: ${esc(String(studentAns))}</div>`
+        : '<div class="ar-ans ar-ans-wrong">x Not answered</div>')
+        + (isCorrect?'': `<div class="ar-ans ar-ans-correct">v Correct: ${esc(q.answer||'')}</div>`);
+    }
+    return `<div class="ar-item ${skipped?'ar-wrong':isCorrect?'ar-correct':'ar-wrong'}">
+      <div class="ar-q">${i+1}. ${esc(q.q)}
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--muted);margin-left:8px">[${q.topic||''}]</span>
+      </div>
+      <div class="ar-answers">${answerHtml}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('spReviewItems').innerHTML = items || '<div class="empty-state">No answers recorded.</div>';
+}
+
 async function spOpenReview(quizId){
   const entry = spCurrentQuizzes.find(q => q.qid === quizId);
-  if(!entry || !entry.progress) return;
+  if(!entry) return;
+  // If there are attempts, open the latest one; otherwise use current progress
+  const allAttempts = [...(entry.attempts || [])];
+  if(entry.progress?.finished){
+    const alreadyArchived = allAttempts.some(a => a.finishedAt === entry.progress.finishedAt);
+    if(!alreadyArchived) allAttempts.push({...entry.progress, attemptNumber: allAttempts.length+1});
+  }
+  if(allAttempts.length > 0){
+    allAttempts.sort((a,b) => new Date(a.finishedAt)-new Date(b.finishedAt));
+    await spOpenAttemptReview(quizId, allAttempts.length - 1);
+    return;
+  }
+  if(!entry.progress) return;
 
   const { quiz, progress } = entry;
   const questions = quiz.questions || [];
