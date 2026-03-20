@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- AMT Classroom v2.4 - Remove Student + Grade Book + Retake -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -694,7 +695,9 @@ a{color:var(--accent);text-decoration:none}
             <div id="spMeta" style="font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--muted);margin-top:2px"></div>
           </div>
         </div>
-        <button onclick="closeModal('studentProfileModal')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:4px">✕</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <button class="btn btn-danger btn-sm" style="font-size:.68rem;padding:5px 12px" onclick="removeStudentFromProfile()" title="Remove this student from the classroom">Remove Student</button>
+          <button onclick="closeModal('studentProfileModal')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:4px">✕</button>
       </div>
       <!-- Summary stats -->
       <div id="spStats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0 0"></div>
@@ -1278,6 +1281,19 @@ async function loadClassroomStudents(classId){
 }
 
 // Safe wrapper -- looks up student from global map instead of passing JSON in HTML
+async function removeStudentFromProfile(){
+  if(!spCurrentStudent || !spCurrentClassId) return;
+  const name = spCurrentStudent.name || 'this student';
+  if(!confirm(`Remove ${name} from this classroom? They will no longer appear in the student list.`)) return;
+  const stuKey = Object.keys(window._stuMap||{}).find(k => window._stuMap[k] === spCurrentStudent)
+                 || safeKey(spCurrentStudent.name);
+  await dbSet(`classroomStudents/${spCurrentClassId}/${stuKey}`, null);
+  closeModal('studentProfileModal');
+  loadClassroomStudents(spCurrentClassId);
+  const remaining = await dbGet(`classroomStudents/${spCurrentClassId}`) || {};
+  document.getElementById('cdStudentCount').textContent = Object.keys(remaining).length;
+}
+
 async function openStudentProfileByKey(stuKey, classId){
   const student = window._stuMap && window._stuMap[stuKey];
   if(!student){ console.error('Student not found in map:', stuKey); return; }
