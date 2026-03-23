@@ -302,6 +302,45 @@ a{color:var(--accent);text-decoration:none}
 .grade-f{background:rgba(204,68,68,.12);color:var(--wl);border:1px solid var(--wrong)}
 .expiry-warn{font-family:'IBM Plex Mono',monospace;font-size:.85rem;color:var(--wl)}
 .expiry-ok{font-family:'IBM Plex Mono',monospace;font-size:.85rem;color:var(--muted)}
+
+/* ── FLASHCARD STUDY ─────────────────────────────────── */
+.study-wrap{max-width:720px;margin:0 auto;padding:22px}
+.study-topic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:24px}
+.study-topic-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:border-color .18s,transform .15s;position:relative}
+.study-topic-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.study-topic-card.all-known{border-color:var(--correct);background:rgba(58,170,102,.06)}
+.stc-name{font-weight:600;font-size:1rem;margin-bottom:6px}
+.stc-meta{font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.stc-bar{height:3px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden}
+.stc-fill{height:100%;background:var(--cl);border-radius:2px;transition:width .4s}
+
+/* Card flip */
+.fc-scene{width:100%;perspective:1000px;margin-bottom:20px;cursor:pointer}
+.fc-card{width:100%;min-height:220px;position:relative;transform-style:preserve-3d;transition:transform .45s cubic-bezier(.4,0,.2,1)}
+.fc-card.flipped{transform:rotateY(180deg)}
+.fc-face{position:absolute;width:100%;min-height:220px;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:var(--r);padding:28px 24px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+.fc-front{background:var(--panel);border:2px solid var(--border)}
+.fc-back{background:var(--panel2);border:2px solid var(--accent);transform:rotateY(180deg)}
+.fc-label{font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.fc-text{font-size:1.12rem;font-weight:500;line-height:1.55;color:var(--text)}
+.fc-back .fc-text{color:var(--accent);font-size:1.05rem}
+.fc-tap-hint{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);margin-top:14px;letter-spacing:1px}
+
+.fc-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:20px}
+.fc-btn{font-family:'IBM Plex Mono',monospace;font-size:.9rem;letter-spacing:1px;text-transform:uppercase;padding:11px 24px;border-radius:var(--r);border:none;cursor:pointer;transition:all .15s;font-weight:600;flex:1;max-width:200px}
+.fc-btn-know{background:rgba(58,170,102,.15);color:var(--cl);border:2px solid var(--correct)}
+.fc-btn-know:hover{background:rgba(58,170,102,.28)}
+.fc-btn-learn{background:rgba(204,68,68,.12);color:var(--wl);border:2px solid var(--wrong)}
+.fc-btn-learn:hover{background:rgba(204,68,68,.24)}
+
+.fc-progress{font-family:'IBM Plex Mono',monospace;font-size:.82rem;color:var(--muted);text-align:center;margin-bottom:16px}
+.fc-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.fc-counter{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent)}
+
+.study-complete{text-align:center;padding:48px 20px}
+.study-complete-icon{font-size:3.5rem;margin-bottom:14px}
+.study-complete-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:var(--cl);margin-bottom:8px}
+.study-complete-sub{font-family:'IBM Plex Mono',monospace;font-size:.9rem;color:var(--muted);line-height:1.7;margin-bottom:24px}
 </style>
 </head>
 <body>
@@ -612,11 +651,21 @@ a{color:var(--accent);text-decoration:none}
     </div>
   </div>
 
+  <!-- Student nav tabs -->
+  <div style="background:var(--panel2);border-bottom:1px solid var(--border);display:flex;gap:0;padding:0 20px;overflow-x:auto">
+    <button class="tab-btn active" id="stuTabQuizzes" onclick="stuSwitchTab('quizzes')" style="font-size:.82rem;padding:10px 14px">📝 Quizzes</button>
+    <button class="tab-btn" id="stuTabStudy" onclick="stuSwitchTab('study')" style="font-size:.82rem;padding:10px 14px">🃏 Study</button>
+  </div>
+
   <!-- Quiz list -->
   <div id="stuQuizListView" class="stu-layout">
     <div id="stuClassroomBanner"></div>
     <div class="section-head">Available Quizzes</div>
     <div id="stuQuizCards"><div class="empty-state">No quizzes assigned yet. Check back soon!</div></div>
+  </div>
+
+  <!-- Study / Flashcards view -->
+  <div id="stuStudyView" class="hidden">
   </div>
 
   <!-- Active quiz -->
@@ -852,7 +901,7 @@ async function callAnthropic(body){
 // ===============================================
 firebase.initializeApp({
   apiKey:"AIzaSyBaD9zy6OOP-S_lmkeRPH6iIMyW4SHmkCw",
-  authDomain:"classroomamt.com",
+  authDomain:"quiz-f332f.firebaseapp.com",
   databaseURL:"https://quiz-f332f-default-rtdb.firebaseio.com",
   projectId:"quiz-f332f"
 });
@@ -972,11 +1021,8 @@ async function doOAuthSignIn(provider){
     p = new firebase.auth.OAuthProvider('yahoo.com');
   }
   try {
-    if(isMobile){
-      try{ localStorage.setItem('pendingOAuthRole','instructor'); localStorage.setItem('pendingOAuthTime', Date.now()); }catch(e){}
-      await auth.signInWithRedirect(p);
-      return; // page will redirect
-    }
+    // Always use popup - redirect requires Firebase Hosting on custom domains
+    // On mobile, popup opens as a new tab which works fine
     const result = await auth.signInWithPopup(p);
     const u = result.user;
     const existing = await dbGet(`instructors/${u.uid}`);
@@ -991,7 +1037,7 @@ async function doOAuthSignIn(provider){
   } catch(e){
     const errEl = document.getElementById('authErr');
     const msg = e.code === 'auth/popup-blocked'
-      ? 'Popup was blocked. Please allow popups for this site in your browser settings, then try again.'
+      ? 'Popup was blocked. On mobile: tap the address bar, allow popups for this site, then try again. Or use email sign-in instead.'
       : e.code === 'auth/unauthorized-domain'
       ? 'This domain is not authorized. Please contact your administrator.'
       : friendlyAuthError(e.code);
@@ -1030,7 +1076,6 @@ auth.onAuthStateChanged(async user => {
   if(!user){ return; }
   if(stuSession) return;
   // Don't interfere if redirect result handler is active or pending
-  if(localStorage.getItem('pendingOAuthRole')) return;
   if(_handlingRedirect) return;
 
   // CASE 1: Instructor app already visible (page refresh while logged in)
@@ -1131,11 +1176,7 @@ async function doStuOAuth(provider){
   if(provider === 'google') p = new firebase.auth.GoogleAuthProvider();
 
   try{
-    if(isMobile){
-      try{ localStorage.setItem('pendingOAuthRole','student'); localStorage.setItem('pendingOAuthTime', Date.now()); }catch(e){}
-      await auth.signInWithRedirect(p);
-      return; // page will redirect
-    }
+    // Always use popup - redirect requires Firebase Hosting on custom domains
     const result = await auth.signInWithPopup(p);
     stuAuthUser = result.user;
     const existing = await dbGet(`studentProfiles/${stuAuthUser.uid}`);
@@ -1150,7 +1191,7 @@ async function doStuOAuth(provider){
   } catch(e){
     const errEl = document.getElementById('stuAuthErr');
     const msg = e.code === 'auth/popup-blocked'
-      ? 'Popup blocked. Please allow popups for this site and try again.'
+      ? 'Popup was blocked. On mobile: allow popups for this site in your browser, or use email/password sign-in instead.'
       : friendlyAuthError(e.code);
     showErr(errEl, msg);
   }
@@ -1248,6 +1289,8 @@ function stuSwitchClassroom(){
 }
 
 function stuLogout(){
+  // Clear flashcard cache so next student doesn't see previous student's progress
+  TOPICS.forEach(t => delete _fcCache[t]);
   stuSession = null; activeQuiz = null; stuAnswers = []; stuCur = 0;
   stuAuthUser = null;
   db.ref('classrooms').off();
@@ -2619,6 +2662,11 @@ function renderFeedList(events, elId){
 // ===============================================
 async function initStudentApp(){
   document.getElementById('stuUserName').textContent = stuSession.name;
+  // Default to quizzes tab
+  document.getElementById('stuStudyView')?.classList.add('hidden');
+  document.getElementById('stuQuizListView')?.classList.remove('hidden');
+  document.getElementById('stuTabQuizzes')?.classList.add('active');
+  document.getElementById('stuTabStudy')?.classList.remove('active');
   // Classroom banner
   document.getElementById('stuClassroomBanner').innerHTML = `
     <div class="classroom-banner">
@@ -2724,7 +2772,9 @@ async function openStudentQuiz(quizId, instructorId){
 
 function exitActiveQuiz(){
   activeQuiz=null; stuAnswers=[]; stuCur=0;
-  hide('stuActiveQuizView'); show('stuQuizListView');
+  hide('stuActiveQuizView');
+  show('stuQuizListView');
+  document.getElementById('stuStudyView')?.classList.add('hidden');
   document.getElementById('aqResultsPanel').classList.remove('show');
   document.getElementById('aqQArea').style.display='block';
   loadStudentQuizzes();
@@ -3633,6 +3683,294 @@ function genCode(){
 function showErr(el,msg){el.textContent=msg;el.classList.remove('hidden');}
 function closeModal(id){hide(id)}
 function openModal(id){show(id)}
+
+
+// ===============================================
+// FLASHCARD STUDY SYSTEM
+// ===============================================
+let fcTopic = null;       // current topic name or 'all'
+let fcDeck = [];          // shuffled cards remaining
+let fcCur = 0;            // index into fcDeck
+let fcFlipped = false;    // card currently showing answer?
+let fcKnownKey = null;    // localStorage key for known card ids
+
+async function stuSwitchTab(tab){
+  document.getElementById('stuQuizListView').classList.toggle('hidden', tab !== 'quizzes');
+  document.getElementById('stuStudyView').classList.toggle('hidden', tab !== 'study');
+  document.getElementById('stuTabQuizzes').classList.toggle('active', tab === 'quizzes');
+  document.getElementById('stuTabStudy').classList.toggle('active', tab === 'study');
+  if(tab === 'study') await renderStudyHome();
+}
+
+// In-memory cache so card flips feel instant — Firebase is source of truth
+const _fcCache = {};  // { topic: Set }
+
+function fcCacheKey(topic){ return topic; }
+
+function fcGetKnown(topic){
+  // Return from cache if available
+  if(_fcCache[topic]) return _fcCache[topic];
+  // Cold start: try localStorage as immediate fallback while Firebase loads
+  try{
+    const lsKey = 'fcKnown_' + (stuSession?.uid||'anon') + '_' + topic;
+    const ls = new Set(JSON.parse(localStorage.getItem(lsKey)||'[]'));
+    _fcCache[topic] = ls;
+    return ls;
+  }catch(e){ _fcCache[topic] = new Set(); return _fcCache[topic]; }
+}
+
+async function fcLoadFromFirebase(){
+  // Load all flashcard progress from Firebase into cache
+  if(!stuSession?.uid) return;
+  try{
+    const data = await dbGet('flashcardProgress/' + stuSession.uid) || {};
+    TOPICS.forEach(t => {
+      const arr = data[safeKey(t)] || [];
+      _fcCache[t] = new Set(arr);
+      // Also sync to localStorage as offline backup
+      try{
+        const lsKey = 'fcKnown_' + stuSession.uid + '_' + t;
+        localStorage.setItem(lsKey, JSON.stringify(arr));
+      }catch(e){}
+    });
+  }catch(e){}
+}
+
+function fcSetKnown(topic, set){
+  // Update cache immediately so UI stays snappy
+  _fcCache[topic] = set;
+  // Write to localStorage as offline backup
+  try{
+    const lsKey = 'fcKnown_' + (stuSession?.uid||'anon') + '_' + topic;
+    localStorage.setItem(lsKey, JSON.stringify([...set]));
+  }catch(e){}
+  // Write to Firebase (fire and forget)
+  if(stuSession?.uid){
+    dbSet('flashcardProgress/' + stuSession.uid + '/' + safeKey(topic), [...set])
+      .catch(e => console.warn('fcSetKnown Firebase write failed:', e.message));
+  }
+}
+
+function fcGetAllKnown(){
+  const all = new Set();
+  TOPICS.forEach(t => fcGetKnown(t).forEach(k => all.add(k)));
+  return all;
+}
+
+async function renderStudyHome(){
+  const el = document.getElementById('stuStudyView');
+  // Show loading state while we fetch from Firebase
+  el.innerHTML = '<div style="text-align:center;padding:48px;font-family:'IBM Plex Mono',monospace;font-size:.85rem;color:var(--muted)">Loading flashcard progress...</div>';
+  await fcLoadFromFirebase();
+  const allKnown = fcGetAllKnown();
+  const totalAll = Object.values(QB).reduce((s,qs)=>s+qs.length,0);
+
+  // Build topic cards
+  const topicCards = TOPICS.map(t => {
+    const qs = QB[t];
+    const known = fcGetKnown(t);
+    const remaining = qs.filter((_,i) => !known.has(t+'_'+i)).length;
+    const pct = Math.round((known.size / qs.length) * 100);
+    const allDone = remaining === 0;
+    return `<div class="study-topic-card ${allDone?'all-known':''}" onclick="startFlashcards('${esc(t)}')">
+      <div class="stc-name">${esc(t)}</div>
+      <div class="stc-meta">
+        <span>${remaining} remaining</span>
+        <span style="color:var(--cl)">${known.size}/${qs.length} known</span>
+        ${allDone ? '<span style="color:var(--cl)">✓ Complete</span>' : ''}
+      </div>
+      <div class="stc-bar"><div class="stc-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+
+  const allRemaining = totalAll - allKnown.size;
+
+  el.innerHTML = `<div class="study-wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+      <div class="section-head" style="margin:0">✈ Study Flashcards</div>
+      <button class="btn btn-ghost btn-sm" onclick="resetAllDecks()" title="Reset all topics">↺ Reset All</button>
+    </div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);margin-bottom:18px">
+      ${allKnown.size} of ${totalAll} cards marked as known across all topics
+    </div>
+
+    <!-- Study All button -->
+    <div style="margin-bottom:16px">
+      <div class="study-topic-card" onclick="startFlashcards('__all__')" style="border-color:rgba(240,165,0,.35);background:rgba(240,165,0,.04)">
+        <div class="stc-name" style="color:var(--accent)">⚡ All Topics</div>
+        <div class="stc-meta">
+          <span>${allRemaining} remaining</span>
+          <span style="color:var(--cl)">${allKnown.size}/${totalAll} known</span>
+        </div>
+        <div class="stc-bar"><div class="stc-fill" style="width:${Math.round(allKnown.size/totalAll*100)}%"></div></div>
+      </div>
+    </div>
+
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">By Topic</div>
+    <div class="study-topic-grid">${topicCards}</div>
+  </div>`;
+}
+
+function startFlashcards(topic){
+  fcTopic = topic;
+  const el = document.getElementById('stuStudyView');
+
+  // Build deck — filter out known cards
+  let cards = [];
+  if(topic === '__all__'){
+    TOPICS.forEach(t => {
+      const known = fcGetKnown(t);
+      QB[t].forEach((q, i) => {
+        if(!known.has(t+'_'+i)) cards.push({q:q.q, a:q.a, topic:t, idx:i});
+      });
+    });
+  } else {
+    const known = fcGetKnown(topic);
+    (QB[topic]||[]).forEach((q, i) => {
+      if(!known.has(topic+'_'+i)) cards.push({q:q.q, a:q.a, topic, idx:i});
+    });
+  }
+
+  // Shuffle
+  for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
+  fcDeck = cards;
+  fcCur = 0;
+  fcFlipped = false;
+
+  if(!fcDeck.length){
+    renderStudyComplete(topic);
+    return;
+  }
+  renderFlashcard();
+}
+
+function renderFlashcard(){
+  const el = document.getElementById('stuStudyView');
+  if(fcCur >= fcDeck.length){ renderStudyComplete(fcTopic); return; }
+
+  const card = fcDeck[fcCur];
+  const topicLabel = fcTopic === '__all__' ? card.topic : fcTopic;
+  const total = fcDeck.length;
+  const remaining = total - fcCur;
+
+  el.innerHTML = `<div class="study-wrap">
+    <div class="fc-nav">
+      <button class="btn btn-ghost btn-sm" onclick="exitFlashcards()">← Topics</button>
+      <div class="fc-counter">${fcCur+1} / ${total}</div>
+      <button class="btn btn-ghost btn-sm" onclick="skipCard()">Skip →</button>
+    </div>
+
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);text-align:center;margin-bottom:12px;letter-spacing:1px">
+      ${esc(topicLabel)} &nbsp;·&nbsp; ${remaining} card${remaining!==1?'s':''} remaining
+    </div>
+
+    <!-- Flip card -->
+    <div class="fc-scene" onclick="flipCard()" id="fcScene">
+      <div class="fc-card${fcFlipped?' flipped':''}" id="fcCard">
+        <div class="fc-face fc-front">
+          <div class="fc-label">Question</div>
+          <div class="fc-text">${esc(card.q)}</div>
+          <div class="fc-tap-hint">Tap to reveal answer</div>
+        </div>
+        <div class="fc-face fc-back">
+          <div class="fc-label">Answer</div>
+          <div class="fc-text">${esc(card.a)}</div>
+          <div class="fc-tap-hint">How did you do?</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons — only shown after flip -->
+    <div class="fc-actions" id="fcActions" style="display:${fcFlipped?'flex':'none'}">
+      <button class="fc-btn fc-btn-learn" onclick="markCard(false)">
+        ✗ Still Learning
+      </button>
+      <button class="fc-btn fc-btn-know" onclick="markCard(true)">
+        ✓ Know It
+      </button>
+    </div>
+
+    <div class="fc-progress">
+      <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:6px">
+        <div style="height:100%;width:${Math.round(fcCur/total*100)}%;background:var(--accent);border-radius:2px;transition:width .3s"></div>
+      </div>
+      ${fcCur} cards reviewed this session
+    </div>
+  </div>`;
+}
+
+function flipCard(){
+  fcFlipped = !fcFlipped;
+  const card = document.getElementById('fcCard');
+  const actions = document.getElementById('fcActions');
+  if(card) card.classList.toggle('flipped', fcFlipped);
+  if(actions) actions.style.display = fcFlipped ? 'flex' : 'none';
+}
+
+function markCard(known){
+  const card = fcDeck[fcCur];
+  if(known){
+    // Add to known set for this card's topic
+    const knownSet = fcGetKnown(card.topic);
+    knownSet.add(card.topic + '_' + card.idx);
+    fcSetKnown(card.topic, knownSet);
+    // Remove from deck (don't see it again this session)
+    fcDeck.splice(fcCur, 1);
+    if(fcCur >= fcDeck.length) fcCur = Math.max(0, fcDeck.length - 1);
+  } else {
+    // Move card to end of deck so they see it again
+    const [c] = fcDeck.splice(fcCur, 1);
+    fcDeck.push(c);
+    if(fcCur >= fcDeck.length) fcCur = 0;
+  }
+  fcFlipped = false;
+  renderFlashcard();
+}
+
+function skipCard(){
+  fcFlipped = false;
+  fcCur = (fcCur + 1) % Math.max(1, fcDeck.length);
+  renderFlashcard();
+}
+
+function exitFlashcards(){
+  fcTopic = null; fcDeck = []; fcCur = 0; fcFlipped = false;
+  renderStudyHome();
+}
+
+function renderStudyComplete(topic){
+  const el = document.getElementById('stuStudyView');
+  const topicName = topic === '__all__' ? 'All Topics' : topic;
+  el.innerHTML = `<div class="study-wrap">
+    <div class="study-complete">
+      <div class="study-complete-icon">🎉</div>
+      <div class="study-complete-title">Deck Complete!</div>
+      <div class="study-complete-sub">
+        You've marked all cards in <strong>${esc(topicName)}</strong> as known.<br>
+        Keep reviewing other topics or reset this deck to practice again.
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="resetDeck('${esc(topic)}')">↺ Reset This Deck</button>
+        <button class="btn btn-ghost" onclick="exitFlashcards()">← All Topics</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function resetDeck(topic){
+  if(topic === '__all__'){
+    TOPICS.forEach(t => fcSetKnown(t, new Set()));
+  } else {
+    fcSetKnown(topic, new Set());
+  }
+  startFlashcards(topic);
+}
+
+function resetAllDecks(){
+  if(!confirm('Reset all flashcard progress? All cards will appear again.')) return;
+  TOPICS.forEach(t => fcSetKnown(t, new Set()));
+  renderStudyHome();
+}
 
 // Enter key handlers
 // Instructor auth - Enter key
