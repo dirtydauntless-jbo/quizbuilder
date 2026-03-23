@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- AMT Classroom v5.61 - Moved Anthropic API calls to Cloudflare Worker backend -->
+<!-- AMT Classroom v5.6 - Moved Anthropic API calls to Cloudflare Worker backend -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -352,12 +352,12 @@ a{color:var(--accent);text-decoration:none}
     <div class="landing-sub">Aviation Mechanic Training Platform</div>
   </div>
   <div class="landing-cards">
-    <div class="landing-card" onclick="showInstructorAuth()">
+    <div class="landing-card" onclick="try{showInstructorAuth()}catch(e){alert('Error: '+e.message)}">
       <div class="landing-card-icon">📋</div>
       <div class="landing-card-title">Instructor</div>
       <div class="landing-card-desc">Create classrooms, build quizzes, and track student progress in real time</div>
     </div>
-    <div class="landing-card" onclick="showStudentJoin()">
+    <div class="landing-card" onclick="try{showStudentJoin()}catch(e){alert('Error: '+e.message)}">
       <div class="landing-card-icon">✈</div>
       <div class="landing-card-title">Student</div>
       <div class="landing-card-desc">Enter your classroom code to access quizzes assigned by your instructor</div>
@@ -857,6 +857,19 @@ a{color:var(--accent);text-decoration:none}
 
 
 <script>
+// Global error handler — shows JS crashes on screen so we can diagnose
+window.onerror = function(msg, src, line, col, err){
+  // Only show if landing screen is still visible (i.e. app never loaded)
+  const landing = document.getElementById('landingScreen');
+  if(landing && !landing.classList.contains('hidden')){
+    const d = document.createElement('div');
+    d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1a0a0a;color:#ff6b6b;font-family:monospace;font-size:12px;padding:10px;z-index:9999;border-top:2px solid #cc4444;white-space:pre-wrap;max-height:120px;overflow-y:auto';
+    d.textContent = 'JS ERROR: ' + msg + '\nLine ' + line + ': ' + (src||'').split('/').pop();
+    document.body.appendChild(d);
+  }
+  return false;
+};
+
 // Force HTTPS
 if(location.protocol==='http:'&&location.hostname!=='localhost'&&location.hostname!=='127.0.0.1'){
   location.replace('https:'+location.href.substring(5));
@@ -3373,7 +3386,7 @@ function renderSpAssigned(){
         <div class="stu-prog-bar"><div class="stu-prog-fill" style="width:${pct}%;background:var(--accent)"></div></div>
         <div class="stu-prog-lbl"><span>${pct}% complete</span><span>${progress.answeredCount}/${progress.totalCount} answered</span></div>
       </div>` : ''}
-      ${isFinished ? '<div style="font-family:IBM Plex Mono,monospace;font-size:.6rem;color:var(--accent);margin-top:8px">Click to review answers -></div>' : ''}
+      ${isFinished ? '<div style="font-family:monospace;font-size:.6rem;color:var(--accent);margin-top:8px">Click to review -></div>' : ''}
       ${isFinished ? `<button class="btn btn-sm" style="margin-top:6px;background:rgba(240,165,0,.1);color:var(--accent);border:1px solid rgba(240,165,0,.3);font-size:.65rem;padding:4px 10px" onclick="event.stopPropagation();grantRetakeFromProfile('${qid}')">Allow Retake</button>` : ''}
     </div>`;
   }).join('');
@@ -3623,7 +3636,7 @@ async function spOpenReview(quizId){
     return `<div class="ar-item ${skipped?'ar-wrong':isCorrect?'ar-correct':'ar-wrong'}">
       <div class="ar-q">${i+1}. ${esc(q.q)}
         <span style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--muted);margin-left:8px">[${q.topic}]</span>
-        ${skipped ? '<span style="font-family:IBM Plex Mono,monospace;font-size:.6rem;color:var(--wl);margin-left:6px">-- Not answered</span>' : ''}
+        ${skipped ? '<span style="font-family:monospace;font-size:.6rem;color:var(--wl);margin-left:6px">Not answered</span>' : ''}
       </div>
       <div class="ar-answers">${answerHtml}</div>
     </div>`;
