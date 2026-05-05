@@ -859,12 +859,31 @@ a{color:var(--accent);text-decoration:none}
         <div style="font-family:monospace;font-size:.72rem;color:var(--muted);padding-bottom:4px" id="instSimRangeLabel">Range: 0–1"</div>
       </div>
 
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
         <button class="btn btn-ghost btn-sm" onclick="simRandomize('inst')" style="font-size:.8rem">🎲 Randomize</button>
+        <button id="instSimRevealBtn" class="btn btn-ghost btn-sm" onclick="simReveal('inst')" style="font-size:.8rem">👁 Reveal Answer</button>
+        <button id="instSimGuideBtn" class="btn btn-ghost btn-sm" onclick="simToggleGuide('inst')" style="font-size:.8rem">📏 Hide Guide Line</button>
+        <div id="instSimRevealVal" class="hidden" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:#111;background:#f5f5f5;border-radius:5px;padding:4px 14px">0.0000"</div>
         <div style="flex:1"></div>
         <button id="instSimStartBtn" class="btn btn-primary" onclick="instSimStartSession()" style="padding:10px 20px">▶ Start New Session</button>
         <button id="instSimSendBtn" class="btn btn-primary hidden" onclick="instSimSendRound()" style="padding:10px 20px;background:var(--cl);color:#fff">📡 Lock &amp; Send to Students</button>
         <button id="instSimNextBtn" class="btn btn-ghost hidden" onclick="instSimNextRound()" style="padding:10px 20px">→ Next Round</button>
+      </div>
+
+      <!-- Class demo answer entry — instructor types class's collective answer -->
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:18px">
+        <div style="font-family:monospace;font-size:.78rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;color:var(--muted)">Class Reading — check answer together</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div style="position:relative">
+            <input id="instSimAnswer" type="text" class="input" placeholder="0.0000" maxlength="7"
+              style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;width:130px;text-align:center;padding:10px"
+              oninput="this.value=this.value.replace(/[^0-9.]/g,'')"
+              onkeydown="if(event.key==='Enter')simSubmit('inst')">
+            <div style="font-family:monospace;font-size:.62rem;color:var(--muted);text-align:center;margin-top:3px">inches (e.g. 0.2537)</div>
+          </div>
+          <button id="instSimSubmitBtn" class="btn btn-primary" onclick="simSubmit('inst')" style="padding:12px 20px">Check Answer</button>
+          <div id="instSimFeedback" class="hidden" style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;padding:8px 16px;border-radius:5px"></div>
+        </div>
       </div>
 
       <div id="instSimResponsesWrap" class="hidden">
@@ -1193,6 +1212,7 @@ a{color:var(--accent);text-decoration:none}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
       <button id="stuSimRandomBtn" class="btn btn-ghost btn-sm" onclick="simRandomize('stu')" style="font-size:.8rem">🎲 Randomize</button>
       <button id="stuSimRevealBtn" class="btn btn-ghost btn-sm" onclick="simReveal('stu')" style="font-size:.8rem">👁 Reveal Answer</button>
+      <button id="stuSimGuideBtn" class="btn btn-ghost btn-sm" onclick="simToggleGuide('stu')" style="font-size:.8rem">📏 Hide Guide Line</button>
       <div id="stuSimRevealVal" class="hidden" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:#111;background:#f5f5f5;border-radius:5px;padding:4px 14px">0.0000"</div>
     </div>
 
@@ -12509,8 +12529,8 @@ function dmeSetStatus(msg){
 // ══════════════════════════════════════════════════════════════════
 
 const SIM = {
-  inst: { value: 0.2500, range: 0, canvas: null, ctx: null, dragging: false, lastY: 0, animating: false, locked: false },
-  stu:  { value: 0.2500, range: 0, canvas: null, ctx: null, dragging: false, lastY: 0, animating: false, locked: false }
+  inst: { value: 0.2500, range: 0, canvas: null, ctx: null, dragging: false, lastY: 0, animating: false, locked: false, showGuide: true },
+  stu:  { value: 0.2500, range: 0, canvas: null, ctx: null, dragging: false, lastY: 0, animating: false, locked: false, showGuide: true }
 };
 const SIM_TOLERANCE = 0.0001;
 const SIM_PATH = (classId) => `instrumentSessions/${classId}`;
@@ -12561,6 +12581,7 @@ function micRenderSide(side){
   const body = document.getElementById(bodyId);
   if(!svg) return;
   const d = micDecompose(s.value, s.range);
+  d.showGuide = s.showGuide !== false;  // default true
 
   // Zoom panel SVG (viewBox 920x280) — unified instrument layout
   let zh = '';
@@ -12745,18 +12766,12 @@ function micSvgZoom(d, side='inst'){
   s += `<line x1="${KNURL_L}" y1="0" x2="${KNURL_L}" y2="${H}" stroke="#666" stroke-width="2.5"/>`;
 
   // ── MATCHED VERNIER LINE extended across thimble face ────────────
-  // The red vernier line (or ref line when vernierDiv=0) is at the same Y
-  // as the aligning thimble graduation. Draw it across the full thimble face
-  // so students can visually trace the alignment. Sleeve portion is solid red;
-  // thimble extension is dashed red so it's clearly a guide, not a scale mark.
-  {
-    const matchV   = d.vernierDiv;  // 0–9
+  // Only drawn when guide is enabled (toggled by instructor/student).
+  if(d.showGuide){
+    const matchV   = d.vernierDiv;
     const matchY   = matchV === 0 ? REF_Y : REF_Y - matchV * V_STEP;
-    // Solid red across sleeve (already drawn above, redraw on top to be sure)
     s += `<line x1="${SLV_L}" y1="${matchY.toFixed(1)}" x2="${EDGE_X}" y2="${matchY.toFixed(1)}" stroke="#cc0000" stroke-width="2.5"/>`;
-    // Dashed red extension across the thimble face
     s += `<line x1="${EDGE_X}" y1="${matchY.toFixed(1)}" x2="${LINE_R}" y2="${matchY.toFixed(1)}" stroke="#cc0000" stroke-width="2" stroke-dasharray="6,4" opacity="0.85"/>`;
-    // Small arrowhead at EDGE_X pointing right into thimble
     s += `<polygon points="${EDGE_X+2},${matchY.toFixed(1)} ${(EDGE_X-10).toFixed(1)},${(matchY-5).toFixed(1)} ${(EDGE_X-10).toFixed(1)},${(matchY+5).toFixed(1)}" fill="#cc0000" opacity="0.75"/>`;
   }
 
@@ -12904,36 +12919,43 @@ function simRandomize(side){
     if(rs) rs.value=String(newRange);
   }
   simAnimateTo(side,newVal,newRange,()=>{
-    if(side==='stu'){
-      const fb=document.getElementById('stuSimFeedback');
-      const ans=document.getElementById('stuSimAnswer');
-      const rv=document.getElementById('stuSimRevealVal');
-      const rd=document.getElementById('stuMicReadout');
-      const btn=document.getElementById('stuSimRevealBtn');
-      const sb=document.getElementById('stuSimSubmitBtn');
-      if(fb){fb.classList.add('hidden');fb.textContent='';}
-      if(ans){ans.value='';ans.disabled=false;ans.style.borderColor='';}
-      if(rv) rv.classList.add('hidden');
-      if(rd){ rd.classList.add('hidden'); }
-      if(btn){ btn.textContent='👁 Reveal Answer'; }
-      if(sb) sb.disabled=false;
-    }
+    const prefix = side==='inst' ? 'inst' : 'stu';
+    const fb=document.getElementById(`${prefix}SimFeedback`);
+    const ans=document.getElementById(`${prefix}SimAnswer`);
+    const rv=document.getElementById(`${prefix}SimRevealVal`);
+    const rd=document.getElementById(`${prefix}MicReadout`);
+    const btn=document.getElementById(`${prefix}SimRevealBtn`);
+    const sb=document.getElementById(`${prefix}SimSubmitBtn`);
+    if(fb){fb.classList.add('hidden');fb.textContent='';}
+    if(ans){ans.value='';ans.disabled=false;ans.style.borderColor='';}
+    if(rv) rv.classList.add('hidden');
+    if(rd){ rd.classList.add('hidden'); }
+    if(btn){ btn.textContent='👁 Reveal Answer'; }
+    if(sb) sb.disabled=false;
   });
+}
+
+function simToggleGuide(side){
+  const s = SIM[side];
+  s.showGuide = !s.showGuide;
+  const prefix = side==='inst' ? 'inst' : 'stu';
+  const btn = document.getElementById(`${prefix}SimGuideBtn`);
+  if(btn) btn.textContent = s.showGuide ? '📏 Hide Guide Line' : '📏 Show Guide Line';
+  micRenderSide(side);
 }
 
 function simReveal(side){
   const s=SIM[side];
-  const btn=document.getElementById('stuSimRevealBtn');
-  const rd=document.getElementById('stuMicReadout');
-  const rv=document.getElementById('stuSimRevealVal');
+  const prefix = side==='inst' ? 'inst' : 'stu';
+  const btn=document.getElementById(`${prefix}SimRevealBtn`);
+  const rd=document.getElementById(`${prefix}MicReadout`);
+  const rv=document.getElementById(`${prefix}SimRevealVal`);
   const isHidden = rd ? rd.classList.contains('hidden') : true;
   if(isHidden){
-    // Reveal
     if(rd){ rd.textContent=s.value.toFixed(4)+'"'; rd.classList.remove('hidden'); }
     if(rv){ rv.textContent=s.value.toFixed(4)+'"'; rv.classList.remove('hidden'); }
     if(btn){ btn.textContent='🙈 Hide Answer'; }
   } else {
-    // Hide
     if(rd){ rd.classList.add('hidden'); }
     if(rv){ rv.classList.add('hidden'); }
     if(btn){ btn.textContent='👁 Reveal Answer'; }
@@ -12942,16 +12964,18 @@ function simReveal(side){
 
 async function simSubmit(side){
   const s=SIM[side];
-  const ansEl=document.getElementById('stuSimAnswer');
-  const fb=document.getElementById('stuSimFeedback');
-  const sb=document.getElementById('stuSimSubmitBtn');
-  const rv=document.getElementById('stuSimRevealVal');
+  const prefix = side==='inst' ? 'inst' : 'stu';
+  const ansEl=document.getElementById(`${prefix}SimAnswer`);
+  const fb=document.getElementById(`${prefix}SimFeedback`);
+  const sb=document.getElementById(`${prefix}SimSubmitBtn`);
+  const rv=document.getElementById(`${prefix}SimRevealVal`);
   const ans=(ansEl?.value||'').trim();
   if(!ans){if(fb){fb.textContent='Enter your reading first.';fb.style.background='rgba(200,50,50,.12)';fb.style.color='var(--wl)';fb.classList.remove('hidden');}return;}
   const parsed=parseFloat(ans);
   if(isNaN(parsed)){if(fb){fb.textContent='Invalid number.';fb.style.background='rgba(200,50,50,.12)';fb.style.color='var(--wl)';fb.classList.remove('hidden');}return;}
   const correct=Math.abs(parsed-s.value)<=SIM_TOLERANCE;
-  if(_stuSimLiveMode&&_stuSimRoundId&&stuSession){
+  // Student live-session submission (stu side only)
+  if(side==='stu'&&_stuSimLiveMode&&_stuSimRoundId&&stuSession){
     const key=stuSession.uid||safeKey(stuSession.name||'student');
     await dbSet(`${SIM_PATH(_stuSimClassId)}/sessions/${_stuSimSessionNum}/rounds/${_stuSimRoundId}/responses/${key}`,{answer:parsed,correct,submittedAt:ts(),studentName:stuSession.name||''});
     if(sb) sb.disabled=true;
@@ -12962,7 +12986,7 @@ async function simSubmit(side){
     if(correct){fb.textContent='✓ Correct!';fb.style.background='rgba(34,197,94,.18)';fb.style.color='var(--cl)';}
     else{fb.textContent=`✗ Incorrect — answer: ${s.value.toFixed(4)}"`;fb.style.background='rgba(200,50,50,.12)';fb.style.color='var(--wl)';if(rv){rv.textContent=s.value.toFixed(4)+'"';rv.classList.remove('hidden');}}
   }
-  if(!_stuSimLiveMode){
+  if(side==='stu'&&!_stuSimLiveMode){
     _stuSimPracticeHistory.push({value:s.value,answer:parsed,correct});
     stuSimUpdateHistory();
   }
