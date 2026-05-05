@@ -12836,22 +12836,22 @@ function micSvgBody(d, locked, side='inst'){
     s += `<text x="${W/2}" y="${H/2+6}" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="22" fill="#cc0000">LOCKED</text>`;
   }
 
-  // Dynamic range label — sits inside the dark U-frame body of the photo.
-  // Photo is rendered at imgX=120, imgY=8, scale=640/1270=0.504
-  // Frame lower arc centre in SVG coords ≈ (imgX+65, imgY+252)
-  // Plaque sized to fit comfortably within the frame width (~110px available)
-  const PW = 136, PH = 48, PR = 10;   // plaque width, height, corner radius
-  const plaqX = imgX + 26;            // left edge — inside left side of frame arc
-  const plaqY = imgY + 230;           // vertical centre of lower frame body
+  // Dynamic range label — centred over the bottom of the U-frame arc.
+  // Frame arc centre in SVG coords ≈ x=246, y=310 (bottom arc of blue frame)
+  const PW = 136, PH = 48, PR = 10;
+  const frameCX = imgX + 126;          // horizontal centre of U-frame arc
+  const frameBottomY = imgY + 302;     // vertical centre of bottom arc area
+  const plaqX = frameCX - PW/2;        // centred horizontally on frame
+  const plaqY = frameBottomY - PH/2;   // centred vertically in bottom arc
   const labelText1 = `${d.base}–${d.base+1}" Micrometer`;
   const labelText2 = `0.0001" Resolution`;
-  // Recessed dark plaque — matches real Mitutoyo-style label plate
+  // Recessed dark plaque — mimics real Mitutoyo-style label badge
   s += `<rect x="${plaqX}" y="${plaqY}" width="${PW}" height="${PH}" rx="${PR}" ry="${PR}" fill="#1a2420" stroke="#0d1a16" stroke-width="1.5"/>`;
-  // Subtle inner bevel highlight (top edge lighter)
+  // Subtle inner bevel highlight
   s += `<rect x="${plaqX+2}" y="${plaqY+2}" width="${PW-4}" height="${PH-4}" rx="${PR-2}" ry="${PR-2}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
-  // Text — centred in the plaque
-  s += `<text x="${plaqX+PW/2}" y="${plaqY+18}" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="13" fill="#d8eeea">${labelText1}</text>`;
-  s += `<text x="${plaqX+PW/2}" y="${plaqY+34}" text-anchor="middle" font-family="Arial" font-size="11" fill="#7aa8a0">${labelText2}</text>`;
+  // Text centred in the plaque
+  s += `<text x="${frameCX}" y="${plaqY+18}" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="13" fill="#d8eeea">${labelText1}</text>`;
+  s += `<text x="${frameCX}" y="${plaqY+34}" text-anchor="middle" font-family="Arial" font-size="11" fill="#7aa8a0">${labelText2}</text>`;
 
   return s;
 }
