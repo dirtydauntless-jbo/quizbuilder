@@ -856,11 +856,7 @@ a{color:var(--accent);text-decoration:none}
           <svg id="instMicSvg" viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
         </div>
         <div id="instMicReadout" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.0000"</div>
-      </div>
-
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:4px;color:var(--accent)" id="instSimValueDisplay">0.0000"</div>
-        <div style="font-family:monospace;font-size:.72rem;color:var(--muted)" id="instSimRangeLabel">Range: 0–1"</div>
+        <div style="font-family:monospace;font-size:.72rem;color:var(--muted);padding-bottom:4px" id="instSimRangeLabel">Range: 0–1"</div>
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
@@ -12577,9 +12573,7 @@ function micRenderSide(side){
   const rd = document.getElementById(readId);
   if(rd) rd.textContent = s.value.toFixed(4)+'"';
   if(side==='inst'){
-    const vd = document.getElementById('instSimValueDisplay');
     const rl = document.getElementById('instSimRangeLabel');
-    if(vd) vd.textContent = s.value.toFixed(4)+'"';
     if(rl) rl.textContent = `Range: ${d.base}\u2013${d.base+1}"`;
   } else {
     const rl = document.getElementById('stuSimRangeLabel');
