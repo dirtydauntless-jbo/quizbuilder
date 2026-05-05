@@ -12835,6 +12835,19 @@ function micSvgBody(d, locked, side='inst'){
     s += `<rect x="0" y="0" width="${W}" height="${H}" fill="rgba(200,0,0,0.12)"/>`;
     s += `<text x="${W/2}" y="${H/2+6}" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="22" fill="#cc0000">LOCKED</text>`;
   }
+
+  // Dynamic range label — overlaid on the dark frame area of the photo
+  // Positioned over the lower-left frame body (dark teal area in the photo)
+  const labelX = imgX + 68;
+  const labelY = imgY + 290;
+  const labelText1 = `Micrometer ${d.base}–${d.base+1}"`;
+  const labelText2 = `0.0001"`;
+  // Dark plaque background
+  s += `<rect x="${labelX-6}" y="${labelY-22}" width="148" height="46" rx="5" fill="rgba(20,30,28,0.82)"/>`;
+  // Label lines
+  s += `<text x="${labelX}" y="${labelY-4}" font-family="Arial" font-weight="bold" font-size="14" fill="#e8f4f2">${labelText1}</text>`;
+  s += `<text x="${labelX}" y="${labelY+16}" font-family="Arial" font-size="12" fill="#aacccc">${labelText2}</text>`;
+
   s += `<rect x="1" y="1" width="${W-2}" height="${H-2}" fill="none" stroke="#aaa" stroke-width="1.5"/>`;
   return s;
 }
