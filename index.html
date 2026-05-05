@@ -12831,51 +12831,6 @@ function micSvgBody(d, locked, side='inst'){
   const imgX=Math.round((W-imgW)/2)-20, imgY=8;
   s += `<image href="${IMG}" x="${imgX}" y="${imgY}" width="${imgW}" height="${imgH}" preserveAspectRatio="xMidYMid meet"/>`;
 
-  // ── Labels with leader lines ────────────────────────────────
-  // Coordinates calibrated to the photo layout (imgX offset applied)
-  // Format: label text, label anchor X, label Y, leader tip X, leader tip Y
-  const ox = imgX; // x offset for photo features
-  const oy = imgY; // y offset
-
-  function lbl(text, lx, ly, tx, ty, anchor='middle'){
-    const col='#111';
-    let out='';
-    // Leader line
-    out += `<line x1="${lx}" y1="${ly}" x2="${tx}" y2="${ty}" stroke="${col}" stroke-width="1.5"/>`;
-    // Dot at tip
-    out += `<circle cx="${tx}" cy="${ty}" r="3" fill="${col}"/>`;
-    // Label background
-    const tw = text.length*7+12;
-    const th = 20;
-    const bx = anchor==='end' ? lx-tw : anchor==='start' ? lx : lx-tw/2;
-    out += `<rect x="${bx}" y="${ly-th+4}" width="${tw}" height="${th}" rx="3" fill="rgba(255,255,255,0.88)"/>`;
-    out += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" font-family="Arial" font-weight="700" font-size="13" fill="${col}">${text}</text>`;
-    return out;
-  }
-
-  // Anvil — short stub on left inner face
-  s += lbl('Anvil',        ox+48,  oy+38,  ox+82,  oy+88,  'middle');
-  // Measuring Faces
-  s += lbl('Measuring',    ox+58,  oy+62,  ox+96,  oy+108, 'middle');
-  s += lbl('Faces',        ox+58,  oy+78,  ox+96,  oy+112, 'middle');
-  // Spindle
-  s += lbl('Spindle',      ox+168, oy+32,  ox+200, oy+90,  'middle');
-  // Sleeve
-  s += lbl('Sleeve w/',    ox+330, oy+22,  ox+330, oy+72,  'middle');
-  s += lbl('Vernier Grads',ox+330, oy+38,  ox+330, oy+76,  'middle');
-  // Spindle Lock
-  s += lbl('Spindle Lock', ox+285, oy+205, ox+260, oy+170, 'middle');
-  // Thimble
-  s += lbl('Thimble',      ox+460, oy+28,  ox+460, oy+72,  'middle');
-  // Ratchet Stop
-  s += lbl('Ratchet',      ox+590, oy+28,  ox+600, oy+72,  'middle');
-  s += lbl('Stop',         ox+590, oy+44,  ox+600, oy+76,  'middle');
-  // Frame
-  s += lbl('Frame',        ox+100, oy+310, ox+140, oy+280, 'middle');
-
-  // Range indicator bottom-left
-  s += `<text x="14" y="${H-8}" font-family="Arial" font-weight="bold" font-size="13" fill="#555">Range: ${d.base}–${d.base+1}"  |  0.0001" resolution</text>`;
-
   if(locked){
     s += `<rect x="0" y="0" width="${W}" height="${H}" fill="rgba(200,0,0,0.12)"/>`;
     s += `<text x="${W/2}" y="${H/2+6}" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="22" fill="#cc0000">LOCKED</text>`;
