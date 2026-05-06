@@ -1288,6 +1288,7 @@ a{color:var(--accent);text-decoration:none}
       </div>
       <div class="nav-row">
         <button class="btn btn-ghost" id="aqPrev" onclick="aqNav(-1)">← Prev</button>
+        <button id="aqSubmitFromReview" class="btn btn-primary" onclick="stuSubmitFromReview()" style="display:none;background:#059669;font-size:.82rem;padding:10px 14px">✓ Submit Quiz</button>
         <button class="btn btn-primary" id="aqNext" onclick="aqNav(1)">Next -></button>
       </div>
     </div>
@@ -5449,7 +5450,7 @@ function renderStudentProgressList(students, elId, integrityMap){
         let badges = '';
         if(dualSession) badges += '<span style="background:rgba(150,0,220,.2);color:#bb44ff;border:1px solid rgba(150,0,220,.4);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;white-space:nowrap">🔴 Dual Device</span>';
         if(tabSwitches) badges += '<span style="background:rgba(204,68,68,.18);color:#e85555;border:1px solid rgba(204,68,68,.35);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;white-space:nowrap">⚠ Tab ×'+tabSwitches+'</span>';
-        if(windowLeft) badges += '<span style="background:rgba(204,68,68,.12);color:#e85555;border:1px solid rgba(204,68,68,.25);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;white-space:nowrap">⚠ Blur ×'+windowLeft+'</span>';
+        if(windowLeft) badges += '<span style="background:rgba(204,68,68,.12);color:#e85555;border:1px solid rgba(204,68,68,.25);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;white-space:nowrap">⚠ Left Window ×'+windowLeft+'</span>';
         if(earlyExit) badges += '<span style="background:rgba(240,165,0,.15);color:var(--accent);border:1px solid rgba(240,165,0,.3);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;white-space:nowrap">← Exited</span>';
         return badges ? '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;width:100%">'+badges+'</div>' : '';
       })()}
@@ -6212,6 +6213,21 @@ function getStuSecGroups(){
   return groups;
 }
 
+function stuSubmitFromReview(){
+  if(!activeQuiz) return;
+  const TQ = activeQuiz.questions.length;
+  const unanswered = stuAnswers.filter(a=>a===null).length;
+  if(unanswered > 0){
+    // Should not reach here (button is disabled), but guard anyway
+    alert(`You still have ${unanswered} unanswered question${unanswered!==1?'s':''}. Please answer all questions before submitting.`);
+    return;
+  }
+  // Hide the submit button and submit
+  const btn = document.getElementById('aqSubmitFromReview');
+  if(btn) btn.style.display = 'none';
+  stuShowResults();
+}
+
 function renderStuQ(){
   if(!activeQuiz) return;
   const questions = activeQuiz.questions;
@@ -6268,6 +6284,19 @@ function renderStuQ(){
 
   document.getElementById('aqPrev').disabled = stuCur===0;
   document.getElementById('aqNext').textContent = stuCur===TQ-1 ? 'Finish' : 'Next ->';
+
+  // Submit button — visible whenever student has gone back into quiz from review
+  // Only enabled when ALL questions are answered
+  const submitBtn = document.getElementById('aqSubmitFromReview');
+  if(submitBtn){
+    const allAnswered = stuAnswers.filter(a=>a!==null).length === TQ;
+    const unansweredCount = TQ - stuAnswers.filter(a=>a!==null).length;
+    submitBtn.style.display = 'block';
+    submitBtn.disabled = !allAnswered;
+    submitBtn.title = allAnswered ? 'Submit your quiz for grading' : `${unansweredCount} question${unansweredCount!==1?'s':''} not yet answered`;
+    submitBtn.style.opacity = allAnswered ? '1' : '0.45';
+    submitBtn.style.cursor = allAnswered ? 'pointer' : 'not-allowed';
+  }
 
   // Section tabs
   const groups = getStuSecGroups();
