@@ -648,6 +648,7 @@ a{color:var(--accent);text-decoration:none}
     <button class="tab-btn" onclick="instSwitchTab('quizzes')">Create a Quiz</button>
     <button class="tab-btn" onclick="instSwitchTab('sim')">📐 Measurement Simulator</button>
     <button class="tab-btn hidden" id="adminTabBtn" onclick="instSwitchTab('admin')">⚙ Admin</button>
+    <button class="tab-btn hidden" id="masterDashTabBtn" onclick="instSwitchTab('masterdash')">📊 Master Dashboard</button>
   </div>
 
   <!-- CLASSROOMS TAB -->
@@ -895,6 +896,50 @@ a{color:var(--accent);text-decoration:none}
         <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:10px">Student Responses — Round <span id="instSimRoundLabel">1</span></div>
         <div id="instSimResponses"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- MASTER DASHBOARD TAB (master admin only) -->
+  <div id="inst-tab-masterdash" style="display:none;padding:24px;max-width:1100px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:3px;color:var(--accent)">📊 Master Dashboard</div>
+      <button class="btn btn-ghost btn-sm" onclick="masterDashLoad()" style="margin-left:auto">↻ Refresh</button>
+    </div>
+    <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:24px">Platform-wide analytics · Master admin only</div>
+    <div id="masterDashCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:28px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">STUDENT LOGINS — LAST 24 HRS</div>
+        <div id="masterDash24hr">Loading…</div>
+      </div>
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">INSTRUCTOR LOGINS — LAST 24 HRS</div>
+        <div id="masterDashInst24hr">Loading…</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MONTHLY USAGE — STUDENTS</div>
+        <div id="masterDashStuMonth">Loading…</div>
+      </div>
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MONTHLY USAGE — INSTRUCTORS</div>
+        <div id="masterDashInstMonth">Loading…</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">QUIZZES ISSUED — LAST 30 DAYS</div>
+        <div id="masterDashQuizzesIssued">Loading…</div>
+      </div>
+      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">QUIZZES TAKEN — LAST 30 DAYS</div>
+        <div id="masterDashQuizzesTaken">Loading…</div>
+      </div>
+    </div>
+    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MOST ACTIVE STUDENTS — LAST 30 DAYS</div>
+      <div id="masterDashTopStudents">Loading…</div>
     </div>
   </div>
 
@@ -2331,6 +2376,9 @@ async function doStudentJoin(){
   const [classId, classroom] = entry;
   stuSession = { name, uid: stuAuthUser.uid, email: stuAuthUser.email, classroomId: classId, classroomCode: code, classroomName: classroom.name };
 
+  // Log access for master admin analytics
+  try{ dbSet(`accessLog/students/${stuAuthUser.uid}/${Date.now()}`,{ts:ts(),name,classroomId:classId}); }catch(e){}
+
   // Save last classroom for convenience
   await dbSet(`studentProfiles/${stuAuthUser.uid}/lastClassroom`, code);
 
@@ -2479,8 +2527,196 @@ function initInstApp(){
   });
 }
 
-// ── SUPER-ADMIN ────────────────────────────────────────────────────────────
+// ── MASTER DASHBOARD ─────────────────────────────────────────────────────────
+async function masterDashLoad(){
+  if(!_isMasterAdmin) return;
+  const now = Date.now();
+  const ms24h  = 24*60*60*1000;
+  const ms30d  = 30*24*60*60*1000;
+  const cutoff24h = now - ms24h;
+  const cutoff30d = now - ms30d;
+
+  // Load all data in parallel
+  const [stuLog, instLog, allClassrooms, allQuizSessions] = await Promise.all([
+    dbGet('accessLog/students')  || {},
+    dbGet('accessLog/instructors') || {},
+    dbGet('classrooms') || {},
+    dbGet('quizSessions') || {}
+  ]);
+
+  // ── STAT CARDS ──────────────────────────────────────────────────────────────
+  const stuLogEntries  = Object.values(stuLog||{}).flatMap(u=>Object.values(u||{}));
+  const instLogEntries = Object.values(instLog||{}).flatMap(u=>Object.values(u||{}));
+  const stuUnique24h   = new Set(Object.entries(stuLog||{}).filter(([,v])=>Object.keys(v||{}).some(k=>Number(k)>cutoff24h)).map(([uid])=>uid)).size;
+  const instUnique24h  = new Set(Object.entries(instLog||{}).filter(([,v])=>Object.keys(v||{}).some(k=>Number(k)>cutoff24h)).map(([uid])=>uid)).size;
+  const stuLogins30d   = stuLogEntries.filter(e=>e.ts&&new Date(e.ts).getTime()>cutoff30d).length;
+  const instLogins30d  = instLogEntries.filter(e=>e.ts&&new Date(e.ts).getTime()>cutoff30d).length;
+
+  // Quizzes issued (assigned) in last 30 days
+  let quizzesIssued30d = 0;
+  for(const [,c] of Object.entries(allClassrooms)){
+    for(const [,q] of Object.entries(c.assignedQuizzes||{})){
+      if(q.assignedAt && new Date(q.assignedAt).getTime() > cutoff30d) quizzesIssued30d++;
+    }
+  }
+
+  // Quizzes taken (completed sessions) in last 30 days
+  let quizzesTaken30d = 0;
+  for(const [,classData] of Object.entries(allQuizSessions||{})){
+    for(const [,stuData] of Object.entries(classData||{})){
+      for(const [,quizData] of Object.entries(stuData||{})){
+        for(const [,attempt] of Object.entries(quizData||{})){
+          if(attempt.submittedAt && new Date(attempt.submittedAt).getTime() > cutoff30d) quizzesTaken30d++;
+        }
+      }
+    }
+  }
+
+  const totalStudents  = new Set(Object.entries(stuLog||{}).map(([uid])=>uid)).size;
+  const totalInst      = new Set(Object.entries(instLog||{}).map(([uid])=>uid)).size;
+  const totalClassrooms= Object.keys(allClassrooms).length;
+
+  const card = (val, label, col='var(--accent)') =>
+    `<div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:16px 18px;text-align:center">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:${col};letter-spacing:2px">${val}</div>
+      <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:1px">${label}</div>
+    </div>`;
+
+  document.getElementById('masterDashCards').innerHTML =
+    card(stuUnique24h,  'Students Online 24h', 'var(--cl)') +
+    card(instUnique24h, 'Instructors Online 24h', 'var(--blue)') +
+    card(stuLogins30d,  'Student Logins 30d', 'var(--accent)') +
+    card(instLogins30d, 'Instructor Logins 30d', 'var(--accent)') +
+    card(quizzesIssued30d, 'Quizzes Issued 30d', '#7c3aed') +
+    card(quizzesTaken30d, 'Quizzes Taken 30d', '#7c3aed') +
+    card(totalStudents,  'Total Students', 'var(--muted)') +
+    card(totalClassrooms,'Total Classrooms', 'var(--muted)');
+
+  // ── LAST 24 HRS BREAKDOWN ───────────────────────────────────────────────────
+  function render24hr(logObj, elId){
+    const el = document.getElementById(elId); if(!el) return;
+    const recent = Object.entries(logObj||{}).map(([uid, sessions]) => {
+      const hits = Object.entries(sessions||{}).filter(([k])=>Number(k)>cutoff24h);
+      if(!hits.length) return null;
+      const name = hits[hits.length-1][1]?.name || uid;
+      const lastTs = Math.max(...hits.map(([k])=>Number(k)));
+      return { name, count: hits.length, lastTs };
+    }).filter(Boolean).sort((a,b)=>b.lastTs-a.lastTs);
+    if(!recent.length){ el.innerHTML = '<div style="color:var(--muted);font-size:.8rem">No logins in the last 24 hours.</div>'; return; }
+    el.innerHTML = `<table style="border-collapse:collapse;width:100%;font-size:.78rem">
+      <thead><tr style="background:var(--panel2)">
+        <th style="padding:5px 10px;text-align:left;border:1px solid var(--border)">Name</th>
+        <th style="padding:5px 10px;text-align:center;border:1px solid var(--border)">Logins</th>
+        <th style="padding:5px 10px;text-align:center;border:1px solid var(--border)">Last Seen</th>
+      </tr></thead><tbody>
+      ${recent.map(r=>`<tr>
+        <td style="padding:5px 10px;border:1px solid var(--border);font-weight:600">${esc(r.name)}</td>
+        <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;font-family:monospace">${r.count}</td>
+        <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.65rem">${new Date(r.lastTs).toLocaleTimeString()}</td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  }
+  render24hr(stuLog,  'masterDash24hr');
+  render24hr(instLog, 'masterDashInst24hr');
+
+  // ── MONTHLY USAGE CHART (bar chart via div heights) ─────────────────────────
+  function renderMonthChart(logObj, elId){
+    const el = document.getElementById(elId); if(!el) return;
+    // Count logins per day for last 30 days
+    const days = {};
+    for(let i=0; i<30; i++){
+      const d = new Date(now - i*24*60*60*1000);
+      days[d.toLocaleDateString('en-US',{month:'short',day:'numeric'})] = 0;
+    }
+    for(const [,sessions] of Object.entries(logObj||{})){
+      for(const [k] of Object.entries(sessions||{})){
+        const d = new Date(Number(k));
+        const label = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        if(label in days) days[label]++;
+      }
+    }
+    const entries = Object.entries(days).reverse();
+    const maxVal  = Math.max(...entries.map(([,v])=>v), 1);
+    el.innerHTML = `<div style="display:flex;align-items:flex-end;gap:3px;height:80px;overflow-x:auto">
+      ${entries.map(([label,val])=>`
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:20px" title="${label}: ${val}">
+          <div style="width:100%;background:var(--cl);border-radius:2px 2px 0 0;height:${Math.max(2,Math.round(val/maxVal*72))}px;transition:height .3s"></div>
+          <div style="font-family:monospace;font-size:.5rem;color:var(--muted);margin-top:3px;writing-mode:vertical-rl;transform:rotate(180deg);height:30px;overflow:hidden">${label}</div>
+        </div>`).join('')}
+    </div>
+    <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:8px">Peak: ${maxVal} logins · Total: ${entries.reduce((a,[,v])=>a+v,0)} logins</div>`;
+  }
+  renderMonthChart(stuLog,  'masterDashStuMonth');
+  renderMonthChart(instLog, 'masterDashInstMonth');
+
+  // ── QUIZZES ISSUED LAST 30 DAYS breakdown ──────────────────────────────────
+  const issuedByClass = [];
+  for(const [cid, c] of Object.entries(allClassrooms)){
+    let count = 0;
+    for(const [,q] of Object.entries(c.assignedQuizzes||{})){
+      if(q.assignedAt && new Date(q.assignedAt).getTime() > cutoff30d) count++;
+    }
+    if(count) issuedByClass.push({ name: c.name||cid, count });
+  }
+  issuedByClass.sort((a,b)=>b.count-a.count);
+  const issuedEl = document.getElementById('masterDashQuizzesIssued');
+  if(issuedEl) issuedEl.innerHTML = issuedByClass.length
+    ? `<div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#7c3aed;margin-bottom:8px">${quizzesIssued30d} total</div>` +
+      issuedByClass.map(r=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:.78rem"><span>${esc(r.name)}</span><span style="font-weight:700;color:#7c3aed">${r.count}</span></div>`).join('')
+    : '<div style="color:var(--muted);font-size:.8rem">No quizzes assigned in the last 30 days.</div>';
+
+  // ── QUIZZES TAKEN LAST 30 DAYS breakdown ───────────────────────────────────
+  const takenByDay = {};
+  let takenTotal = 0;
+  for(const [,classData] of Object.entries(allQuizSessions||{})){
+    for(const [,stuData] of Object.entries(classData||{})){
+      for(const [,quizData] of Object.entries(stuData||{})){
+        for(const [,attempt] of Object.entries(quizData||{})){
+          if(attempt.submittedAt){
+            const d = new Date(attempt.submittedAt);
+            if(d.getTime()>cutoff30d){
+              takenTotal++;
+              const label = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+              takenByDay[label] = (takenByDay[label]||0)+1;
+            }
+          }
+        }
+      }
+    }
+  }
+  const takenEl = document.getElementById('masterDashQuizzesTaken');
+  if(takenEl) takenEl.innerHTML = takenTotal
+    ? `<div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#7c3aed;margin-bottom:8px">${takenTotal} total</div>` +
+      Object.entries(takenByDay).sort((a,b)=>new Date(b[0])-new Date(a[0])).slice(0,10)
+        .map(([d,n])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:.78rem"><span>${d}</span><span style="font-weight:700;color:#7c3aed">${n}</span></div>`).join('')
+    : '<div style="color:var(--muted);font-size:.8rem">No quizzes taken in the last 30 days.</div>';
+
+  // ── TOP ACTIVE STUDENTS ─────────────────────────────────────────────────────
+  const stuActivity = Object.entries(stuLog||{}).map(([uid, sessions])=>{
+    const logins30d = Object.entries(sessions||{}).filter(([k])=>Number(k)>cutoff30d).length;
+    const name = Object.values(sessions||{}).slice(-1)[0]?.name || uid;
+    return { uid, name, logins30d };
+  }).filter(s=>s.logins30d>0).sort((a,b)=>b.logins30d-a.logins30d).slice(0,15);
+
+  const topEl = document.getElementById('masterDashTopStudents');
+  if(topEl) topEl.innerHTML = stuActivity.length
+    ? `<table style="border-collapse:collapse;width:100%;font-size:.8rem">
+        <thead><tr style="background:var(--panel2)">
+          <th style="padding:6px 12px;text-align:left;border:1px solid var(--border)">#</th>
+          <th style="padding:6px 12px;text-align:left;border:1px solid var(--border)">Student</th>
+          <th style="padding:6px 12px;text-align:center;border:1px solid var(--border)">Logins (30d)</th>
+        </tr></thead><tbody>
+        ${stuActivity.map((s,i)=>`<tr>
+          <td style="padding:5px 12px;border:1px solid var(--border);font-family:monospace;font-size:.7rem;color:var(--muted)">${i+1}</td>
+          <td style="padding:5px 12px;border:1px solid var(--border);font-weight:600">${esc(s.name)}</td>
+          <td style="padding:5px 12px;border:1px solid var(--border);text-align:center;font-weight:700;color:var(--cl)">${s.logins30d}</td>
+        </tr>`).join('')}
+        </tbody></table>`
+    : '<div style="color:var(--muted);font-size:.8rem">No student activity in the last 30 days.</div>';
+}
+// ── END MASTER DASHBOARD ─────────────────────────────────────────────────────
 let _isSuperAdmin = false;
+let _isMasterAdmin = false;
 let _adminCurrentSubTab = 'instructors';
 
 async function _checkSuperAdmin(){
@@ -2488,9 +2724,17 @@ async function _checkSuperAdmin(){
   try{
     const flag = await dbGet(`config/superAdmins/${instUser.uid}`);
     _isSuperAdmin = !!flag;
-  } catch(e){ _isSuperAdmin = false; }
+    const masterFlag = await dbGet(`config/masterAdmins/${instUser.uid}`);
+    _isMasterAdmin = !!masterFlag;
+    if(_isMasterAdmin) _isSuperAdmin = true; // master admin has all super admin rights
+  } catch(e){ _isSuperAdmin = false; _isMasterAdmin = false; }
   const btn = document.getElementById('adminTabBtn');
   if(btn) btn.classList.toggle('hidden', !_isSuperAdmin);
+  const masterBtn = document.getElementById('masterDashTabBtn');
+  if(masterBtn) masterBtn.classList.toggle('hidden', !_isMasterAdmin);
+  // Log access for master admin analytics
+  if(instUser?.uid){ try{ dbSet(`accessLog/instructors/${instUser.uid}/${Date.now()}`,{ts:ts(),name:instProfile?.name||''}); }catch(e){} }
+}
 }
 
 function adminSubTab(tab){
@@ -2638,9 +2882,9 @@ async function adminLoadClassQuizzes(){
     const assigned = Object.entries(classroom?.assignedQuizzes||{});
     if(!assigned.length){ el.innerHTML = '<div class="empty-state">No quizzes assigned.</div>'; return; }
     const rows = await Promise.all(assigned.map(async ([qid, info]) => {
-      const sessions = await dbGet(`quizSessions/${classId}/${qid}`) || {};
-      const attempts = Object.values(sessions);
-      const scores = attempts.map(a => a.score).filter(s => s != null);
+      const stuProgress = await dbGet(`quizProgress/${classId}/${qid}`) || {};
+      const allAttempts = Object.values(stuProgress).flatMap(s => Object.values(s.attempts||{}));
+      const scores = allAttempts.map(a => a.score).filter(s => s != null);
       const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
       const best = scores.length ? Math.max(...scores).toFixed(1) : '—';
       const assigned_on = info.assignedAt ? new Date(info.assignedAt).toLocaleDateString() : '—';
@@ -2648,7 +2892,7 @@ async function adminLoadClassQuizzes(){
         <div style="font-weight:700;font-size:.9rem;margin-bottom:4px">${esc(info.quizTitle||qid)}</div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;font-family:monospace;font-size:.72rem;color:var(--muted)">
           <span>Assigned: ${assigned_on}</span>
-          <span>Attempts: ${attempts.length}</span>
+          <span>Attempts: ${allAttempts.length}</span>
           <span>Avg: ${avg}%</span>
           <span>Best: ${best}%</span>
         </div>
@@ -2671,8 +2915,9 @@ async function adminLoadClassGradebook(){
     const stuEntries = Object.entries(students||{}).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
     if(!quizzes.length || !stuEntries.length){ el.innerHTML = '<div class="empty-state">No quizzes or students yet.</div>'; return; }
 
-    // Build grade matrix
-    const allSessions = await dbGet(`quizSessions/${classId}`) || {};
+    // Read all progress for this class — path: quizProgress/{classId}/{quizId}/{stuKey}/attempts
+    const allProgress = await dbGet(`quizProgress/${classId}`) || {};
+
     const colW = 110;
     let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem">
       <thead><tr style="background:var(--panel2)">
@@ -2682,10 +2927,10 @@ async function adminLoadClassGradebook(){
       </tr></thead><tbody>`;
 
     for(const [stuKey, stuData] of stuEntries){
-      const stuSessions = allSessions[stuKey] || {};
       const scores = [];
       const cells = quizzes.map(([qid]) => {
-        const attempts = Object.values(stuSessions[qid]||{}).filter(a=>a.score!=null);
+        const stuProgress = allProgress[qid]?.[stuKey] || {};
+        const attempts = Object.values(stuProgress.attempts||{}).filter(a=>a.score!=null);
         if(!attempts.length) return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
         const best = Math.max(...attempts.map(a=>a.score));
         scores.push(best);
@@ -2705,24 +2950,35 @@ async function adminLoadClassIntegrity(){
   const el = document.getElementById('acmPane-integrity');
   el.innerHTML = '<div class="empty-state">Loading…</div>';
   try {
-    const log = await dbGet('integrityLog') || {};
-    const entries = Object.entries(log)
-      .filter(([,v]) => v.classId === classId)
-      .sort((a,b) => (b[1].ts||0) - (a[1].ts||0));
-    if(!entries.length){ el.innerHTML = '<div class="empty-state">No integrity flags for this class.</div>'; return; }
-    el.innerHTML = entries.map(([id, e]) => {
-      const ts = e.ts ? new Date(e.ts).toLocaleString() : '—';
-      const flags = [];
-      if(e.tabSwitches)  flags.push(`Tab Switches: ${e.tabSwitches}`);
-      if(e.windowLeft)   flags.push(`Left Window: ${e.windowLeft}`);
-      if(e.copyPaste)    flags.push(`Copy/Paste: ${e.copyPaste}`);
+    // integrityLog/{classId}/{quizId}/{stuKey}/{pushKey} = {type, name, ts, ...}
+    const classLog = await dbGet(`integrityLog/${classId}`) || {};
+    const allFlags = [];
+    for(const [quizId, stuEntries] of Object.entries(classLog)){
+      for(const [stuKey, events] of Object.entries(stuEntries||{})){
+        const evList = Object.values(events||{});
+        const tabs   = evList.filter(e=>e.type==='tab_switch').length;
+        const blurs  = evList.filter(e=>e.type==='window_blur').length;
+        if(tabs || blurs){
+          const name = evList[0]?.name || stuKey;
+          const latestTs = Math.max(...evList.map(e=>e.ts||0));
+          allFlags.push({ quizId, stuKey, name, tabs, blurs, ts: latestTs });
+        }
+      }
+    }
+    if(!allFlags.length){ el.innerHTML = '<div class="empty-state">No integrity flags for this class.</div>'; return; }
+    allFlags.sort((a,b) => b.ts - a.ts);
+    el.innerHTML = allFlags.map(f => {
+      const ts = f.ts ? new Date(f.ts).toLocaleString() : '—';
       return `<div style="border:1px solid rgba(220,50,50,.3);border-radius:6px;padding:10px 14px;margin-bottom:8px;background:rgba(220,50,50,.06)">
         <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:4px">
-          <span style="font-weight:700;font-size:.88rem">${esc(e.studentName||e.studentKey||'unknown')}</span>
+          <span style="font-weight:700;font-size:.88rem">${esc(f.name)}</span>
           <span style="font-family:monospace;font-size:.65rem;color:var(--muted)">${ts}</span>
         </div>
-        <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:4px">${esc(e.quizTitle||e.quizId||'—')}</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">${flags.map(f=>`<span style="background:rgba(220,50,50,.15);color:#e85555;border:1px solid rgba(220,50,50,.25);border-radius:3px;font-family:monospace;font-size:.65rem;padding:2px 6px">⚠ ${esc(f)}</span>`).join('')}</div>
+        <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:6px">Quiz ID: ${esc(f.quizId)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${f.tabs  ? `<span style="background:rgba(220,50,50,.15);color:#e85555;border:1px solid rgba(220,50,50,.25);border-radius:3px;font-family:monospace;font-size:.65rem;padding:2px 6px">⚠ Tab Switches ×${f.tabs}</span>` : ''}
+          ${f.blurs ? `<span style="background:rgba(220,50,50,.15);color:#e85555;border:1px solid rgba(220,50,50,.25);border-radius:3px;font-family:monospace;font-size:.65rem;padding:2px 6px">⚠ Left Window ×${f.blurs}</span>` : ''}
+        </div>
       </div>`;
     }).join('');
   } catch(e){ el.innerHTML = `<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
@@ -2817,25 +3073,69 @@ async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
 
     const classBlocks = await Promise.all(allStudentRecords.map(async ({classId: cid, className, key, data, classroom}) => {
       const quizzes = Object.entries(classroom.assignedQuizzes||{});
-      const sessions = await dbGet(`quizSessions/${cid}/${key}`) || {};
-      const integrityAll = await dbGet('integrityLog') || {};
-      const intFlags = Object.values(integrityAll).filter(e => (e.classId===cid) && (e.studentKey===key || (stuUid && e.studentUid===stuUid)));
+      // Correct path: quizSessions/{classId}/{stuKey}/{qid}
+      const stuSessions = await dbGet(`quizSessions/${cid}/${key}`) || {};
+      const integrityAll = await dbGet(`integrityLog/${cid}`) || {};
+      const intFlags = [];
+      for(const [qid, stuEntries] of Object.entries(integrityAll)){
+        const evList = Object.values(stuEntries?.[key]||{});
+        const tabs  = evList.filter(e=>e.type==='tab_switch').length;
+        const blurs = evList.filter(e=>e.type==='window_blur').length;
+        if(tabs||blurs) intFlags.push({qid, tabs, blurs});
+      }
       const joined = data.joinedAt ? new Date(data.joinedAt).toLocaleDateString() : '—';
 
       const quizRows = quizzes.map(([qid, qinfo]) => {
-        const attempts = Object.values(sessions[qid]||{}).filter(a=>a.score!=null);
-        if(!attempts.length) return `<tr><td style="padding:5px 10px;border:1px solid var(--border)">${esc(qinfo.quizTitle||qid)}</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:center;color:var(--muted)">—</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:center;color:var(--muted)">—</td></tr>`;
+        const attempts = Object.entries(stuSessions[qid]||{})
+          .map(([aid, a]) => ({...a, aid}))
+          .filter(a => a.score != null)
+          .sort((a,b) => (b.submittedAt||b.endedAt||0) - (a.submittedAt||a.endedAt||0));
+
+        if(!attempts.length) return `<tr>
+          <td style="padding:5px 10px;border:1px solid var(--border)">${esc(qinfo.quizTitle||qid)}</td>
+          <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;color:var(--muted)">—</td>
+          <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;color:var(--muted)">—</td>
+          <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;color:var(--muted)">—</td>
+        </tr>`;
+
         const best = Math.max(...attempts.map(a=>a.score));
-        const last = attempts.sort((a,b)=>(b.endedAt||0)-(a.endedAt||0))[0];
-        const lastDate = last?.endedAt ? new Date(last.endedAt).toLocaleDateString() : '—';
+        const last = attempts[0];
+        const lastDate = (last?.submittedAt||last?.endedAt) ? new Date(last.submittedAt||last.endedAt).toLocaleDateString() : '—';
         const col = best>=80?'#16a34a':best>=60?'#d97706':'#dc2626';
-        return `<tr><td style="padding:5px 10px;border:1px solid var(--border)">${esc(qinfo.quizTitle||qid)}</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:center;font-weight:700;color:${col}">${best.toFixed(0)}%</td><td style="padding:5px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.68rem">${lastDate}</td></tr>`;
-      }).join('') || '<tr><td colspan="3" style="padding:6px 10px;text-align:center;color:var(--muted)">No quizzes taken</td></tr>';
+        const attemptsLabel = attempts.length > 1 ? `${attempts.length} attempts` : '1 attempt';
+
+        // Build attempt drill-down rows
+        const attemptRows = attempts.map((a, i) => {
+          const aDate = (a.submittedAt||a.endedAt) ? new Date(a.submittedAt||a.endedAt).toLocaleString() : '—';
+          const aCol = a.score>=80?'#16a34a':a.score>=60?'#d97706':'#dc2626';
+          const answers = Object.values(a.answers||{});
+          const qCount = answers.length;
+          const correct = answers.filter(x=>x.correct).length;
+          return `<tr style="background:rgba(0,0,0,.15)">
+            <td style="padding:4px 10px 4px 22px;border:1px solid var(--border);font-family:monospace;font-size:.68rem;color:var(--muted)">
+              Attempt ${attempts.length - i} — ${aDate}
+            </td>
+            <td style="padding:4px 10px;border:1px solid var(--border);text-align:center;font-weight:700;font-size:.8rem;color:${aCol}">${a.score.toFixed(0)}%</td>
+            <td style="padding:4px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.68rem;color:var(--muted)">${qCount ? `${correct}/${qCount} correct` : '—'}</td>
+            <td style="padding:4px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.65rem;color:var(--muted)">${i===0?'Latest':''}</td>
+          </tr>`;
+        }).join('');
+
+        return `<tr style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+          <td style="padding:6px 10px;border:1px solid var(--border)">${esc(qinfo.quizTitle||qid)} <span style="font-family:monospace;font-size:.62rem;color:var(--muted)">▼</span></td>
+          <td style="padding:6px 10px;border:1px solid var(--border);text-align:center;font-weight:700;color:${col}">${best.toFixed(0)}%</td>
+          <td style="padding:6px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.68rem">${lastDate}</td>
+          <td style="padding:6px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.65rem;color:var(--muted)">${attemptsLabel}</td>
+        </tr>
+        <tr style="display:none"><td colspan="4" style="padding:0;border:1px solid var(--border)">
+          <table style="border-collapse:collapse;width:100%">${attemptRows}</table>
+        </td></tr>`;
+      }).join('') || '<tr><td colspan="4" style="padding:6px 10px;text-align:center;color:var(--muted)">No quizzes taken</td></tr>';
 
       const flagBadges = intFlags.map(f => {
         const parts = [];
-        if(f.tabSwitches) parts.push(`Tab Switches: ${f.tabSwitches}`);
-        if(f.windowLeft)  parts.push(`Left Window: ${f.windowLeft}`);
+        if(f.tabs)  parts.push(`Tab Switches ×${f.tabs}`);
+        if(f.blurs) parts.push(`Left Window ×${f.blurs}`);
         return parts.map(p=>`<span style="background:rgba(220,50,50,.15);color:#e85555;border:1px solid rgba(220,50,50,.25);border-radius:3px;font-family:monospace;font-size:.62rem;padding:1px 5px;margin:2px">⚠ ${esc(p)}</span>`).join('');
       }).join('') || '<span style="font-family:monospace;font-size:.68rem;color:var(--muted)">No flags</span>';
 
@@ -2854,6 +3154,7 @@ async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
               <th style="padding:6px 10px;text-align:left;border:1px solid var(--border)">Quiz</th>
               <th style="padding:6px 10px;text-align:center;border:1px solid var(--border)">Best</th>
               <th style="padding:6px 10px;text-align:center;border:1px solid var(--border)">Last Taken</th>
+              <th style="padding:6px 10px;text-align:center;border:1px solid var(--border)">Attempts</th>
             </tr></thead><tbody>${quizRows}</tbody>
           </table></div>
           <div style="font-family:monospace;font-size:.7rem;font-weight:700;letter-spacing:1px;color:var(--muted);margin-bottom:6px">INTEGRITY FLAGS</div>
@@ -3883,7 +4184,7 @@ function instSwitchTab(tab){
 function instSwitchTabRaw(tab){
   // Persist tab so refresh restores it
   if(instUser?.uid) try{ localStorage.setItem('instLastTab_'+instUser.uid, tab); }catch(e){}
-  ['classrooms','classroom-detail','quizzes','dashboard','performance','sim','admin'].forEach(t=>{
+  ['classrooms','classroom-detail','quizzes','dashboard','performance','sim','admin','masterdash'].forEach(t=>{
     const el = document.getElementById('inst-tab-'+t);
     if(el) el.style.display = (t===tab) ? 'block' : 'none';
   });
@@ -3900,6 +4201,7 @@ function instSwitchTabRaw(tab){
   if(tab === 'classrooms') loadClassrooms();
   if(tab === 'admin') adminSubTab(_adminCurrentSubTab || 'instructors');
   if(tab === 'sim') instSimInit();
+  if(tab === 'masterdash') masterDashLoad();
 }
 
 function backToClassrooms(){
