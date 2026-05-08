@@ -1234,7 +1234,7 @@ a{color:var(--accent);text-decoration:none}
 
     <!-- Answer entry -->
     <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px">
-      <div style="font-family:monospace;font-size:.78rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Your Reading</div>
+      <div id="stuSimInputLabel" style="font-family:monospace;font-size:.78rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;color:var(--muted)">Your Reading</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <div style="position:relative">
           <input id="stuSimAnswer" type="text" class="input" placeholder="0.0000" maxlength="7"
@@ -6032,6 +6032,8 @@ async function initStudentApp(){
 // When a live round is pushed, auto-switches to the sim tab and shows a badge.
 function stuSimInitBackground(){
   if(!stuSession?.classroomId) return;
+  // Don't run student sim background listener if the instructor app is active
+  if(instUser && !document.getElementById('instApp').classList.contains('hidden')) return;
   _stuSimClassId = stuSession.classroomId;
   if(_stuSimListener){ try{ _stuSimListener.off(); }catch(e){} }
   const liveRef = db.ref(`${SIM_PATH(_stuSimClassId)}/currentRound`);
@@ -6048,9 +6050,10 @@ function stuSimInitBackground(){
         badge.style.cssText = 'margin-left:6px;font-size:.65rem;background:#dc2626;color:#fff;padding:2px 6px;border-radius:9px;animation:pulse 1s infinite;vertical-align:middle';
         simBtn.appendChild(badge);
       }
-      // Auto-switch to sim tab if student isn't already there
+      // Auto-switch to sim tab only if student app is the active screen
       const simView = document.getElementById('stuSimView');
-      if(simView && simView.classList.contains('hidden')){
+      const instActive = instUser && !document.getElementById('instApp').classList.contains('hidden');
+      if(!instActive && simView && simView.classList.contains('hidden')){
         stuSwitchTab('sim');
       }
     } else {
@@ -13365,7 +13368,7 @@ function micSvgBody(d, locked, side='inst'){
 
   if(locked){
     s += `<rect x="0" y="0" width="${W}" height="${H}" fill="rgba(200,0,0,0.12)"/>`;
-    s += `<text x="${W/2}" y="${H/2+6}" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="22" fill="#cc0000">LOCKED</text>`;
+    s += `<text x="${W-10}" y="22" text-anchor="end" font-family="sans-serif" font-weight="bold" font-size="15" fill="#cc0000">🔒 LOCKED</text>`;
   }
 
   // Dynamic range label — centred over the bottom of the U-frame arc.
@@ -13561,6 +13564,8 @@ function stuSimHandleLiveUpdate(data){
     }
     if(banner) banner.classList.remove('hidden');
     if(ml) ml.textContent='Live Session — read the micrometer and submit your answer.';
+    const il=document.getElementById('stuSimInputLabel');
+    if(il){ il.textContent='🔴 Live Session Reading'; il.style.color='#cc0000'; }
     if(rb) rb.disabled=true; if(revb) revb.disabled=true;
     const re=document.getElementById('stuSimLiveRound');
     if(re) re.textContent=`Round ${data.roundNum||1}`;
@@ -13571,6 +13576,8 @@ function stuSimHandleLiveUpdate(data){
     simRedraw('stu');
     if(banner) banner.classList.add('hidden');
     if(ml) ml.textContent='Practice Mode — drag the thimble or use the controls below.';
+    const il2=document.getElementById('stuSimInputLabel');
+    if(il2){ il2.textContent='Your Reading'; il2.style.color=''; }
     if(rb) rb.disabled=false; if(revb) revb.disabled=false;
   }
 }
@@ -13644,6 +13651,9 @@ async function instSimStartSession(){
   if(sendBtn)sendBtn.classList.remove('hidden');
   const info=document.getElementById('instSimSessionInfo');
   if(info)info.textContent=`Session ${_instSimSessionNum} · Ready`;
+  // Hide photo reference window during live session — zoom panel only
+  const bodyDiv=document.getElementById('instMicBody')?.parentElement;
+  if(bodyDiv)bodyDiv.style.display='none';
   _showInstToast(`✓ Session ${_instSimSessionNum} started. Randomize and send when ready.`,3000);
 }
 
@@ -13686,6 +13696,9 @@ async function instSimEndSession(){
   document.getElementById('instSimSendBtn')?.classList.add('hidden');
   document.getElementById('instSimNextBtn')?.classList.add('hidden');
   document.getElementById('instSimResponsesWrap')?.classList.add('hidden');
+  // Restore photo reference window
+  const bodyDiv=document.getElementById('instMicBody')?.parentElement;
+  if(bodyDiv)bodyDiv.style.display='';
   _showInstToast(`✓ Session ended. "Instruments Session ${_instSimSessionNum}" added to gradebook.`,5000);
   if(selectedClassId===classId) try{loadAssignedQuizList(classId);}catch(e){}
 }
