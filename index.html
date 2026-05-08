@@ -1356,7 +1356,7 @@ a{color:var(--accent);text-decoration:none}
 
 <!-- ============== NAME PROMPT MODAL (Google sign-up) ============== -->
 <!-- ── ADMIN CLASS DETAIL MODAL ───────────────────────────────────────── -->
-<div id="adminClassModal" class="modal-backdrop hidden" style="z-index:3000" onclick="if(event.target===this)closeAdminClassModal()">
+<div id="adminClassModal" class="modal-overlay hidden" onclick="if(event.target===this)closeAdminClassModal()">
   <div class="stu-modal" style="max-width:860px;max-height:92vh">
     <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
       <div style="flex:1">
@@ -1381,7 +1381,7 @@ a{color:var(--accent);text-decoration:none}
 </div>
 
 <!-- ── ADMIN INSTRUCTOR PROFILE MODAL ────────────────────────────────── -->
-<div id="adminInstModal" class="modal-backdrop hidden" style="z-index:3000" onclick="if(event.target===this)closeAdminInstModal()">
+<div id="adminInstModal" class="modal-overlay hidden" onclick="if(event.target===this)closeAdminInstModal()">
   <div class="stu-modal" style="max-width:700px;max-height:88vh">
     <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
       <div style="flex:1">
@@ -1397,7 +1397,7 @@ a{color:var(--accent);text-decoration:none}
 </div>
 
 <!-- ── ADMIN STUDENT PROFILE MODAL ───────────────────────────────────── -->
-<div id="adminStuModal" class="modal-backdrop hidden" style="z-index:3000" onclick="if(event.target===this)closeAdminStuModal()">
+<div id="adminStuModal" class="modal-overlay hidden" onclick="if(event.target===this)closeAdminStuModal()">
   <div class="stu-modal" style="max-width:700px;max-height:88vh">
     <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
       <div style="flex:1">
@@ -2562,13 +2562,11 @@ async function adminOpenClassModal(classId, className){
   document.getElementById('adminClassModalTitle').textContent = className || 'Class Detail';
   document.getElementById('adminClassModalMeta').textContent = `Loading… ID: ${classId}`;
   document.getElementById('adminClassModal').classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
   adminClassModalTab('roster');
 }
 
 function closeAdminClassModal(){
   document.getElementById('adminClassModal').classList.add('hidden');
-  document.body.style.overflow = '';
   _adminClassModalId = null;
 }
 
@@ -2733,7 +2731,6 @@ async function adminLoadClassIntegrity(){
 // ── ADMIN INSTRUCTOR PROFILE MODAL ────────────────────────────────────────
 function closeAdminInstModal(){
   document.getElementById('adminInstModal').classList.add('hidden');
-  document.body.style.overflow = '';
 }
 
 async function adminOpenInstructorProfile(uid, name){
@@ -2741,7 +2738,6 @@ async function adminOpenInstructorProfile(uid, name){
   document.getElementById('adminInstModalMeta').textContent = `UID: ${uid}`;
   document.getElementById('adminInstModalBody').innerHTML = '<div class="empty-state">Loading…</div>';
   document.getElementById('adminInstModal').classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
   try {
     const [profile, ownClassrooms, coClassrooms] = await Promise.all([
       dbGet(`instructors/${uid}`),
@@ -2797,7 +2793,6 @@ async function adminOpenInstructorProfile(uid, name){
 // ── ADMIN STUDENT PROFILE MODAL ───────────────────────────────────────────
 function closeAdminStuModal(){
   document.getElementById('adminStuModal').classList.add('hidden');
-  document.body.style.overflow = '';
 }
 
 async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
@@ -2805,7 +2800,6 @@ async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
   document.getElementById('adminStuModalMeta').textContent = `Loading… UID: ${stuUid}`;
   document.getElementById('adminStuModalBody').innerHTML = '<div class="empty-state">Loading…</div>';
   document.getElementById('adminStuModal').classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
   try {
     // Find ALL classrooms this student is in (by UID or key)
     const allClassrooms = await dbGet('classrooms') || {};
