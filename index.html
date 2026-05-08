@@ -844,6 +844,7 @@ a{color:var(--accent);text-decoration:none}
           <div id="instSimSessionInfo" style="font-family:monospace;font-size:.72rem;color:var(--muted)">Session 1 · Round 0</div>
         </div>
         <div id="instSimSubmitCount" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--accent)">0 / 0 submitted</div>
+        <button class="btn btn-ghost btn-sm" onclick="instSimDeleteRound()" style="font-size:.75rem;color:var(--wl);border-color:var(--wl)">🗑 Delete Round</button>
         <button class="btn btn-danger btn-sm" onclick="instSimEndSession()">End Session</button>
       </div>
 
@@ -2453,18 +2454,29 @@ function initInstApp(){
   if(!instUser){ instUser = firebase.auth().currentUser; }
   if(!instUser) { console.error('initInstApp: no instUser'); return; }
   document.getElementById('instUserName').textContent = (instProfile && instProfile.name) || instUser.displayName || instUser.email || 'Instructor';
-  // Push auth screen sentinel so back from classrooms → sign in page
   _navStack.length = 0;
   _navStack.push({ screen: 'landing' });
-  instSwitchTabRaw('classrooms');
-  loadClassrooms();
+
+  // Restore last tab + classroom from localStorage
+  const savedTab     = localStorage.getItem('instLastTab_'+instUser.uid) || 'classrooms';
+  const savedClassId = localStorage.getItem('instLastClassId_'+instUser.uid) || null;
+
   loadQuizBank();
-  // Link any pending co-instructor invitations to this real UID
   _linkPendingCoInstructor();
-  // Check for unread notifications
   _checkInstNotifications();
-  // Check super-admin status
   _checkSuperAdmin();
+
+  // Restore to classrooms list first, then open saved classroom if one was selected
+  instSwitchTabRaw('classrooms');
+  loadClassrooms().then(() => {
+    if(savedClassId && (savedTab === 'classroom-detail' || savedTab === 'classrooms')){
+      // Re-open the classroom they were in
+      openClassroom(savedClassId);
+    } else if(savedTab && savedTab !== 'classrooms' && savedTab !== 'classroom-detail'){
+      // Restore other tabs (quizzes, sim, admin, etc.)
+      instSwitchTabRaw(savedTab);
+    }
+  });
 }
 
 // ── SUPER-ADMIN ────────────────────────────────────────────────────────────
@@ -3820,6 +3832,8 @@ async function doCreateClassroom(){
 
 async function openClassroom(classId){
   selectedClassId = classId;
+  // Persist selected classroom for refresh restore
+  if(instUser?.uid) try{ localStorage.setItem('instLastClassId_'+instUser.uid, classId); }catch(e){}
   const classroom = await dbGet(`classrooms/${classId}`);
   if(!classroom) return;
 
@@ -3873,6 +3887,8 @@ function instSwitchTab(tab){
 }
 
 function instSwitchTabRaw(tab){
+  // Persist tab so refresh restores it
+  if(instUser?.uid) try{ localStorage.setItem('instLastTab_'+instUser.uid, tab); }catch(e){}
   ['classrooms','classroom-detail','quizzes','dashboard','performance','sim','admin'].forEach(t=>{
     const el = document.getElementById('inst-tab-'+t);
     if(el) el.style.display = (t===tab) ? 'block' : 'none';
@@ -3893,6 +3909,7 @@ function instSwitchTabRaw(tab){
 }
 
 function backToClassrooms(){
+  if(instUser?.uid) try{ localStorage.removeItem('instLastClassId_'+instUser.uid); }catch(e){}
   instSwitchTab('classrooms');
   loadClassrooms();
 }
@@ -13508,6 +13525,13 @@ function simToggleGuide(side){
   const btn = document.getElementById(`${prefix}SimGuideBtn`);
   if(btn) btn.textContent = s.showGuide ? '📏 Hide Guide Line' : '📏 Show Guide Line';
   micRenderSide(side);
+  // If instructor toggles during a live session, push update to students
+  if(side==='inst' && _instSimActive && _instSimRoundId){
+    const classId = document.getElementById('instSimClassPicker')?.value;
+    if(classId){
+      dbSet(`${SIM_PATH(classId)}/currentRound/showGuide`, s.showGuide).catch(()=>{});
+    }
+  }
 }
 
 function simReveal(side){
@@ -13582,6 +13606,9 @@ async function stuSimInit(){
 }
 
 function stuSimHandleLiveUpdate(data){
+  // Don't update student sim UI if instructor app is the active screen
+  const instAppEl = document.getElementById('instApp');
+  if(instAppEl && !instAppEl.classList.contains('hidden')) return;
   const banner=document.getElementById('stuSimLiveBanner');
   const ml=document.getElementById('stuSimModeLabel');
   const rb=document.getElementById('stuSimRandomBtn');
@@ -13593,6 +13620,8 @@ function stuSimHandleLiveUpdate(data){
   if(data&&data.active){
     _stuSimLiveMode=true; _stuSimSessionNum=data.sessionNum; _stuSimRoundId=data.roundId;
     const s=SIM['stu'];
+    // Apply instructor's guide line setting — student cannot override during live session
+    s.showGuide = data.showGuide !== false;
     simAnimateTo('stu',data.value,data.range||0,()=>{s.locked=true;if(s.canvas)s.canvas.style.cursor='not-allowed';simRedraw('stu');});
     if(fb){fb.classList.add('hidden');fb.textContent='';}
     if(ans){ans.value='';ans.disabled=false;ans.style.borderColor='';}
@@ -13606,6 +13635,9 @@ function stuSimHandleLiveUpdate(data){
     if(ml) ml.textContent='Live Session — read the micrometer and submit your answer.';
     const il=document.getElementById('stuSimInputLabel');
     if(il){ il.textContent='🔴 Live Session Reading'; il.style.color='#cc0000'; }
+    // Hide guide button — instructor controls this during live session
+    const gb=document.getElementById('stuSimGuideBtn');
+    if(gb){ gb.disabled=true; gb.style.opacity='0.4'; gb.title='Guide line is controlled by your instructor during live sessions'; }
     if(rb) rb.disabled=true; if(revb) revb.disabled=true;
     const re=document.getElementById('stuSimLiveRound');
     if(re) re.textContent=`Round ${data.roundNum||1}`;
@@ -13618,6 +13650,9 @@ function stuSimHandleLiveUpdate(data){
     if(ml) ml.textContent='Practice Mode — drag the thimble or use the controls below.';
     const il2=document.getElementById('stuSimInputLabel');
     if(il2){ il2.textContent='Your Reading'; il2.style.color=''; }
+    // Restore guide button control to student
+    const gb=document.getElementById('stuSimGuideBtn');
+    if(gb){ gb.disabled=false; gb.style.opacity=''; gb.title=''; }
     if(rb) rb.disabled=false; if(revb) revb.disabled=false;
   }
 }
@@ -13719,7 +13754,7 @@ async function instSimSendRound(){
   _instSimRoundNum++; _instSimRoundId=`r${_instSimRoundNum}`;
   const s=SIM['inst'];
   await dbSet(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}`,{value:s.value,range:s.range,sentAt:ts(),responses:{}});
-  await dbSet(`${SIM_PATH(classId)}/currentRound`,{active:true,value:s.value,range:s.range,roundId:_instSimRoundId,roundNum:_instSimRoundNum,sessionNum:_instSimSessionNum,sentAt:ts()});
+  await dbSet(`${SIM_PATH(classId)}/currentRound`,{active:true,value:s.value,range:s.range,roundId:_instSimRoundId,roundNum:_instSimRoundNum,sessionNum:_instSimSessionNum,sentAt:ts(),showGuide:SIM['inst'].showGuide!==false});
   const info=document.getElementById('instSimSessionInfo');
   if(info)info.textContent=`Session ${_instSimSessionNum} · Round ${_instSimRoundNum} — LIVE`;
   const rl=document.getElementById('instSimRoundLabel');
@@ -13737,6 +13772,30 @@ async function instSimNextRound(){
   simRandomize('inst');
   await new Promise(r=>setTimeout(r,950));
   await instSimSendRound();
+}
+
+async function instSimDeleteRound(){
+  const classId=document.getElementById('instSimClassPicker')?.value;
+  if(!classId||!_instSimActive||!_instSimRoundId) return;
+  if(!confirm(`Delete Round ${_instSimRoundNum}?\n\nThis removes all student responses for this round and clears their screens. The round will not count in the gradebook.`)) return;
+  try{
+    // Clear the active round from Firebase (students see it deactivate)
+    await dbSet(`${SIM_PATH(classId)}/currentRound`,{active:false});
+    // Delete the round data entirely
+    await dbSet(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}`,null);
+    // Reset round state
+    _instSimRoundNum = Math.max(0, _instSimRoundNum-1);
+    _instSimRoundId = null;
+    if(_instSimResponseListener){try{_instSimResponseListener.off();}catch(e){} _instSimResponseListener=null;}
+    _instSimLastResponses={}; _instSimLastStudents={}; _instSimIntegrityCache={};
+    // Update UI
+    document.getElementById('instSimResponsesWrap')?.classList.add('hidden');
+    document.getElementById('instSimNextBtn')?.classList.add('hidden');
+    document.getElementById('instSimSubmitCount').textContent='0 / 0 submitted';
+    const info=document.getElementById('instSimSessionInfo');
+    if(info)info.textContent=`Session ${_instSimSessionNum} · Round deleted — set new value and send`;
+    _showInstToast(`🗑 Round deleted. Set a new reading and send when ready.`,3000);
+  }catch(e){alert('Error deleting round: '+e.message);}
 }
 
 async function instSimEndSession(){
