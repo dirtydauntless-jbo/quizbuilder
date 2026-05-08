@@ -867,7 +867,11 @@ a{color:var(--accent);text-decoration:none}
         <div style="flex:1"></div>
         <button id="instSimStartBtn" class="btn btn-primary" onclick="instSimStartSession()" style="padding:10px 20px">▶ Start New Session</button>
         <button id="instSimSendBtn" class="btn btn-primary hidden" onclick="instSimSendRound()" style="padding:10px 20px;background:var(--cl);color:#fff">📡 Lock &amp; Send to Students</button>
+        <button id="instSimRandSendBtn" class="btn btn-primary hidden" onclick="instSimNextRound()" style="padding:10px 20px;background:#7c3aed;color:#fff">🎲 Randomize &amp; Send</button>
         <button id="instSimNextBtn" class="btn btn-ghost hidden" onclick="instSimNextRound()" style="padding:10px 20px">→ Next Round</button>
+      </div>
+      <div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-bottom:14px">
+        💡 <strong>Set manually:</strong> drag the thimble on the simulator above, then click Lock &amp; Send — or use Randomize &amp; Send for a quick new round.
       </div>
 
       <!-- Class demo answer entry — instructor types class's collective answer -->
@@ -888,7 +892,7 @@ a{color:var(--accent);text-decoration:none}
 
       <div id="instSimResponsesWrap" class="hidden">
         <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:10px">Student Responses — Round <span id="instSimRoundLabel">1</span></div>
-        <div id="instSimResponses" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
+        <div id="instSimResponses"></div>
       </div>
     </div>
   </div>
@@ -10406,6 +10410,28 @@ async function logIntegrityEvent(type){
 
 let _tabWarningCount = 0;
 let _tabWarningEl = null;
+let _simHiddenSince = null;
+let _simWindowBlurSince = null;
+
+async function logSimIntegrityEvent(type){
+  if(!_stuSimLiveMode || !stuSession) return;
+  const classroomId = _stuSimClassId || stuSession.classroomId;
+  if(!classroomId || !_stuSimRoundId) return;
+  const key = stuSession.uid || safeKey(stuSession.name||'student');
+  const logPath = `integrityLog/${classroomId}/sim_${_stuSimSessionNum}_${_stuSimRoundId}/${key}`;
+  const payload = {
+    type,
+    name: stuSession.name,
+    uid: stuSession.uid || key,
+    classroomId,
+    sessionNum: _stuSimSessionNum,
+    roundId: _stuSimRoundId,
+    time: ts()
+  };
+  try {
+    await dbPush(logPath, payload);
+  } catch(e){}
+}
 
 function showTimedQuizWarning(reason){
   clearTabWarning();
@@ -10456,18 +10482,27 @@ function clearTabWarning(){
 // Hovering over taskbar/dock does NOT set document.hidden — only full focus loss does
 let _hiddenSince = null;
 document.addEventListener('visibilitychange', function(){
-  if(!activeQuiz) return;
-  if(document.hidden){
-    _hiddenSince = Date.now();
-  } else {
-    // Only count as a tab switch if page was hidden for more than 1.5 seconds
-    // (eliminates OS-level transient focus events like Chromebook taskbar hover)
-    if(_hiddenSince && (Date.now() - _hiddenSince) >= 1500){
-      _tabWarningCount++;
-      logIntegrityEvent('tab_switch');
-      if(_quizTimerEnd) showTimedQuizWarning('tab');
+  // Quiz integrity
+  if(activeQuiz){
+    if(document.hidden){
+      _hiddenSince = Date.now();
+    } else {
+      if(_hiddenSince && (Date.now() - _hiddenSince) >= 1500){
+        _tabWarningCount++;
+        logIntegrityEvent('tab_switch');
+        if(_quizTimerEnd) showTimedQuizWarning('tab');
+      }
+      _hiddenSince = null;
     }
-    _hiddenSince = null;
+  }
+  // Sim integrity
+  if(_stuSimLiveMode && stuSession && document.hidden){
+    _simHiddenSince = Date.now();
+  } else if(_stuSimLiveMode && stuSession && !document.hidden){
+    if(_simHiddenSince && (Date.now() - _simHiddenSince) >= 1500){
+      logSimIntegrityEvent('tab_switch');
+    }
+    _simHiddenSince = null;
   }
 });
 
@@ -10477,20 +10512,25 @@ document.addEventListener('visibilitychange', function(){
 let _windowBlurTimer = null;
 let _windowBlurSince = null;
 window.addEventListener('blur', function(){
-  if(!activeQuiz) return;
-  _windowBlurSince = Date.now();
+  if(activeQuiz) _windowBlurSince = Date.now();
+  if(_stuSimLiveMode && stuSession) _simWindowBlurSince = Date.now();
   _windowBlurTimer = setTimeout(()=>{
-    // Only log if: window still blurred AND document still visible (not a tab switch)
-    // AND the blur lasted long enough to be intentional (3+ seconds)
-    if(!document.hidden && _windowBlurSince && (Date.now() - _windowBlurSince) >= 3000){
-      logIntegrityEvent('window_blur');
+    if(!document.hidden){
+      if(activeQuiz && _windowBlurSince && (Date.now() - _windowBlurSince) >= 3000){
+        logIntegrityEvent('window_blur');
+      }
+      if(_stuSimLiveMode && stuSession && _simWindowBlurSince && (Date.now() - _simWindowBlurSince) >= 3000){
+        logSimIntegrityEvent('window_blur');
+      }
     }
     _windowBlurSince = null;
+    _simWindowBlurSince = null;
   }, 3000);
 });
 window.addEventListener('focus', function(){
   if(_windowBlurTimer){ clearTimeout(_windowBlurTimer); _windowBlurTimer = null; }
   _windowBlurSince = null;
+  _simWindowBlurSince = null;
 });
 
 // Warn on window close/navigate away during timed quiz
@@ -13616,15 +13656,27 @@ async function instSimOnClassChange(){
   const rw=document.getElementById('instSimResponsesWrap');
   if(active&&active.active){
     _instSimActive=true; _instSimSessionNum=active.sessionNum; _instSimRoundNum=active.roundNum||1; _instSimRoundId=active.roundId;
+    // ── RESTORE the micrometer to whatever was last sent ──────────
+    const s=SIM['inst'];
+    s.value=active.value||s.value;
+    s.range=active.range||0;
+    const rs=document.getElementById('instSimRange');
+    if(rs) rs.value=String(s.range);
+    micRenderSide('inst');
+    // ─────────────────────────────────────────────────────────────
     if(sb)sb.classList.remove('hidden');
     if(stBtn)stBtn.classList.add('hidden');
     if(sendBtn)sendBtn.classList.remove('hidden');
     if(nextBtn)nextBtn.classList.remove('hidden');
+    document.getElementById('instSimRandSendBtn')?.classList.remove('hidden');
     if(rw)rw.classList.remove('hidden');
     const info=document.getElementById('instSimSessionInfo');
-    if(info)info.textContent=`Session ${_instSimSessionNum} · Round ${_instSimRoundNum}`;
+    if(info)info.textContent=`Session ${_instSimSessionNum} · Round ${_instSimRoundNum} — LIVE`;
     const rl=document.getElementById('instSimRoundLabel');
     if(rl)rl.textContent=_instSimRoundNum;
+    // Hide photo window since session is active
+    const bodyDiv=document.getElementById('instMicBody')?.parentElement;
+    if(bodyDiv)bodyDiv.style.display='none';
     instSimListenResponses(classId);
   } else {
     _instSimActive=false;
@@ -13633,6 +13685,9 @@ async function instSimOnClassChange(){
     if(sendBtn)sendBtn.classList.add('hidden');
     if(nextBtn)nextBtn.classList.add('hidden');
     if(rw)rw.classList.add('hidden');
+    // Restore photo window
+    const bodyDiv=document.getElementById('instMicBody')?.parentElement;
+    if(bodyDiv)bodyDiv.style.display='';
   }
 }
 
@@ -13649,6 +13704,7 @@ async function instSimStartSession(){
   if(sb)sb.classList.remove('hidden');
   if(stBtn)stBtn.classList.add('hidden');
   if(sendBtn)sendBtn.classList.remove('hidden');
+  document.getElementById('instSimRandSendBtn')?.classList.remove('hidden');
   const info=document.getElementById('instSimSessionInfo');
   if(info)info.textContent=`Session ${_instSimSessionNum} · Ready`;
   // Hide photo reference window during live session — zoom panel only
@@ -13694,6 +13750,7 @@ async function instSimEndSession(){
   document.getElementById('instSimSessionBar')?.classList.add('hidden');
   document.getElementById('instSimStartBtn')?.classList.remove('hidden');
   document.getElementById('instSimSendBtn')?.classList.add('hidden');
+  document.getElementById('instSimRandSendBtn')?.classList.add('hidden');
   document.getElementById('instSimNextBtn')?.classList.add('hidden');
   document.getElementById('instSimResponsesWrap')?.classList.add('hidden');
   // Restore photo reference window
@@ -13701,6 +13758,102 @@ async function instSimEndSession(){
   if(bodyDiv)bodyDiv.style.display='';
   _showInstToast(`✓ Session ended. "Instruments Session ${_instSimSessionNum}" added to gradebook.`,5000);
   if(selectedClassId===classId) try{loadAssignedQuizList(classId);}catch(e){}
+}
+
+let _instSimSortCol = 'name', _instSimSortDir = 1;
+
+function instSimSortBy(col){
+  if(_instSimSortCol === col) _instSimSortDir *= -1;
+  else { _instSimSortCol = col; _instSimSortDir = 1; }
+  instSimRenderResponses();
+}
+
+let _instSimLastResponses = {}, _instSimLastStudents = {}, _instSimIntegrityCache = {};
+
+function instSimRenderResponses(){
+  const el = document.getElementById('instSimResponses');
+  if(!el) return;
+  const responses = _instSimLastResponses;
+  const students  = _instSimLastStudents;
+  const stuEntries = Object.entries(students);
+  if(!stuEntries.length){ el.innerHTML='<div class="empty-state" style="font-size:.75rem">No students enrolled.</div>'; return; }
+
+  // Build row data
+  let rows = stuEntries.map(([key, s], idx) => {
+    const nameParts = (s.name||key).trim().split(/\s+/);
+    const lastName  = nameParts.length>1 ? nameParts[nameParts.length-1] : nameParts[0];
+    const resp = responses[key] || responses[s.uid] || null;
+    const status = resp ? (resp.correct ? 1 : 0) : -1; // 1=correct, 0=wrong, -1=pending
+    return { key, name: s.name||key, lastName, resp, status };
+  });
+
+  // Sort
+  rows.sort((a, b) => {
+    if(_instSimSortCol === 'name'){
+      return _instSimSortDir * a.lastName.localeCompare(b.lastName);
+    } else {
+      // Sort by status: correct first(1), wrong(0), pending(-1) — or reverse
+      return _instSimSortDir * (b.status - a.status);
+    }
+  });
+
+  const correct  = rows.filter(r=>r.status===1).length;
+  const wrong    = rows.filter(r=>r.status===0).length;
+  const pending  = rows.filter(r=>r.status===-1).length;
+  const total    = rows.length;
+
+  const arrowName   = _instSimSortCol==='name'   ? (_instSimSortDir===1?'↑':'↓') : '';
+  const arrowStatus = _instSimSortCol==='status' ? (_instSimSortDir===1?'↑':'↓') : '';
+
+  el.innerHTML = `
+    <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;font-family:monospace;font-size:.72rem">
+      <span style="color:var(--muted)">${total} students</span>
+      <span style="color:var(--cl)">✓ ${correct} correct</span>
+      <span style="color:var(--wl)">✗ ${wrong} incorrect</span>
+      <span style="color:var(--muted)">⏳ ${pending} pending</span>
+    </div>
+    <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;width:100%;font-size:.82rem">
+      <thead>
+        <tr style="background:var(--panel2);border-bottom:2px solid var(--border)">
+          <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);width:36px;font-family:monospace;font-size:.7rem;color:var(--muted)">#</th>
+          <th style="padding:7px 12px;text-align:left;border:1px solid var(--border);cursor:pointer;user-select:none" onclick="instSimSortBy('name')">
+            Student ${arrowName} <span style="font-size:.65rem;color:var(--muted)">${arrowName?'':'↕'}</span>
+          </th>
+          <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);cursor:pointer;user-select:none;min-width:90px" onclick="instSimSortBy('status')">
+            Answer ${arrowStatus} <span style="font-size:.65rem;color:var(--muted)">${arrowStatus?'':'↕'}</span>
+          </th>
+          <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);min-width:70px">Result</th>
+          <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);min-width:80px;font-size:.7rem;color:var(--muted)">Integrity</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r, i) => {
+          const statusCell = r.status === -1
+            ? `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted);font-family:monospace;font-size:.75rem">—</td>
+               <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted);font-size:.75rem">⏳</td>`
+            : `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;color:${r.status?'var(--cl)':'var(--wl)'}">${(r.resp.answer||0).toFixed(4)}"</td>
+               <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;font-size:.85rem;background:${r.status?'rgba(34,197,94,.08)':'rgba(200,50,50,.08)'};color:${r.status?'var(--cl)':'var(--wl)'}">${r.status?'✓ Correct':'✗ Wrong'}</td>`;
+          // Integrity flags from pre-fetched data
+          const flags = _instSimIntegrityCache[r.key] || [];
+          const tabs   = flags.filter(f=>f.type==='tab_switch').length;
+          const blurs  = flags.filter(f=>f.type==='window_blur').length;
+          const intCell = (tabs||blurs)
+            ? `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border)">
+                ${tabs  ? `<span style="background:rgba(204,68,68,.15);color:#e85555;border:1px solid rgba(204,68,68,.3);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;display:inline-block;margin:1px">⚠ Tab ×${tabs}</span>` : ''}
+                ${blurs ? `<span style="background:rgba(204,68,68,.1);color:#e85555;border:1px solid rgba(204,68,68,.2);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;display:inline-block;margin:1px">⚠ Left ×${blurs}</span>` : ''}
+               </td>`
+            : `<td style="padding:7px 8px;text-align:center;border:1px solid var(--border);color:var(--muted);font-size:.7rem">—</td>`;
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:monospace;font-size:.68rem;color:var(--muted)">${i+1}</td>
+            <td style="padding:7px 12px;border:1px solid var(--border);font-weight:600">${esc(r.name)}</td>
+            ${statusCell}
+            ${intCell}
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>`;
 }
 
 function instSimListenResponses(classId){
@@ -13711,14 +13864,21 @@ function instSimListenResponses(classId){
   ref.on('value',async snap=>{
     const responses=snap.val()||{};
     const students=await dbGet(`classroomStudents/${classId}`)||{};
+    _instSimLastResponses=responses;
+    _instSimLastStudents=students;
     const total=Object.keys(students).length;
     const submitted=Object.keys(responses).length;
     const ce=document.getElementById('instSimSubmitCount');
     if(ce)ce.textContent=`${submitted} / ${total} submitted`;
-    const el=document.getElementById('instSimResponses');
-    if(!el) return;
-    if(!submitted){el.innerHTML='<div class="empty-state" style="font-size:.75rem">Waiting for students...</div>';return;}
-    el.innerHTML=Object.entries(responses).map(([key,r])=>`<div style="padding:10px 12px;border-radius:6px;border:2px solid ${r.correct?'var(--cl)':'var(--wl)'};background:${r.correct?'rgba(34,197,94,.08)':'rgba(200,50,50,.08)'}"><div style="font-weight:700;font-size:.82rem;margin-bottom:3px">${esc(r.studentName||key)}</div><div style="font-family:monospace;font-size:.78rem;color:${r.correct?'var(--cl)':'var(--wl)'}">${r.correct?'✓':'✗'} ${(r.answer||0).toFixed(4)}"</div></div>`).join('');
+    // Fetch integrity flags for this round
+    try{
+      const iLog=await dbGet(`integrityLog/${classId}/sim_${_instSimSessionNum}_${_instSimRoundId}`)||{};
+      _instSimIntegrityCache={};
+      for(const [stuKey,events] of Object.entries(iLog)){
+        _instSimIntegrityCache[stuKey]=Object.values(events||{});
+      }
+    }catch(e){ _instSimIntegrityCache={}; }
+    instSimRenderResponses();
   });
 }
 
