@@ -583,6 +583,9 @@ setTimeout(function(){
         <label for="rememberMe" style="font-family:monospace;font-size:.65rem;color:var(--muted);cursor:pointer">Remember me</label>
       </div>
       <button class="btn btn-primary" id="authSubmitBtn" style="width:100%;margin-top:8px;padding:12px" onclick="doEmailAuth()"><span id="i18n-inst-submit-btn">Sign In</span></button>
+      <div style="text-align:center;margin-top:10px">
+        <button onclick="doForgotPassword('inst')" id="i18n-inst-forgot" style="background:none;border:none;color:var(--muted);font-family:monospace;font-size:.72rem;cursor:pointer;text-decoration:underline">Forgot password?</button>
+      </div>
     </div>
     <div class="divider-or">or continue with</div>
     <button class="oauth-btn" onclick="doOAuthSignIn('google')" style="display:flex;align-items:center;justify-content:center;gap:10px">
@@ -621,6 +624,9 @@ setTimeout(function(){
         <label for="stuRememberMe" style="font-family:monospace;font-size:.65rem;color:var(--muted);cursor:pointer">Remember me</label>
       </div>
       <button class="btn btn-primary" id="stuAuthSubmitBtn" style="width:100%;margin-top:8px;padding:12px;background:var(--blue);color:#fff" onclick="doStuEmailAuth()"><span id="i18n-stu-submit-btn">Sign In</span></button>
+      <div style="text-align:center;margin-top:10px">
+        <button onclick="doForgotPassword('stu')" style="background:none;border:none;color:var(--muted);font-family:monospace;font-size:.72rem;cursor:pointer;text-decoration:underline">Forgot password?</button>
+      </div>
       <div id="stuSigningIn" style="display:none;text-align:center;font-family:monospace;font-size:.7rem;color:var(--blue);margin-top:8px">Signing in...</div>
     </div>
     <div class="divider-or">or continue with</div>
@@ -1908,7 +1914,37 @@ function switchAuthTab(tab){
   hideEl('authErr');
 }
 
-async function doEmailAuth(){
+async async function doForgotPassword(role){
+  const emailId = role === 'inst' ? 'authEmail' : 'stuAuthEmail';
+  const errId   = role === 'inst' ? 'authErr'   : 'stuAuthErr';
+  const email   = document.getElementById(emailId)?.value.trim();
+  if(!email){
+    const errEl = document.getElementById(errId);
+    if(errEl){ errEl.textContent = 'Enter your email address first.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+  try{
+    await auth.sendPasswordResetEmail(email);
+    const errEl = document.getElementById(errId);
+    if(errEl){
+      errEl.textContent = `✓ Password reset email sent to ${email}. Check your inbox (and spam folder).`;
+      errEl.style.color = 'var(--cl)';
+      errEl.classList.remove('hidden');
+    }
+  }catch(e){
+    const errEl = document.getElementById(errId);
+    if(errEl){
+      errEl.style.color = '';
+      const msg = e.code === 'auth/user-not-found' ? 'No account found with that email address.'
+                : e.code === 'auth/invalid-email'  ? 'Please enter a valid email address.'
+                : 'Error sending reset email. Please try again.';
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+    }
+  }
+}
+
+function doEmailAuth(){
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
   const errEl = document.getElementById('authErr');
