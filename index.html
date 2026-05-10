@@ -936,6 +936,15 @@ setTimeout(function(){
           <div id="instSimHistory"></div>
         </div>
       </div>
+
+      <!-- Permanent grades panel — shows whenever a classroom is selected -->
+      <div id="instSimGradesWrap" class="hidden" style="margin-top:24px;border-top:2px solid var(--border);padding-top:18px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">📊 Simulator Grades</div>
+          <button class="btn btn-ghost btn-sm" onclick="instSimLoadGrades()" style="font-size:.72rem">↻ Refresh</button>
+        </div>
+        <div id="instSimGradesContent"><div class="empty-state" style="font-size:.8rem">Loading grades…</div></div>
+      </div>
     </div>
   </div>
 
@@ -1244,7 +1253,6 @@ setTimeout(function(){
     </div>
   </div>
 
-  </div>
 
   <!-- Measurement Simulator -->
   <div id="stuSimView" class="hidden" style="padding:16px;max-width:900px;margin:0 auto">
@@ -3114,6 +3122,117 @@ initLang();
 // ── END i18n ─────────────────────────────────────────────────────────────
 
 // ── SIM SESSION HISTORY ───────────────────────────────────────────────────
+async function instSimLoadGrades(){
+  const classId = document.getElementById('instSimClassPicker')?.value;
+  const el = document.getElementById('instSimGradesContent');
+  if(!classId || !el) return;
+  el.innerHTML = '<div class="empty-state" style="font-size:.8rem">Loading…</div>';
+  try{
+    const [sessions, students] = await Promise.all([
+      dbGet(`${SIM_PATH(classId)}/sessions`),
+      dbGet(`classroomStudents/${classId}`)
+    ]);
+    const stuEntries = Object.entries(students||{}).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+    if(!stuEntries.length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No students enrolled.</div>'; return; }
+    if(!sessions || !Object.keys(sessions).length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No sessions recorded yet. Start a live session to begin tracking grades.</div>'; return; }
+
+    // Collect all rounds across all sessions, sorted by sentAt
+    const allRounds = []; // {sessionNum, roundId, roundNum, value, sentAt, responses}
+    for(const [sNum, session] of Object.entries(sessions)){
+      for(const [rId, round] of Object.entries(session.rounds||{})){
+        allRounds.push({ sessionNum:sNum, roundId:rId, roundNum:round.roundNum||rId, value:round.value, sentAt:round.sentAt||0, responses:round.responses||{} });
+      }
+    }
+    allRounds.sort((a,b)=>a.sentAt-b.sentAt);
+
+    if(!allRounds.length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No rounds recorded yet.</div>'; return; }
+
+    // Per-student totals
+    const stuStats = {};
+    for(const [key] of stuEntries){ stuStats[key]={correct:0,total:0}; }
+    for(const round of allRounds){
+      for(const [key, resp] of Object.entries(round.responses)){
+        if(!stuStats[key]) stuStats[key]={correct:0,total:0};
+        stuStats[key].total++;
+        if(resp.correct) stuStats[key].correct++;
+      }
+    }
+
+    // Build table — columns are rounds, rows are students
+    const roundCols = allRounds.map((r,i)=>`
+      <th style="padding:6px 8px;text-align:center;border:1px solid var(--border);font-size:.65rem;min-width:65px;white-space:nowrap">
+        S${r.sessionNum}·R${r.roundNum}<br>
+        <span style="font-weight:400;color:var(--muted)">${r.value?(r.value.toFixed(3)+'"'):'—'}</span>
+      </th>`).join('');
+
+    const stuRows = stuEntries.map(([key, s]) => {
+      const stat = stuStats[key]||{correct:0,total:0};
+      const pct = stat.total ? Math.round(stat.correct/stat.total*100) : null;
+      const avgCol = pct===null?'var(--muted)':pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+      const cells = allRounds.map(round => {
+        const resp = round.responses[key];
+        if(!resp) return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);color:var(--muted);font-size:.75rem">—</td>`;
+        const col = resp.correct?'var(--cl)':'var(--wl)';
+        return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col};font-size:.82rem">
+          ${resp.correct?'✓':'✗'}
+          <div style="font-family:monospace;font-size:.55rem;font-weight:400;color:var(--muted)">${(resp.answer||0).toFixed(3)}"</div>
+        </td>`;
+      }).join('');
+      return `<tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg);font-size:.8rem">${esc(s.name||key)}</td>
+        ${cells}
+        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.06)">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;color:${avgCol}">${pct!==null?pct+'%':'—'}</span>
+          <div style="font-family:monospace;font-size:.6rem;color:var(--muted)">${stat.correct}/${stat.total}</div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Summary row — class average per round
+    const summaryRow = `<tr style="background:var(--panel2)">
+      <td style="padding:6px 12px;border:1px solid var(--border);font-weight:700;font-size:.75rem;position:sticky;left:0;background:var(--panel2)">Class Avg</td>
+      ${allRounds.map(round=>{
+        const resps = Object.values(round.responses);
+        if(!resps.length) return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
+        const correct = resps.filter(r=>r.correct).length;
+        const pct = Math.round(correct/resps.length*100);
+        const col = pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+        return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col};font-size:.8rem">${pct}%<div style="font-family:monospace;font-size:.55rem;font-weight:400;color:var(--muted)">${correct}/${resps.length}</div></td>`;
+      }).join('')}
+      <td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.1)">
+        ${(()=>{
+          const totals = stuEntries.map(([key])=>stuStats[key]||{correct:0,total:0}).filter(s=>s.total>0);
+          if(!totals.length) return '—';
+          const avg = Math.round(totals.reduce((a,s)=>a+s.correct/s.total*100,0)/totals.length);
+          const col = avg>=80?'#16a34a':avg>=60?'#d97706':'#dc2626';
+          return `<span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;color:${col}">${avg}%</span>`;
+        })()}
+      </td>
+    </tr>`;
+
+    el.innerHTML = `
+      <div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-bottom:10px">
+        ${allRounds.length} round${allRounds.length!==1?'s':''} across ${Object.keys(sessions).length} session${Object.keys(sessions).length!==1?'s':''}
+        · ✓ correct &nbsp; ✗ incorrect &nbsp; — not in session
+      </div>
+      <div style="overflow-x:auto">
+      <table style="border-collapse:collapse;width:100%;font-size:.78rem">
+        <thead>
+          <tr style="background:var(--panel2)">
+            <th style="padding:7px 12px;text-align:left;border:1px solid var(--border);position:sticky;left:0;background:var(--panel2);min-width:150px">Student</th>
+            ${roundCols}
+            <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.08);min-width:70px">Overall</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryRow}
+          ${stuRows}
+        </tbody>
+      </table>
+      </div>`;
+  }catch(e){ el.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
+}
+
 async function instSimToggleHistory(){
   const wrap=document.getElementById('instSimHistoryWrap');
   const btn=document.getElementById('instSimHistoryBtn');
@@ -6829,6 +6948,57 @@ function renderGradeBook(students, quizId, iLog){
     <th style="font-family:monospace;font-size:.7rem;letter-spacing:1px">Integrity</th>
     <th>Retake</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+
+  // Append sim grades below quiz table
+  if(selectedClassId){
+    const simDiv = document.createElement('div');
+    simDiv.id = 'gbSimSection';
+    simDiv.style.marginTop = '24px';
+    simDiv.innerHTML = '<div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Loading simulator grades…</div>';
+    el.appendChild(simDiv);
+    dbGet(`${SIM_PATH(selectedClassId)}/sessions`).then(sessions => {
+      if(!sessions || !Object.keys(sessions).length){
+        simDiv.innerHTML = '';
+        return;
+      }
+      // Reuse instSimLoadGrades logic inline
+      const allRounds = [];
+      for(const [sNum, session] of Object.entries(sessions)){
+        for(const [rId, round] of Object.entries(session.rounds||{})){
+          allRounds.push({sessionNum:sNum, roundNum:round.roundNum||rId, value:round.value, sentAt:round.sentAt||0, responses:round.responses||{}});
+        }
+      }
+      allRounds.sort((a,b)=>a.sentAt-b.sentAt);
+      if(!allRounds.length){ simDiv.innerHTML=''; return; }
+
+      const stuStats = {};
+      for(const round of allRounds){
+        for(const [key, resp] of Object.entries(round.responses)){
+          if(!stuStats[key]) stuStats[key]={correct:0,total:0,name:resp.studentName||key};
+          stuStats[key].total++;
+          if(resp.correct) stuStats[key].correct++;
+        }
+      }
+      if(!Object.keys(stuStats).length){ simDiv.innerHTML=''; return; }
+
+      const statRows = Object.entries(stuStats).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||'')).map(([key, stat])=>{
+        const pct = Math.round(stat.correct/stat.total*100);
+        const col = pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+        return `<tr>
+          <td style="font-weight:600;font-size:.88rem;color:var(--blue)">${esc(stat.name)}</td>
+          <td style="font-family:monospace">${stat.correct}/${stat.total}</td>
+          <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${col}"></div></div><span style="font-family:monospace;font-size:.75rem;color:${col};font-weight:700">${pct}%</span></div></td>
+          <td style="font-family:monospace;font-size:.7rem;color:var(--muted)">${allRounds.length} round${allRounds.length!==1?'s':''}</td>
+        </tr>`;
+      }).join('');
+
+      simDiv.innerHTML = `
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--accent);margin-bottom:10px">📐 Micrometer Simulator — ${allRounds.length} Round${allRounds.length!==1?'s':''}</div>
+        <table class="grade-table"><thead><tr>
+          <th>Student</th><th>Rounds Correct</th><th>Accuracy</th><th>Rounds Attempted</th>
+        </tr></thead><tbody>${statRows}</tbody></table>`;
+    }).catch(()=>{ simDiv.innerHTML=''; });
+  }
 }
 
 function exportGrades(format){
@@ -14882,6 +15052,12 @@ function instSimDraw(){
 
 async function instSimOnClassChange(){
   const classId=document.getElementById('instSimClassPicker')?.value;
+  // Show grades panel whenever a classroom is picked
+  const gradesWrap = document.getElementById('instSimGradesWrap');
+  if(gradesWrap){
+    if(classId){ gradesWrap.classList.remove('hidden'); instSimLoadGrades(); }
+    else { gradesWrap.classList.add('hidden'); }
+  }
   if(!classId) return;
   const active=await dbGet(`${SIM_PATH(classId)}/currentRound`);
   const sb=document.getElementById('instSimSessionBar');
@@ -14973,6 +15149,7 @@ async function instSimSendRound(){
   document.getElementById('instSimResponses').innerHTML='<div class="empty-state" style="font-size:.75rem">Waiting for students...</div>';
   instSimListenResponses(classId);
   _showInstToast(`📡 Round ${_instSimRoundNum} sent!`,2000);
+  instSimLoadGrades();
 }
 
 async function instSimNextRound(){
