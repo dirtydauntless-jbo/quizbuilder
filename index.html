@@ -508,6 +508,13 @@ a{color:var(--accent);text-decoration:none}
 <div id="jsLoadingIndicator" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0c0f;display:flex;align-items:center;justify-content:center;z-index:1;font-family:monospace;color:#5a6370;font-size:.9rem;letter-spacing:2px">
   LOADING...
 </div>
+<script>
+// Force-hide loading indicator after 6s as a fallback in case auth hangs
+setTimeout(function(){
+  var ind = document.getElementById('jsLoadingIndicator');
+  if(ind) ind.style.display='none';
+}, 6000);
+</script>
 
 <!-- ============== LANDING ============== -->
 <div id="landingScreen" class="landing">
@@ -2096,13 +2103,16 @@ function doSignOut(){
 let pendingAuthRole = null;
 
 auth.onAuthStateChanged(async user => {
+  try {
+  // Always hide loading indicator as soon as auth state resolves
+  const ind = document.getElementById('jsLoadingIndicator');
+  if(ind) ind.style.display = 'none';
+
   if(!user){
-    // No logged-in user — show landing screen
     if(!stuSession && !instUser) showLanding();
     return;
   }
   if(stuSession) return;
-  // Don't interfere if redirect result handler is active or pending
   if(_handlingRedirect) return;
 
   // CASE 1: Instructor app already visible (page refresh while logged in)
@@ -2194,6 +2204,12 @@ auth.onAuthStateChanged(async user => {
 
   // Unknown role — show landing
   showLanding();
+  } catch(e) {
+    console.error('onAuthStateChanged error:', e);
+    const ind = document.getElementById('jsLoadingIndicator');
+    if(ind) ind.style.display = 'none';
+    showLanding();
+  }
 });
 
 // ===============================================
@@ -2518,13 +2534,11 @@ function initInstApp(){
   instSwitchTabRaw('classrooms');
   loadClassrooms().then(() => {
     if(savedClassId && (savedTab === 'classroom-detail' || savedTab === 'classrooms')){
-      // Re-open the classroom they were in
       openClassroom(savedClassId);
     } else if(savedTab && savedTab !== 'classrooms' && savedTab !== 'classroom-detail'){
-      // Restore other tabs (quizzes, sim, admin, etc.)
       instSwitchTabRaw(savedTab);
     }
-  });
+  }).catch(e => { console.error('loadClassrooms failed:', e); instSwitchTabRaw('classrooms'); });
 }
 
 // ── MASTER DASHBOARD ─────────────────────────────────────────────────────────
