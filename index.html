@@ -955,6 +955,10 @@ setTimeout(function(){
       <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MOST ACTIVE STUDENTS — LAST 30 DAYS</div>
       <div id="masterDashTopStudents">Loading…</div>
     </div>
+    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px;margin-top:18px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">RECENT SIGNUPS</div>
+      <div id="masterDashNewSignups">Loading…</div>
+    </div>
   </div>
 
   <!-- ADMIN TAB (super-admins only) -->
@@ -1258,13 +1262,20 @@ setTimeout(function(){
   <div id="stuSimView" class="hidden" style="padding:16px;max-width:900px;margin:0 auto">
 
     <!-- Live session banner -->
-    <div id="stuSimLiveBanner" class="hidden" style="background:linear-gradient(135deg,rgba(240,165,0,.15),rgba(240,165,0,.05));border:2px solid var(--accent);border-radius:8px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div style="font-size:1.4rem">📡</div>
-      <div style="flex:1">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">LIVE SESSION ACTIVE</div>
-        <div id="stuSimLiveDesc" style="font-family:monospace;font-size:.72rem;color:var(--muted)">Your instructor has locked a measurement for you to read.</div>
+    <div id="stuSimLiveBanner" class="hidden" style="background:linear-gradient(135deg,rgba(240,165,0,.15),rgba(240,165,0,.05));border:2px solid var(--accent);border-radius:8px;padding:14px 18px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="font-size:1.4rem">📡</div>
+        <div style="flex:1">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">LIVE SESSION ACTIVE</div>
+          <div id="stuSimLiveDesc" style="font-family:monospace;font-size:.72rem;color:var(--muted)">Your instructor has locked a measurement for you to read.</div>
+        </div>
+        <div id="stuSimLiveRound" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--accent)">Round 1</div>
       </div>
-      <div id="stuSimLiveRound" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--accent)">Round 1</div>
+      <div id="stuSimLiveClassInfo" style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:rgba(0,0,0,.2);border-radius:4px"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button id="stuSimJoinBtn" class="btn btn-primary" onclick="stuSimJoinLive()" style="font-size:.85rem;padding:10px 20px;background:var(--accent);color:#000;font-weight:700">▶ Join Live Session</button>
+        <button class="btn btn-ghost btn-sm" onclick="stuSimExitLive()" style="font-size:.7rem;color:var(--wl);border-color:var(--wl)" title="Exit live session and return to practice mode">✕ Exit Live Session</button>
+      </div>
     </div>
 
     <!-- Mode label -->
@@ -2113,16 +2124,40 @@ let pendingAuthRole = null;
 
 auth.onAuthStateChanged(async user => {
   try {
-  // Always hide loading indicator as soon as auth state resolves
   const ind = document.getElementById('jsLoadingIndicator');
   if(ind) ind.style.display = 'none';
 
   if(!user){
+    if(typeof _stuSimCleanup === 'function') try{ _stuSimCleanup(); }catch(e){}
     if(!stuSession && !instUser) showLanding();
     return;
   }
   if(stuSession) return;
   if(_handlingRedirect) return;
+
+  // Log site access immediately on any authenticated page load
+  // Use email as the key (not UID) to deduplicate multi-auth users
+  const logKey = (user.email||user.uid).replace(/[.#$\[\]]/g,'_');
+  const nowMs = Date.now();
+  try {
+    const isInst = await dbGet(`instructors/${user.uid}`);
+    const role = isInst ? 'instructors' : 'students';
+    const name = isInst?.name || user.displayName || user.email || 'Unknown';
+    // Check if this user has logged before (first seen = new signup)
+    const existing = await dbGet(`accessLog/${role}/${logKey}/meta`);
+    if(!existing){
+      // First time ever — mark as new signup
+      await dbSet(`accessLog/${role}/${logKey}/meta`, {
+        name, email: user.email||'', uid: user.uid,
+        firstSeen: nowMs, role
+      });
+    } else {
+      // Update name in case it changed
+      await dbSet(`accessLog/${role}/${logKey}/meta/name`, name);
+    }
+    // Always log this session
+    await dbSet(`accessLog/${role}/${logKey}/sessions/${nowMs}`, { ts: nowMs, name });
+  } catch(e){ /* non-critical, ignore */ }
 
   // CASE 1: Instructor app already visible (page refresh while logged in)
   if(!document.getElementById('instApp').classList.contains('hidden')){
@@ -2401,9 +2436,6 @@ async function doStudentJoin(){
   const [classId, classroom] = entry;
   stuSession = { name, uid: stuAuthUser.uid, email: stuAuthUser.email, classroomId: classId, classroomCode: code, classroomName: classroom.name };
 
-  // Log access for master admin analytics
-  try{ dbSet(`accessLog/students/${stuAuthUser.uid}/${Date.now()}`,{ts:ts(),name,classroomId:classId}); }catch(e){}
-
   // Save last classroom for convenience
   await dbSet(`studentProfiles/${stuAuthUser.uid}/lastClassroom`, code);
 
@@ -2498,20 +2530,48 @@ async function doInlineJoin(){
   await loadStudentQuizzes();
 }
 
+function _stuSimCleanup(){
+  // Detach Firebase live session listener
+  if(_stuSimListener){ try{ _stuSimListener.off(); }catch(e){} _stuSimListener=null; }
+  // Reset all sim state
+  _stuSimLiveMode=false; _stuSimClassId=null; _stuSimSessionNum=null; _stuSimRoundId=null;
+  _stuSimPendingData=null; _stuSimExitedRounds=new Set();
+  // Hide live session banner and reset UI
+  const banner=document.getElementById('stuSimLiveBanner');
+  if(banner) banner.classList.add('hidden');
+  const ml=document.getElementById('stuSimModeLabel');
+  if(ml) ml.textContent='Practice Mode — drag the thimble or use the controls below.';
+  const il=document.getElementById('stuSimInputLabel');
+  if(il){ il.textContent='Your Reading'; il.style.color=''; }
+  const gb=document.getElementById('stuSimGuideBtn');
+  if(gb){ gb.disabled=false; gb.style.opacity=''; gb.title=''; }
+  const rb=document.getElementById('stuSimRandomBtn');
+  const revb=document.getElementById('stuSimRevealBtn');
+  const sb=document.getElementById('stuSimSubmitBtn');
+  if(rb) rb.disabled=false;
+  if(revb) revb.disabled=false;
+  if(sb) sb.disabled=false;
+  // Remove live badge from tab button
+  const badge=document.querySelector('.sim-live-badge');
+  if(badge) badge.remove();
+  // Reset SIM state
+  if(typeof SIM!=='undefined'){ SIM['stu'].locked=false; SIM['stu'].showGuide=true; }
+}
+
 function stuSwitchClassroom(){
-  // Clear saved classroom so student sees the code entry screen
   if(stuAuthUser) dbSet(`studentProfiles/${stuAuthUser.uid}/lastClassroom`, null);
   stuSession = null; activeQuiz = null; stuAnswers = []; stuCur = 0;
+  _stuSimCleanup();
   db.ref('classrooms').off();
   document.getElementById('joinCode').value = '';
   showScreen('stuJoinScreen');
 }
 
 function stuLogout(){
-  // Clear flashcard cache so next student doesn't see previous student's progress
   Object.keys(_fcCache).forEach(k => delete _fcCache[k]);
   stuSession = null; activeQuiz = null; stuAnswers = []; stuCur = 0;
   stuAuthUser = null;
+  _stuSimCleanup();
   db.ref('classrooms').off();
   show('stuQuizListView'); hide('stuActiveQuizView');
   document.getElementById('aqResultsPanel').classList.remove('show');
@@ -2567,37 +2627,66 @@ async function masterDashLoad(){
     dbGet('quizSessions') || {}
   ]);
 
-  // ── STAT CARDS ──────────────────────────────────────────────────────────────
-  const stuLogEntries  = Object.values(stuLog||{}).flatMap(u=>Object.values(u||{}));
-  const instLogEntries = Object.values(instLog||{}).flatMap(u=>Object.values(u||{}));
-  const stuUnique24h   = new Set(Object.entries(stuLog||{}).filter(([,v])=>Object.keys(v||{}).some(k=>Number(k)>cutoff24h)).map(([uid])=>uid)).size;
-  const instUnique24h  = new Set(Object.entries(instLog||{}).filter(([,v])=>Object.keys(v||{}).some(k=>Number(k)>cutoff24h)).map(([uid])=>uid)).size;
-  const stuLogins30d   = stuLogEntries.filter(e=>e.ts&&new Date(e.ts).getTime()>cutoff30d).length;
-  const instLogins30d  = instLogEntries.filter(e=>e.ts&&new Date(e.ts).getTime()>cutoff30d).length;
+  // ── STAT CALCULATIONS ────────────────────────────────────────────────────────
+  const stuUsers  = Object.values(stuLog||{});
+  const instUsers = Object.values(instLog||{});
+  const ms7d   = 7*24*60*60*1000;
+  const ms12mo = 365*24*60*60*1000;
+  const cutoff7d  = now - ms7d;
+  const cutoff12mo= now - ms12mo;
 
-  // Quizzes issued (assigned) in last 30 days
-  let quizzesIssued30d = 0;
+  const hasSessionAfter = (u, cutoff) => Object.keys(u?.sessions||{}).some(k=>Number(k)>cutoff);
+
+  // Active 24h
+  const stuUnique24h  = stuUsers.filter(u=>hasSessionAfter(u,cutoff24h)).length;
+  const instUnique24h = instUsers.filter(u=>hasSessionAfter(u,cutoff24h)).length;
+
+  // Active users = logged in within last 30 days
+  const activeStu   = stuUsers.filter(u=>hasSessionAfter(u,cutoff30d)).length;
+  const activeInst  = instUsers.filter(u=>hasSessionAfter(u,cutoff30d)).length;
+  const activeTotal = activeStu + activeInst;
+
+  // Login counts
+  const stuLogins30d  = stuUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff30d)).length;
+  const instLogins30d = instUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff30d)).length;
+  const stuLogins12mo  = stuUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff12mo)).length;
+  const instLogins12mo = instUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff12mo)).length;
+
+  // New signups
+  const stuMetas  = stuUsers.map(u=>u?.meta).filter(Boolean);
+  const instMetas = instUsers.map(u=>u?.meta).filter(Boolean);
+  const newStu7d   = stuMetas.filter(m=>m.firstSeen>cutoff7d).length;
+  const newStu30d  = stuMetas.filter(m=>m.firstSeen>cutoff30d).length;
+  const newStu12mo = stuMetas.filter(m=>m.firstSeen>cutoff12mo).length;
+  const newInst7d   = instMetas.filter(m=>m.firstSeen>cutoff7d).length;
+  const newInst30d  = instMetas.filter(m=>m.firstSeen>cutoff30d).length;
+  const newInst12mo = instMetas.filter(m=>m.firstSeen>cutoff12mo).length;
+
+  // Quizzes issued
+  let quizzesIssued30d = 0, quizzesIssued12mo = 0;
   for(const [,c] of Object.entries(allClassrooms)){
     for(const [,q] of Object.entries(c.assignedQuizzes||{})){
-      if(q.assignedAt && new Date(q.assignedAt).getTime() > cutoff30d) quizzesIssued30d++;
+      const t = q.assignedAt ? new Date(q.assignedAt).getTime() : 0;
+      if(t > cutoff30d) quizzesIssued30d++;
+      if(t > cutoff12mo) quizzesIssued12mo++;
     }
   }
 
-  // Quizzes taken (completed sessions) in last 30 days
-  let quizzesTaken30d = 0;
+  // Quizzes taken
+  let quizzesTaken30d = 0, quizzesTaken12mo = 0;
   for(const [,classData] of Object.entries(allQuizSessions||{})){
     for(const [,stuData] of Object.entries(classData||{})){
       for(const [,quizData] of Object.entries(stuData||{})){
         for(const [,attempt] of Object.entries(quizData||{})){
-          if(attempt.submittedAt && new Date(attempt.submittedAt).getTime() > cutoff30d) quizzesTaken30d++;
+          const t = attempt.submittedAt ? new Date(attempt.submittedAt).getTime() : 0;
+          if(t > cutoff30d) quizzesTaken30d++;
+          if(t > cutoff12mo) quizzesTaken12mo++;
         }
       }
     }
   }
 
-  const totalStudents  = new Set(Object.entries(stuLog||{}).map(([uid])=>uid)).size;
-  const totalInst      = new Set(Object.entries(instLog||{}).map(([uid])=>uid)).size;
-  const totalClassrooms= Object.keys(allClassrooms).length;
+  const totalClassrooms = Object.keys(allClassrooms).length;
 
   const card = (val, label, col='var(--accent)') =>
     `<div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:16px 18px;text-align:center">
@@ -2605,25 +2694,55 @@ async function masterDashLoad(){
       <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:1px">${label}</div>
     </div>`;
 
+  const section = (title, cards) =>
+    `<div style="margin-bottom:22px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">${title}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px">${cards}</div>
+    </div>`;
+
   document.getElementById('masterDashCards').innerHTML =
-    card(stuUnique24h,  'Students Online 24h', 'var(--cl)') +
-    card(instUnique24h, 'Instructors Online 24h', 'var(--blue)') +
-    card(stuLogins30d,  'Student Logins 30d', 'var(--accent)') +
-    card(instLogins30d, 'Instructor Logins 30d', 'var(--accent)') +
-    card(quizzesIssued30d, 'Quizzes Issued 30d', '#7c3aed') +
-    card(quizzesTaken30d, 'Quizzes Taken 30d', '#7c3aed') +
-    card(totalStudents,  'Total Students', 'var(--muted)') +
-    card(totalClassrooms,'Total Classrooms', 'var(--muted)');
+    section('🟢 Active Users (logged in last 30 days)',
+      card(activeTotal, 'Total Active Users', '#16a34a') +
+      card(activeStu,   'Active Students', 'var(--cl)') +
+      card(activeInst,  'Active Instructors', 'var(--blue)')
+    ) +
+    section('📅 Logins',
+      card(stuUnique24h,  'Students Today', 'var(--cl)') +
+      card(instUnique24h, 'Instructors Today', 'var(--blue)') +
+      card(stuLogins30d,  'Student Logins 30d', 'var(--accent)') +
+      card(instLogins30d, 'Instructor Logins 30d', 'var(--accent)') +
+      card(stuLogins12mo,  'Student Logins 12mo', 'var(--muted)') +
+      card(instLogins12mo, 'Instructor Logins 12mo', 'var(--muted)')
+    ) +
+    section('🆕 New Signups',
+      card(newStu7d,   'New Students 7d',   '#16a34a') +
+      card(newStu30d,  'New Students 30d',  '#16a34a') +
+      card(newStu12mo, 'New Students 12mo', '#16a34a') +
+      card(newInst7d,   'New Instructors 7d',   '#2563eb') +
+      card(newInst30d,  'New Instructors 30d',  '#2563eb') +
+      card(newInst12mo, 'New Instructors 12mo', '#2563eb')
+    ) +
+    section('📋 Quizzes',
+      card(quizzesIssued30d,  'Issued 30d',  '#7c3aed') +
+      card(quizzesIssued12mo, 'Issued 12mo', '#7c3aed') +
+      card(quizzesTaken30d,   'Taken 30d',   '#7c3aed') +
+      card(quizzesTaken12mo,  'Taken 12mo',  '#7c3aed')
+    ) +
+    section('🏫 Platform Totals',
+      card(stuMetas.length,   'Total Students Registered', 'var(--muted)') +
+      card(instMetas.length,  'Total Instructors', 'var(--muted)') +
+      card(totalClassrooms,   'Total Classrooms', 'var(--muted)')
+    );
 
   // ── LAST 24 HRS BREAKDOWN ───────────────────────────────────────────────────
   function render24hr(logObj, elId){
     const el = document.getElementById(elId); if(!el) return;
-    const recent = Object.entries(logObj||{}).map(([uid, sessions]) => {
-      const hits = Object.entries(sessions||{}).filter(([k])=>Number(k)>cutoff24h);
-      if(!hits.length) return null;
-      const name = hits[hits.length-1][1]?.name || uid;
-      const lastTs = Math.max(...hits.map(([k])=>Number(k)));
-      return { name, count: hits.length, lastTs };
+    const recent = Object.values(logObj||{}).map(u => {
+      const sessions = Object.entries(u?.sessions||{}).filter(([k])=>Number(k)>cutoff24h);
+      if(!sessions.length) return null;
+      const name = u?.meta?.name || '—';
+      const lastTs = Math.max(...sessions.map(([k])=>Number(k)));
+      return { name, count: sessions.length, lastTs };
     }).filter(Boolean).sort((a,b)=>b.lastTs-a.lastTs);
     if(!recent.length){ el.innerHTML = '<div style="color:var(--muted);font-size:.8rem">No logins in the last 24 hours.</div>'; return; }
     el.innerHTML = `<table style="border-collapse:collapse;width:100%;font-size:.78rem">
@@ -2645,14 +2764,13 @@ async function masterDashLoad(){
   // ── MONTHLY USAGE CHART (bar chart via div heights) ─────────────────────────
   function renderMonthChart(logObj, elId){
     const el = document.getElementById(elId); if(!el) return;
-    // Count logins per day for last 30 days
     const days = {};
     for(let i=0; i<30; i++){
       const d = new Date(now - i*24*60*60*1000);
       days[d.toLocaleDateString('en-US',{month:'short',day:'numeric'})] = 0;
     }
-    for(const [,sessions] of Object.entries(logObj||{})){
-      for(const [k] of Object.entries(sessions||{})){
+    for(const u of Object.values(logObj||{})){
+      for(const [k] of Object.entries(u?.sessions||{})){
         const d = new Date(Number(k));
         const label = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
         if(label in days) days[label]++;
@@ -2715,10 +2833,10 @@ async function masterDashLoad(){
     : '<div style="color:var(--muted);font-size:.8rem">No quizzes taken in the last 30 days.</div>';
 
   // ── TOP ACTIVE STUDENTS ─────────────────────────────────────────────────────
-  const stuActivity = Object.entries(stuLog||{}).map(([uid, sessions])=>{
-    const logins30d = Object.entries(sessions||{}).filter(([k])=>Number(k)>cutoff30d).length;
-    const name = Object.values(sessions||{}).slice(-1)[0]?.name || uid;
-    return { uid, name, logins30d };
+  const stuActivity = Object.values(stuLog||{}).map(u=>{
+    const logins30d = Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff30d).length;
+    const name = u?.meta?.name || '—';
+    return { name, logins30d };
   }).filter(s=>s.logins30d>0).sort((a,b)=>b.logins30d-a.logins30d).slice(0,15);
 
   const topEl = document.getElementById('masterDashTopStudents');
@@ -2736,6 +2854,32 @@ async function masterDashLoad(){
         </tr>`).join('')}
         </tbody></table>`
     : '<div style="color:var(--muted);font-size:.8rem">No student activity in the last 30 days.</div>';
+
+  // ── RECENT SIGNUPS ──────────────────────────────────────────────────────────
+  const allSignups = [
+    ...stuMetas.map(m=>({...m, roleLabel:'Student', col:'var(--cl)'})),
+    ...instMetas.map(m=>({...m, roleLabel:'Instructor', col:'var(--blue)'}))
+  ].filter(m=>m.firstSeen).sort((a,b)=>b.firstSeen-a.firstSeen).slice(0,20);
+
+  const signupsEl = document.getElementById('masterDashNewSignups');
+  if(signupsEl) signupsEl.innerHTML = allSignups.length
+    ? `<table style="border-collapse:collapse;width:100%;font-size:.78rem">
+        <thead><tr style="background:var(--panel2)">
+          <th style="padding:6px 12px;text-align:left;border:1px solid var(--border)">Name</th>
+          <th style="padding:6px 10px;text-align:center;border:1px solid var(--border)">Role</th>
+          <th style="padding:6px 10px;text-align:center;border:1px solid var(--border)">Signed Up</th>
+          <th style="padding:6px 10px;text-align:left;border:1px solid var(--border)">Email</th>
+        </tr></thead><tbody>
+        ${allSignups.map(m=>`<tr>
+          <td style="padding:5px 12px;border:1px solid var(--border);font-weight:600">${esc(m.name)}</td>
+          <td style="padding:5px 10px;border:1px solid var(--border);text-align:center">
+            <span style="font-family:monospace;font-size:.62rem;padding:2px 6px;border-radius:3px;background:${m.col==='var(--cl)'?'rgba(34,197,94,.12)':'rgba(37,99,235,.12)'};color:${m.col}">${m.roleLabel}</span>
+          </td>
+          <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.68rem">${new Date(m.firstSeen).toLocaleDateString()}</td>
+          <td style="padding:5px 10px;border:1px solid var(--border);font-family:monospace;font-size:.68rem;color:var(--muted)">${esc(m.email||'—')}</td>
+        </tr>`).join('')}
+        </tbody></table>`
+    : '<div style="color:var(--muted);font-size:.8rem">No signup data yet. Data accumulates as users log in.</div>';
 }
 // ── END MASTER DASHBOARD ─────────────────────────────────────────────────────
 let _isSuperAdmin = false;
@@ -2756,7 +2900,7 @@ async function _checkSuperAdmin(){
   const masterBtn = document.getElementById('masterDashTabBtn');
   if(masterBtn) masterBtn.classList.toggle('hidden', !_isMasterAdmin);
   // Log access for master admin analytics
-  if(instUser?.uid){ try{ dbSet(`accessLog/instructors/${instUser.uid}/${Date.now()}`,{ts:ts(),name:instProfile?.name||''}); }catch(e){} }
+  if(instUser?.uid){ /* access already logged in onAuthStateChanged */ }
 }
 
 function adminSubTab(tab){
@@ -2863,7 +3007,7 @@ async function adminLoadClassRoster(){
     ]);
     if(!classroom){ el.innerHTML = '<div class="empty-state">Classroom not found.</div>'; return; }
     const instName = classroom.instructorId ? ((await dbGet(`instructors/${classroom.instructorId}`))?.name || classroom.instructorId) : '—';
-    document.getElementById('adminClassModalMeta').textContent = `Host: ${instName}  ·  Code: ${classroom.joinCode||'—'}  ·  ID: ${classId}`;
+    document.getElementById('adminClassModalMeta').textContent = `Instructor: ${instName}  ·  Code: ${classroom.joinCode||'—'}  ·  ID: ${classId}`;
     const stuEntries = Object.entries(students||{}).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
     el.innerHTML = `
       <div style="margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap">
@@ -2904,7 +3048,6 @@ async function adminLoadClassQuizzes(){
     const assigned = Object.entries(classroom?.assignedQuizzes||{});
     if(!assigned.length){ el.innerHTML = '<div class="empty-state">No quizzes assigned.</div>'; return; }
     const rows = await Promise.all(assigned.map(async ([qid, info]) => {
-      // quizProgress/{classId}/{quizId}/{stuKey}/attempts/attempt_N
       const quizProgress = await dbGet(`quizProgress/${classId}/${qid}`) || {};
       const allAttempts = Object.values(quizProgress).flatMap(s => Object.values(s.attempts||{}));
       const scores = allAttempts.map(a => {
@@ -2914,77 +3057,147 @@ async function adminLoadClassQuizzes(){
         return null;
       }).filter(s=>s!=null);
       const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
-      const best = scores.length ? Math.max(...scores).toFixed(1) : '—';
+      const best = scores.length ? Math.max(...scores).toFixed(0) : '—';
       const assigned_on = info.assignedAt ? new Date(info.assignedAt).toLocaleDateString() : '—';
-      return `<div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:8px;background:var(--panel2)">
-        <div style="font-weight:700;font-size:.9rem;margin-bottom:4px">${esc(info.quizTitle||qid)}</div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;font-family:monospace;font-size:.72rem;color:var(--muted)">
-          <span>Assigned: ${assigned_on}</span>
-          <span>Attempts: ${allAttempts.length}</span>
-          <span>Avg: ${avg}%</span>
-          <span>Best: ${best}%</span>
+
+      // Load actual quiz questions
+      const quizData = await dbGet(`quizzes/${info.instructorId||''}/${qid}`) || null;
+      const questions = quizData?.questions || [];
+      const questionsHtml = questions.length ? `
+        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;letter-spacing:1px;color:var(--muted);margin-bottom:8px">QUESTIONS (${questions.length})</div>
+          ${questions.map((q,i)=>`
+            <div style="padding:7px 10px;border:1px solid var(--border);border-radius:4px;margin-bottom:5px;background:var(--bg);font-size:.78rem">
+              <div style="font-weight:600;margin-bottom:4px">${i+1}. ${esc(q.q||q.question||'')}</div>
+              ${q.type==='mc'&&q.options ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:3px">
+                ${q.options.map((opt,oi)=>`<span style="font-family:monospace;font-size:.65rem;padding:2px 7px;border-radius:3px;border:1px solid ${oi===q.correct?'var(--cl)':'var(--border)'};color:${oi===q.correct?'var(--cl)':'var(--muted)'};background:${oi===q.correct?'rgba(34,197,94,.08)':'transparent'}">${esc(opt)}</span>`).join('')}
+              </div>` : `<div style="font-family:monospace;font-size:.65rem;color:var(--cl);margin-top:3px">Answer: ${esc(q.answer||q.a||'')}</div>`}
+            </div>`).join('')}
+        </div>` : '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:6px">No question data available.</div>';
+
+      return `<div style="border:1px solid var(--border);border-radius:6px;margin-bottom:10px;overflow:hidden">
+        <div style="padding:12px 14px;background:var(--panel2);cursor:pointer;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"
+             onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+          <div>
+            <div style="font-weight:700;font-size:.9rem">${esc(info.quizTitle||qid)} <span style="font-family:monospace;font-size:.6rem;color:var(--muted)">▼ click to view questions</span></div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:4px">
+              <span>Assigned: ${assigned_on}</span>
+              <span>Submissions: ${allAttempts.length}</span>
+              <span>Avg: ${avg !== '—' ? avg+'%' : '—'}</span>
+              <span>Best: ${best !== '—' ? best+'%' : '—'}</span>
+              <span>${questions.length} questions</span>
+            </div>
+          </div>
         </div>
+        <div style="display:none;padding:12px 14px">${questionsHtml}</div>
       </div>`;
     }));
     el.innerHTML = rows.join('');
   } catch(e){ el.innerHTML = `<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
 }
 
+let _gbSortCol = 'name', _gbSortDir = 1, _gbData = null;
+
+function adminRenderGradebook(){
+  if(!_gbData) return;
+  const { quizzes, rows, classId } = _gbData;
+  const el = document.getElementById('acmPane-gradebook');
+
+  // Sort rows
+  const sorted = [...rows].sort((a, b) => {
+    if(_gbSortCol === 'name'){
+      return _gbSortDir * a.lastName.localeCompare(b.lastName);
+    } else {
+      // Sort by specific quiz index or avg
+      const idx = parseInt(_gbSortCol);
+      const va = isNaN(idx) ? a.avg : (a.scores[idx] ?? -1);
+      const vb = isNaN(idx) ? b.avg : (b.scores[idx] ?? -1);
+      return _gbSortDir * (va - vb);
+    }
+  });
+
+  const arrowFor = col => _gbSortCol===col ? (_gbSortDir===1?'↑':'↓') : '↕';
+  const thStyle = `padding:8px 10px;text-align:center;border:1px solid var(--border);cursor:pointer;user-select:none;font-size:.68rem`;
+  const stickyTh = `padding:8px 12px;text-align:left;border:1px solid var(--border);position:sticky;left:0;background:var(--panel2);min-width:160px;cursor:pointer;user-select:none`;
+
+  let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem">
+    <thead><tr style="background:var(--panel2)">
+      <th style="${stickyTh}" onclick="adminGbSort('name')">Student ${arrowFor('name')}</th>
+      ${quizzes.map(([qid,q],i)=>`<th style="${thStyle}" onclick="adminGbSort('${i}')">${esc((q.quizTitle||qid).substring(0,18))} ${arrowFor(String(i))}</th>`).join('')}
+      <th style="${thStyle};min-width:70px;background:rgba(240,165,0,.08)" onclick="adminGbSort('avg')">Avg ${arrowFor('avg')}</th>
+    </tr></thead><tbody>
+    ${sorted.map(r => {
+      const avgCol = r.avg>=80?'#16a34a':r.avg>=60?'#d97706':r.avg>0?'#dc2626':'var(--muted)';
+      const avgStr = r.avg > 0 ? r.avg.toFixed(0)+'%' : '—';
+      const scoreCells = r.scores.map(s => {
+        if(s===null||s===undefined) return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
+        const col = s>=80?'#16a34a':s>=60?'#d97706':'#dc2626';
+        return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col}">${s}%</td>`;
+      }).join('');
+      return `<tr>
+        <td style="padding:7px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg)">
+          <span style="cursor:pointer;color:var(--accent);text-decoration:underline dotted" onclick="adminOpenStudentProfile('${esc(classId)}','${esc(r.stuKey)}','${esc(r.name)}','${esc(r.uid)}')">${esc(r.name)}</span>
+        </td>
+        ${scoreCells}
+        <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${avgCol};background:rgba(240,165,0,.06)">${avgStr}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`;
+  el.innerHTML = html;
+}
+
+function adminGbSort(col){
+  if(_gbSortCol === col) _gbSortDir *= -1;
+  else { _gbSortCol = col; _gbSortDir = col==='name' ? 1 : -1; } // grades default high-to-low
+  adminRenderGradebook();
+}
+
 async function adminLoadClassGradebook(){
   const classId = _adminClassModalId; if(!classId) return;
   const el = document.getElementById('acmPane-gradebook');
   el.innerHTML = '<div class="empty-state">Loading…</div>';
+  _gbSortCol = 'name'; _gbSortDir = 1;
   try {
     const [classroom, students] = await Promise.all([
       dbGet(`classrooms/${classId}`),
       dbGet(`classroomStudents/${classId}`)
     ]);
     const quizzes = Object.entries(classroom?.assignedQuizzes||{});
-    const stuEntries = Object.entries(students||{}).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+    const stuEntries = Object.entries(students||{});
     if(!quizzes.length || !stuEntries.length){ el.innerHTML = '<div class="empty-state">No quizzes or students yet.</div>'; return; }
 
-    // quizProgress/{classId}/{quizId}/{stuKey}/attempts/attempt_N
     const allProgress = await dbGet(`quizProgress/${classId}`) || {};
 
-    const colW = 110;
-    let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem">
-      <thead><tr style="background:var(--panel2)">
-        <th style="padding:8px 12px;text-align:left;border:1px solid var(--border);position:sticky;left:0;background:var(--panel2);min-width:150px">Student</th>
-        ${quizzes.map(([qid,q])=>`<th style="padding:8px 10px;text-align:center;border:1px solid var(--border);min-width:${colW}px;font-size:.68rem">${esc((q.quizTitle||qid).substring(0,20))}</th>`).join('')}
-        <th style="padding:8px 10px;text-align:center;border:1px solid var(--border);min-width:80px;background:rgba(240,165,0,.08)">Avg</th>
-      </tr></thead><tbody>`;
-
-    for(const [stuKey, stuData] of stuEntries){
-      const scores = [];
-      const cells = quizzes.map(([qid]) => {
-        const prog = allProgress[qid]?.[stuKey];
-        if(!prog) return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
-        // Score from attempts or from direct correctCount/totalCount
-        let best = null;
-        const attempts = Object.values(prog.attempts||{});
-        if(attempts.length){
-          for(const a of attempts){
-            let pct = null;
-            if(typeof a.score === 'string' && a.score.includes('/')){
-              const [c,t] = a.score.split('/').map(Number);
-              if(t>0) pct = Math.round((c/t)*100);
-            } else if(typeof a.score === 'number'){ pct = a.score; }
-            else if(a.correctCount!=null && a.totalCount){ pct = Math.round((a.correctCount/a.totalCount)*100); }
-            if(pct!=null && (best===null||pct>best)) best=pct;
-          }
-        } else if(prog.correctCount!=null && prog.totalCount){
-          best = Math.round((prog.correctCount/prog.totalCount)*100);
+    function getBest(prog){
+      if(!prog) return null;
+      let best = null;
+      const attempts = Object.values(prog.attempts||{});
+      if(attempts.length){
+        for(const a of attempts){
+          let pct = null;
+          if(typeof a.score==='string'&&a.score.includes('/')){const[c,t]=a.score.split('/').map(Number);if(t>0)pct=Math.round(c/t*100);}
+          else if(typeof a.score==='number') pct=a.score;
+          else if(a.correctCount!=null&&a.totalCount) pct=Math.round(a.correctCount/a.totalCount*100);
+          if(pct!=null&&(best===null||pct>best)) best=pct;
         }
-        if(best===null) return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
-        scores.push(best);
-        const col = best>=80?'#16a34a':best>=60?'#d97706':'#dc2626';
-        return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col}">${best}%</td>`;
-      }).join('');
-      const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(0)+'%' : '—';
-      html += `<tr><td style="padding:7px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg)">${esc(stuData.name||stuKey)}</td>${cells}<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;background:rgba(240,165,0,.06)">${avg}</td></tr>`;
+      } else if(prog.correctCount!=null&&prog.totalCount){
+        best=Math.round(prog.correctCount/prog.totalCount*100);
+      }
+      return best;
     }
-    html += '</tbody></table></div>';
-    el.innerHTML = html;
+
+    // Build row data
+    const rows = stuEntries.map(([stuKey, stuData]) => {
+      const nameParts = (stuData.name||stuKey).trim().split(/\s+/);
+      const lastName = nameParts.length>1 ? nameParts[nameParts.length-1] : nameParts[0];
+      const scores = quizzes.map(([qid]) => getBest(allProgress[qid]?.[stuKey]));
+      const validScores = scores.filter(s=>s!=null);
+      const avg = validScores.length ? validScores.reduce((a,b)=>a+b,0)/validScores.length : 0;
+      return { stuKey, name: stuData.name||stuKey, lastName, uid: stuData.uid||stuKey, scores, avg };
+    });
+
+    _gbData = { quizzes, rows, classId };
+    adminRenderGradebook();
   } catch(e){ el.innerHTML = `<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
 }
 
@@ -3061,7 +3274,7 @@ async function adminOpenInstructorProfile(uid, name){
       return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:7px;background:var(--panel2);flex-wrap:wrap">
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:.9rem">${esc(c.name||id)}
-            <span style="font-family:monospace;font-size:.62rem;color:${isHost?'var(--cl)':'var(--muted)'};margin-left:6px;border:1px solid ${isHost?'var(--cl)':'var(--border)'};border-radius:3px;padding:1px 5px">${isHost?'HOST':'CO-INST'}</span>
+            <span style="font-family:monospace;font-size:.62rem;color:${isHost?'var(--cl)':'var(--muted)'};margin-left:6px;border:1px solid ${isHost?'var(--cl)':'var(--border)'};border-radius:3px;padding:1px 5px">${isHost?'INSTRUCTOR':'CO-INST'}</span>
           </div>
           <div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:2px">${stuCount} student${stuCount!==1?'s':''} · ${quizCount} quiz${quizCount!==1?'zes':''} · Code: ${esc(c.joinCode||'—')}</div>
         </div>
@@ -3325,19 +3538,21 @@ async function adminLoadClassrooms(){
       const stuCount = Object.keys(students).length;
       const quizCount = Object.keys(c.assignedQuizzes||{}).length;
       const coInst = Object.keys(c.coInstructors||{});
+      const instUid = esc(c.instructorId||'');
       return `<div style="border:1px solid var(--border);border-radius:6px;margin-bottom:8px;background:var(--panel2);overflow:hidden">
         <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;flex-wrap:wrap">
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:.88rem">${esc(c.name||'(unnamed)')}</div>
             <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-top:2px">
-              Host: ${esc(instName)} · ${stuCount} student${stuCount!==1?'s':''} · ${quizCount} quiz${quizCount!==1?'zes':''}
-              ${coInst.length ? ` · ${coInst.length} co-instructor${coInst.length>1?'s':''}` : ''}
+              Instructor: <span style="color:var(--accent);cursor:pointer;text-decoration:underline dotted" onclick="adminOpenInstructorProfile('${instUid}','${esc(instName)}')">${esc(instName)}</span>
+              &nbsp;·&nbsp;${stuCount} student${stuCount!==1?'s':''}
+              &nbsp;·&nbsp;${quizCount} quiz${quizCount!==1?'zes':''}
             </div>
             <div style="font-family:monospace;font-size:.62rem;color:var(--muted);margin-top:2px">ID: ${esc(id)} · Code: ${esc(c.joinCode||'—')}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
             <button class="btn btn-primary btn-sm" onclick="adminOpenClassModal('${esc(id)}','${esc(c.name||'')}')">View Class</button>
-            <button class="btn btn-ghost btn-sm" onclick="adminManageClassroomCoInst('${esc(id)}','${esc(c.name||'')}')">Co-Instructors</button>
+            ${coInst.length ? `<button class="btn btn-sm" style="background:#2563eb;color:#fff;border:none" onclick="adminManageClassroomCoInst('${esc(id)}','${esc(c.name||'')}')">👥 Co-Instructors (${coInst.length})</button>` : ''}
             <button class="btn btn-danger btn-sm" onclick="adminDeleteClassroom('${esc(id)}','${esc(c.name||'')}','${esc(c.instructorId||'')}')">Delete</button>
           </div>
         </div>
@@ -10905,6 +11120,23 @@ window.addEventListener('beforeunload', function(e){
   return e.returnValue;
 });
 
+// Flag page close as integrity event if student is in a live session
+window.addEventListener('pagehide', function(){
+  if(!_stuSimLiveMode || !stuSession || !_stuSimClassId || !_stuSimRoundId) return;
+  const key = stuSession.uid || safeKey(stuSession.name||'student');
+  const logPath = `integrityLog/${_stuSimClassId}/sim_${_stuSimSessionNum}_${_stuSimRoundId}/${key}`;
+  // Use sendBeacon for reliability on page close — falls back to sync XHR via Firebase REST
+  try{
+    const payload = { type:'page_close', name: stuSession.name||key, uid: stuSession.uid||key, time: Date.now() };
+    // Write via Firebase SDK (may not complete on close, but best effort)
+    dbPush(logPath, payload);
+    // Also mark exit in exits node
+    dbSet(`${SIM_PATH(_stuSimClassId)}/sessions/${_stuSimSessionNum}/rounds/${_stuSimRoundId}/exits/${key}`, {
+      name: stuSession.name||key, exitedAt: Date.now(), uid: stuSession.uid||key, type:'page_close'
+    });
+  }catch(e){}
+});
+
 
 // Enter key handlers
 // Instructor auth - Enter key
@@ -13952,55 +14184,226 @@ async function stuSimInit(){
   }
 }
 
+async function stuSimExitLive(){
+  if(!_stuSimLiveMode && !_stuSimPendingData) return;
+  const exitRoundId = _stuSimRoundId;
+  const name = stuSession?.name || 'A student';
+  // Record which round they exited
+  if(exitRoundId) _stuSimExitedRounds.add(exitRoundId);
+  // Log the exit
+  try{
+    const classId = _stuSimClassId;
+    const key = stuSession?.uid || safeKey(stuSession?.name||'student');
+    const logPath = `integrityLog/${classId}/sim_${_stuSimSessionNum}_${_stuSimRoundId}/${key}`;
+    await dbPush(logPath, { type:'session_exit', name, uid: stuSession?.uid||key, time: ts() });
+    await dbSet(`${SIM_PATH(classId)}/sessions/${_stuSimSessionNum}/rounds/${_stuSimRoundId}/exits/${key}`, {
+      name, exitedAt: ts(), uid: stuSession?.uid||key
+    });
+  }catch(e){}
+  // Unlock micrometer and restore practice mode WITHOUT detaching the listener
+  // so they can see the Rejoin button if session is still active
+  _stuSimLiveMode = false;
+  const s = SIM['stu']; s.locked = false;
+  if(s.canvas) s.canvas.style.cursor = 'grab';
+  simRandomize('stu');
+  // Restore practice mode UI
+  const ml = document.getElementById('stuSimModeLabel');
+  const il = document.getElementById('stuSimInputLabel');
+  const gb = document.getElementById('stuSimGuideBtn');
+  const rb = document.getElementById('stuSimRandomBtn');
+  const revb = document.getElementById('stuSimRevealBtn');
+  const joinBtn = document.getElementById('stuSimJoinBtn');
+  const fb = document.getElementById('stuSimFeedback');
+  if(ml) ml.textContent = 'You exited the live session. You can rejoin if the session is still active.';
+  if(il){ il.textContent = 'Your Reading'; il.style.color = ''; }
+  if(gb){ gb.disabled = false; gb.style.opacity = ''; gb.title = ''; }
+  if(rb) rb.disabled = false;
+  if(revb) revb.disabled = false;
+  // Show Rejoin button in banner (keep banner visible since session may still be active)
+  if(joinBtn){ joinBtn.textContent = '↩ Rejoin Live Session'; joinBtn.style.display = ''; }
+  if(fb){ fb.textContent = 'You exited the live session. Practice mode active — click Rejoin if you want to participate.'; fb.style.background = 'rgba(240,165,0,.12)'; fb.style.color = 'var(--accent)'; fb.classList.remove('hidden'); }
+}
+
+// Check for 1-hour inactivity auto-expire on the currentRound
+function stuSimCheckExpiry(data){
+  if(!data || !data.active || !data.sentAt) return false;
+  const age = Date.now() - data.sentAt;
+  if(age > 60*60*1000){ // 1 hour
+    console.log('Live session auto-expired after 1 hour of inactivity');
+    return true;
+  }
+  return false;
+}
+
+let _stuSimPendingData = null; // stores live session data until student clicks Join
+
 function stuSimHandleLiveUpdate(data){
-  // Don't update student sim UI if instructor app is the active screen
   const instAppEl = document.getElementById('instApp');
   if(instAppEl && !instAppEl.classList.contains('hidden')) return;
-  const banner=document.getElementById('stuSimLiveBanner');
-  const ml=document.getElementById('stuSimModeLabel');
-  const rb=document.getElementById('stuSimRandomBtn');
-  const revb=document.getElementById('stuSimRevealBtn');
-  const sb=document.getElementById('stuSimSubmitBtn');
-  const fb=document.getElementById('stuSimFeedback');
-  const ans=document.getElementById('stuSimAnswer');
-  const rv=document.getElementById('stuSimRevealVal');
-  if(data&&data.active){
-    _stuSimLiveMode=true; _stuSimSessionNum=data.sessionNum; _stuSimRoundId=data.roundId;
-    const s=SIM['stu'];
-    // Apply instructor's guide line setting — student cannot override during live session
-    s.showGuide = data.showGuide !== false;
-    simAnimateTo('stu',data.value,data.range||0,()=>{s.locked=true;if(s.canvas)s.canvas.style.cursor='not-allowed';simRedraw('stu');});
-    if(fb){fb.classList.add('hidden');fb.textContent='';}
-    if(ans){ans.value='';ans.disabled=false;ans.style.borderColor='';}
-    if(rv) rv.classList.add('hidden');
-    if(sb) sb.disabled=false;
-    if(stuSession?.uid){
-      const key=stuSession.uid||safeKey(stuSession.name||'student');
-      dbGet(`${SIM_PATH(_stuSimClassId)}/sessions/${data.sessionNum}/rounds/${data.roundId}/responses/${key}`).then(resp=>{if(resp&&sb){sb.disabled=true;if(ans)ans.disabled=true;}});
-    }
+
+  // Auto-expire if round older than 1 hour
+  if(data && data.active && stuSimCheckExpiry(data)) data = { active: false };
+
+  const banner = document.getElementById('stuSimLiveBanner');
+  const ml     = document.getElementById('stuSimModeLabel');
+  const rb     = document.getElementById('stuSimRandomBtn');
+  const revb   = document.getElementById('stuSimRevealBtn');
+  const gb     = document.getElementById('stuSimGuideBtn');
+  const re     = document.getElementById('stuSimLiveRound');
+  const il     = document.getElementById('stuSimInputLabel');
+
+  if(data && data.active){
+    _stuSimPendingData = data;
+    _stuSimSessionNum  = data.sessionNum;
+    _stuSimRoundId     = data.roundId;
+
+    // Show banner with class/instructor info but DON'T lock the micrometer yet
     if(banner) banner.classList.remove('hidden');
-    if(ml) ml.textContent='Live Session — read the micrometer and submit your answer.';
-    const il=document.getElementById('stuSimInputLabel');
-    if(il){ il.textContent='🔴 Live Session Reading'; il.style.color='#cc0000'; }
-    // Hide guide button — instructor controls this during live session
-    const gb=document.getElementById('stuSimGuideBtn');
-    if(gb){ gb.disabled=true; gb.style.opacity='0.4'; gb.title='Guide line is controlled by your instructor during live sessions'; }
-    if(rb) rb.disabled=true; if(revb) revb.disabled=true;
-    const re=document.getElementById('stuSimLiveRound');
-    if(re) re.textContent=`Round ${data.roundNum||1}`;
+    if(re) re.textContent = `Round ${data.roundNum||1}`;
+
+    // Populate class + instructor info
+    const classInfo = document.getElementById('stuSimLiveClassInfo');
+    if(classInfo){
+      const className = stuSession?.classroomName || stuSession?.classroomId || '—';
+      classInfo.textContent = `Class: ${className}  ·  Instructor session`;
+      // Fetch instructor name async
+      if(stuSession?.classroomId){
+        dbGet(`classrooms/${stuSession.classroomId}`).then(c=>{
+          if(!c) return;
+          const iid = c.instructorId;
+          if(iid) dbGet(`instructors/${iid}`).then(inst=>{
+            const iname = inst?.name || '—';
+            if(classInfo) classInfo.textContent = `Class: ${className}  ·  Instructor: ${iname}`;
+          });
+        }).catch(()=>{});
+      }
+    }
+
+    // Update Join button — check Firebase for prior exit (covers page reload case)
+    const joinBtn = document.getElementById('stuSimJoinBtn');
+    const hasExitedMemory = _stuSimExitedRounds && _stuSimExitedRounds.has(data.roundId);
+    if(joinBtn){
+      joinBtn.textContent = hasExitedMemory ? '↩ Rejoin Live Session' : '▶ Join Live Session';
+      joinBtn.style.display = '';
+      // Also check Firebase for prior exit in case they reloaded the page
+      if(!hasExitedMemory && stuSession?.uid){
+        const key = stuSession.uid || safeKey(stuSession.name||'student');
+        dbGet(`${SIM_PATH(_stuSimClassId)}/sessions/${data.sessionNum}/rounds/${data.roundId}/exits/${key}`)
+          .then(exitRecord => { if(exitRecord && joinBtn) joinBtn.textContent = '↩ Rejoin Live Session'; })
+          .catch(()=>{});
+      }
+    }
+
+    // Check if already submitted this round — show notice in banner
+    if(stuSession?.uid){
+      const key = stuSession.uid || safeKey(stuSession.name||'student');
+      dbGet(`${SIM_PATH(_stuSimClassId)}/sessions/${data.sessionNum}/rounds/${data.roundId}/responses/${key}`)
+        .then(resp => {
+          if(resp){
+            const classInfo = document.getElementById('stuSimLiveClassInfo');
+            if(classInfo) classInfo.innerHTML += ' &nbsp;<span style="color:var(--cl);font-weight:700">✓ Already submitted</span>';
+            if(joinBtn){ joinBtn.textContent = '↩ View Round'; }
+          }
+        }).catch(()=>{});
+    }
+    if(rb) rb.disabled = false;
+    if(revb) revb.disabled = false;
+    if(gb) gb.style.opacity = '';
+
+    // Auto-switch to sim tab
+    const simView = document.getElementById('stuSimView');
+    const stuAppEl = document.getElementById('stuApp');
+    if(stuAppEl && !stuAppEl.classList.contains('hidden') && simView && simView.classList.contains('hidden')){
+      stuSwitchTab('sim');
+    }
+    // Live badge on tab
+    const simBtn = document.getElementById('stuTabSim');
+    if(simBtn && !simBtn.querySelector('.sim-live-badge')){
+      const badge = document.createElement('span');
+      badge.className = 'sim-live-badge';
+      badge.textContent = '🔴 LIVE';
+      badge.style.cssText = 'margin-left:6px;font-size:.65rem;background:#dc2626;color:#fff;padding:2px 6px;border-radius:9px;vertical-align:middle';
+      simBtn.appendChild(badge);
+    }
   } else {
-    _stuSimLiveMode=false; _stuSimRoundId=null;
-    const s=SIM['stu']; s.locked=false;
-    if(s.canvas) s.canvas.style.cursor='grab';
+    // Session ended
+    _stuSimPendingData = null;
+    _stuSimLiveMode    = false;
+    _stuSimRoundId     = null;
+    const s = SIM['stu']; s.locked = false;
+    if(s.canvas) s.canvas.style.cursor = 'grab';
     simRedraw('stu');
     if(banner) banner.classList.add('hidden');
-    if(ml) ml.textContent='Practice Mode — drag the thimble or use the controls below.';
-    const il2=document.getElementById('stuSimInputLabel');
-    if(il2){ il2.textContent='Your Reading'; il2.style.color=''; }
-    // Restore guide button control to student
-    const gb=document.getElementById('stuSimGuideBtn');
-    if(gb){ gb.disabled=false; gb.style.opacity=''; gb.title=''; }
-    if(rb) rb.disabled=false; if(revb) revb.disabled=false;
+    if(ml) ml.textContent = 'Practice Mode — drag the thimble or use the controls below.';
+    if(il){ il.textContent = 'Your Reading'; il.style.color = ''; }
+    if(gb){ gb.disabled = false; gb.style.opacity = ''; gb.title = ''; }
+    if(rb) rb.disabled = false; if(revb) revb.disabled = false;
+    const badge = document.querySelector('.sim-live-badge'); if(badge) badge.remove();
+  }
+}
+
+// Track which rounds the student has exited
+let _stuSimExitedRounds = new Set();
+
+async function stuSimJoinLive(){
+  const data = _stuSimPendingData;
+  if(!data || !data.active) return;
+
+  const wasExited = _stuSimExitedRounds.has(data.roundId);
+  _stuSimLiveMode  = true;
+  _stuSimSessionNum = data.sessionNum;
+  _stuSimRoundId   = data.roundId;
+
+  const s = SIM['stu'];
+  s.showGuide = data.showGuide !== false;
+
+  // Lock the micrometer and set the reading
+  simAnimateTo('stu', data.value, data.range||0, ()=>{
+    s.locked = true;
+    if(s.canvas) s.canvas.style.cursor = 'not-allowed';
+    simRedraw('stu');
+  });
+
+  const fb   = document.getElementById('stuSimFeedback');
+  const ans  = document.getElementById('stuSimAnswer');
+  const rv   = document.getElementById('stuSimRevealVal');
+  const sb   = document.getElementById('stuSimSubmitBtn');
+  const ml   = document.getElementById('stuSimModeLabel');
+  const il   = document.getElementById('stuSimInputLabel');
+  const gb   = document.getElementById('stuSimGuideBtn');
+  const rb   = document.getElementById('stuSimRandomBtn');
+  const revb = document.getElementById('stuSimRevealBtn');
+  const joinBtn = document.getElementById('stuSimJoinBtn');
+
+  if(fb){ fb.classList.add('hidden'); fb.textContent = ''; }
+  if(ans){ ans.value = ''; ans.disabled = false; ans.style.borderColor = ''; }
+  if(rv) rv.classList.add('hidden');
+  if(sb) sb.disabled = false;
+  if(ml) ml.textContent = 'Live Session — read the micrometer and submit your answer.';
+  if(il){ il.textContent = '🔴 Live Session Reading'; il.style.color = '#cc0000'; }
+  if(gb){ gb.disabled = true; gb.style.opacity = '0.4'; gb.title = 'Guide line is controlled by your instructor during live sessions'; }
+  if(rb) rb.disabled = true;
+  if(revb) revb.disabled = true;
+  if(joinBtn) joinBtn.style.display = 'none'; // hide Join after joining
+
+  if(stuSession?.uid){
+    const key = stuSession.uid || safeKey(stuSession.name||'student');
+    // Clear absent marker — student is now present
+    try{ dbSet(`${SIM_PATH(_stuSimClassId)}/sessions/${_stuSimSessionNum}/rounds/${_stuSimRoundId}/absent/${key}`, null); }catch(e){}
+    // Log rejoin event if they previously exited
+    if(wasExited){
+      try{
+        const logPath = `integrityLog/${_stuSimClassId}/sim_${_stuSimSessionNum}_${_stuSimRoundId}/${key}`;
+        await dbPush(logPath, { type:'session_rejoin', name:stuSession.name||key, uid:stuSession.uid||key, time:ts() });
+        await dbSet(`${SIM_PATH(_stuSimClassId)}/sessions/${_stuSimSessionNum}/rounds/${_stuSimRoundId}/exits/${key}/rejoined`, true);
+      }catch(e){}
+    }
+    // Check if already submitted
+    const resp = await dbGet(`${SIM_PATH(_stuSimClassId)}/sessions/${data.sessionNum}/rounds/${data.roundId}/responses/${key}`);
+    if(resp && sb){
+      sb.disabled = true; if(ans) ans.disabled = true;
+      if(fb){ fb.textContent = '✓ You already submitted an answer for this round.'; fb.style.background = 'rgba(34,197,94,.12)'; fb.style.color = 'var(--cl)'; fb.classList.remove('hidden'); }
+    }
   }
 }
 
@@ -14101,7 +14504,16 @@ async function instSimSendRound(){
   _instSimRoundNum++; _instSimRoundId=`r${_instSimRoundNum}`;
   const s=SIM['inst'];
   await dbSet(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}`,{value:s.value,range:s.range,sentAt:ts(),responses:{}});
-  await dbSet(`${SIM_PATH(classId)}/currentRound`,{active:true,value:s.value,range:s.range,roundId:_instSimRoundId,roundNum:_instSimRoundNum,sessionNum:_instSimSessionNum,sentAt:ts(),showGuide:SIM['inst'].showGuide!==false});
+  await dbSet(`${SIM_PATH(classId)}/currentRound`,{active:true,value:s.value,range:s.range,roundId:_instSimRoundId,roundNum:_instSimRoundNum,sessionNum:_instSimSessionNum,sentAt:Date.now(),showGuide:SIM['inst'].showGuide!==false});
+  // Mark all enrolled students as initially absent — cleared when they join
+  try{
+    const students = await dbGet(`classroomStudents/${classId}`) || {};
+    const absentUpdates = {};
+    for(const key of Object.keys(students)){
+      absentUpdates[`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}/absent/${key}`] = true;
+    }
+    if(Object.keys(absentUpdates).length) await db.ref().update(absentUpdates);
+  }catch(e){}
   const info=document.getElementById('instSimSessionInfo');
   if(info)info.textContent=`Session ${_instSimSessionNum} · Round ${_instSimRoundNum} — LIVE`;
   const rl=document.getElementById('instSimRoundLabel');
@@ -14189,7 +14601,9 @@ function instSimRenderResponses(){
     const nameParts = (s.name||key).trim().split(/\s+/);
     const lastName  = nameParts.length>1 ? nameParts[nameParts.length-1] : nameParts[0];
     const resp = responses[key] || responses[s.uid] || null;
-    const status = resp ? (resp.correct ? 1 : 0) : -1; // 1=correct, 0=wrong, -1=pending
+    const isAbsent = !resp && !!_instSimAbsentCache[key]; // marked absent, never joined
+    const status = resp ? (resp.correct ? 1 : 0) : (isAbsent ? -2 : -1);
+    // 1=correct, 0=wrong, -1=joined but pending, -2=not in live session
     return { key, name: s.name||key, lastName, resp, status };
   });
 
@@ -14206,6 +14620,7 @@ function instSimRenderResponses(){
   const correct  = rows.filter(r=>r.status===1).length;
   const wrong    = rows.filter(r=>r.status===0).length;
   const pending  = rows.filter(r=>r.status===-1).length;
+  const absent   = rows.filter(r=>r.status===-2).length;
   const total    = rows.length;
 
   const arrowName   = _instSimSortCol==='name'   ? (_instSimSortDir===1?'↑':'↓') : '';
@@ -14217,6 +14632,7 @@ function instSimRenderResponses(){
       <span style="color:var(--cl)">✓ ${correct} correct</span>
       <span style="color:var(--wl)">✗ ${wrong} incorrect</span>
       <span style="color:var(--muted)">⏳ ${pending} pending</span>
+      ${absent ? `<span style="color:#e85555">⊘ ${absent} not in session</span>` : ''}
     </div>
     <div style="overflow-x:auto">
     <table style="border-collapse:collapse;width:100%;font-size:.82rem">
@@ -14235,19 +14651,27 @@ function instSimRenderResponses(){
       </thead>
       <tbody>
         ${rows.map((r, i) => {
-          const statusCell = r.status === -1
+          const statusCell = r.status === -2
+            ? `<td colspan="2" style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:monospace;font-size:.7rem;color:#e85555;background:rgba(220,50,50,.05)">⊘ Not In Live Session</td>`
+            : r.status === -1
             ? `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted);font-family:monospace;font-size:.75rem">—</td>
                <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted);font-size:.75rem">⏳</td>`
             : `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;color:${r.status?'var(--cl)':'var(--wl)'}">${(r.resp.answer||0).toFixed(4)}"</td>
                <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;font-size:.85rem;background:${r.status?'rgba(34,197,94,.08)':'rgba(200,50,50,.08)'};color:${r.status?'var(--cl)':'var(--wl)'}">${r.status?'✓ Correct':'✗ Wrong'}</td>`;
-          // Integrity flags from pre-fetched data
+          // Integrity flags
           const flags = _instSimIntegrityCache[r.key] || [];
-          const tabs   = flags.filter(f=>f.type==='tab_switch').length;
-          const blurs  = flags.filter(f=>f.type==='window_blur').length;
-          const intCell = (tabs||blurs)
+          const tabs      = flags.filter(f=>f.type==='tab_switch').length;
+          const blurs     = flags.filter(f=>f.type==='window_blur').length;
+          const exits     = flags.filter(f=>f.type==='session_exit').length || (_instSimExitsCache[r.key] ? 1 : 0);
+          const rejoins   = flags.filter(f=>f.type==='session_rejoin').length || (_instSimExitsCache[r.key]?.rejoined ? 1 : 0);
+          const pageClosed= flags.filter(f=>f.type==='page_close').length || (_instSimExitsCache[r.key]?.type==='page_close' ? 1 : 0);
+          const intCell = (tabs||blurs||exits||rejoins||pageClosed)
             ? `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border)">
-                ${tabs  ? `<span style="background:rgba(204,68,68,.15);color:#e85555;border:1px solid rgba(204,68,68,.3);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;display:inline-block;margin:1px">⚠ Tab ×${tabs}</span>` : ''}
-                ${blurs ? `<span style="background:rgba(204,68,68,.1);color:#e85555;border:1px solid rgba(204,68,68,.2);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;display:inline-block;margin:1px">⚠ Left ×${blurs}</span>` : ''}
+                ${pageClosed? `<span style="background:rgba(150,0,200,.2);color:#cc44ff;border:1px solid rgba(150,0,200,.4);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;display:inline-block;margin:1px">⚠ Closed Page</span>` : ''}
+                ${exits     ? `<span style="background:rgba(220,50,50,.2);color:#e85555;border:1px solid rgba(220,50,50,.4);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;display:inline-block;margin:1px">⚠ Exited</span>` : ''}
+                ${rejoins   ? `<span style="background:rgba(220,130,0,.2);color:#e09000;border:1px solid rgba(220,130,0,.4);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;display:inline-block;margin:1px">⚠ Rejoined</span>` : ''}
+                ${tabs      ? `<span style="background:rgba(204,68,68,.15);color:#e85555;border:1px solid rgba(204,68,68,.3);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;display:inline-block;margin:1px">⚠ Tab ×${tabs}</span>` : ''}
+                ${blurs     ? `<span style="background:rgba(204,68,68,.1);color:#e85555;border:1px solid rgba(204,68,68,.2);border-radius:3px;font-family:monospace;font-size:.6rem;padding:1px 5px;display:inline-block;margin:1px">⚠ Left ×${blurs}</span>` : ''}
                </td>`
             : `<td style="padding:7px 8px;text-align:center;border:1px solid var(--border);color:var(--muted);font-size:.7rem">—</td>`;
           return `<tr style="border-bottom:1px solid var(--border)">
@@ -14262,11 +14686,22 @@ function instSimRenderResponses(){
     </div>`;
 }
 
+let _instSimExitsCache = {}, _instSimAbsentCache = {};
+
 function instSimListenResponses(classId){
   if(_instSimResponseListener){try{_instSimResponseListener.off();}catch(e){}}
   if(!_instSimRoundId) return;
   const ref=db.ref(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}/responses`);
   _instSimResponseListener=ref;
+
+  // Listen for exits
+  const exitRef=db.ref(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}/exits`);
+  exitRef.on('value',snap=>{ _instSimExitsCache=snap.val()||{}; instSimRenderResponses(); });
+
+  // Listen for absences (students who haven't joined)
+  const absentRef=db.ref(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}/absent`);
+  absentRef.on('value',snap=>{ _instSimAbsentCache=snap.val()||{}; instSimRenderResponses(); });
+
   ref.on('value',async snap=>{
     const responses=snap.val()||{};
     const students=await dbGet(`classroomStudents/${classId}`)||{};
