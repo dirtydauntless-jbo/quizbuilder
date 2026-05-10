@@ -4770,17 +4770,12 @@ async function loadCdPerfTab(){
   const content = document.getElementById('cdPerfContent');
   if(!picker || !content) return;
 
-  // Populate quiz picker if not yet loaded for this classroom
+  // Populate picker if not yet loaded for this classroom
   if(!picker.options.length || picker.dataset.classId !== selectedClassId){
     picker.dataset.classId = selectedClassId;
     const classroom = await dbGet(`classrooms/${selectedClassId}`);
     const assigned = classroom?.assignedQuizzes || {};
     const quizIds = Object.keys(assigned);
-    if(!quizIds.length){
-      picker.innerHTML = '<option>No quizzes assigned</option>';
-      content.innerHTML = '<div class="empty-state">No quizzes assigned to this classroom yet.</div>';
-      return;
-    }
     const quizzes = await Promise.all(quizIds.map(async id => {
       const info = assigned[id] || {};
       const iid = info.instructorId || (instUser && instUser.uid) || '';
@@ -4789,10 +4784,29 @@ async function loadCdPerfTab(){
       return q ? { ...q, id, assignedAt: info.assignedAt || '' } : null;
     }));
     const valid = quizzes.filter(Boolean).sort((a,b) => (b.assignedAt||'').localeCompare(a.assignedAt||''));
-    picker.innerHTML = valid.map(q => `<option value="${q.id}">${esc(q.title)}</option>`).join('');
+    let opts = valid.map(q => `<option value="quiz::${q.id}">${esc(q.title)}</option>`).join('');
+    // Add sim sessions
+    try{
+      const instrSessions = await dbGet(`instrumentSessions/${selectedClassId}/sessions`) || {};
+      const sessionNums = Object.keys(instrSessions).sort((a,b)=>Number(a)-Number(b));
+      if(sessionNums.length){
+        opts += sessionNums.map(n=>`<option value="sim::${n}">📐 Micrometer Session ${n}</option>`).join('');
+      }
+    }catch(e){}
+    picker.innerHTML = opts || '<option value="">No data yet</option>';
   }
 
-  const quizId = picker.value;
+  const val = picker.value;
+  if(!val){ content.innerHTML = '<div class="empty-state">Select a quiz or session.</div>'; return; }
+
+  // Route to sim performance if selected
+  if(val.startsWith('sim::')){
+    const sessionNum = val.split('::')[1];
+    await loadSimPerfTab(selectedClassId, sessionNum, content);
+    return;
+  }
+
+  const quizId = val.startsWith('quiz::') ? val.split('::')[1] : val;
   if(!quizId){ content.innerHTML = '<div class="empty-state">Select a quiz.</div>'; return; }
   content.innerHTML = '<div class="empty-state">Loading...</div>';
 
@@ -15350,30 +15364,214 @@ function instSimListenResponses(classId){
   });
 }
 
-async function loadInstrumentGradebook(classId,sessionNum){
-  const el=document.getElementById('gradeBook');
-  if(!el) return;
-  el.innerHTML='<div class="empty-state">Loading instrument grades...</div>';
+async function loadSimPerfTab(classId, sessionNum, content){
+  content.innerHTML = '<div class="empty-state">Loading micrometer session data...</div>';
   try{
-    const session=await dbGet(`instrumentSessions/${classId}/sessions/${sessionNum}`)||{};
-    const students=await dbGet(`classroomStudents/${classId}`)||{};
-    const stuList=Object.values(students).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    const rounds=session.rounds||{};
-    const roundNums=Object.keys(rounds).sort((a,b)=>Number(a.replace('r',''))-Number(b.replace('r','')));
-    const total=roundNums.length;
-    if(!total){el.innerHTML='<div class="empty-state">No rounds completed.</div>';return;}
-    const rows=stuList.map(s=>{
-      const key=s.uid||safeKey(s.name);
-      let correct=0,wrong=0;
-      roundNums.forEach(rn=>{const resp=rounds[rn]?.responses?.[key];if(resp){if(resp.correct)correct++;else wrong++;}});
-      const att=correct+wrong;
-      const pct=att?Math.round(correct/att*100):0;
-      const grade=pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
-      const gc=pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
-      return `<tr><td style="font-weight:600;font-size:.9rem;color:var(--blue)">${esc(s.name||key)}</td><td style="font-family:monospace;font-weight:700;color:${pct>=70?'var(--cl)':'var(--wl)'}">${correct}/${att}</td><td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div></div><span style="font-family:monospace;font-size:.75rem">${pct}%</span></div></td><td><span class="grade-pill ${gc}">${grade}</span></td><td style="font-family:monospace;font-size:.72rem">${att}/${total} rounds</td></tr>`;
+    const [session, students, iLog] = await Promise.all([
+      dbGet(`instrumentSessions/${classId}/sessions/${sessionNum}`),
+      dbGet(`classroomStudents/${classId}`),
+      dbGet(`integrityLog/${classId}`)
+    ]);
+    const rounds = session?.rounds || {};
+    const roundEntries = Object.entries(rounds).sort((a,b)=>(a[1].sentAt||0)-(b[1].sentAt||0));
+    const total = roundEntries.length;
+    if(!total){ content.innerHTML='<div class="empty-state">No rounds completed in this session.</div>'; return; }
+
+    // Per-student stats
+    const stuList = Object.entries(students||{}).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+    const allScores = [];
+    const stuStats = stuList.map(([key, s]) => {
+      let correct=0, attempted=0;
+      for(const [,round] of roundEntries){
+        const resp = round.responses?.[key];
+        if(resp){ attempted++; if(resp.correct) correct++; }
+      }
+      const pct = attempted ? Math.round(correct/attempted*100) : null;
+      if(pct !== null) allScores.push(pct);
+      return { key, name: s.name||key, correct, attempted, total, pct };
     });
-    el.innerHTML=`<div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-bottom:10px">Instruments Session ${sessionNum} · ${total} round${total!==1?'s':''}</div><table style="width:100%;border-collapse:collapse"><thead><tr style="font-family:monospace;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px 8px">Student</th><th style="text-align:left;padding:6px 8px">Score</th><th style="text-align:left;padding:6px 8px">Progress</th><th style="text-align:left;padding:6px 8px">Grade</th><th style="text-align:left;padding:6px 8px">Rounds</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
-  }catch(e){el.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`;}
+
+    const finished = stuStats.filter(s=>s.attempted>0);
+    if(!finished.length){ content.innerHTML='<div class="empty-state">No student responses recorded yet.</div>'; return; }
+    const avg = Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length);
+    const highest = Math.max(...allScores);
+    const lowest = Math.min(...allScores);
+    const passing = allScores.filter(s=>s>=70).length;
+    const passPct = Math.round(passing/allScores.length*100);
+
+    // Per-round accuracy
+    const roundStats = roundEntries.map(([rId, round], i) => {
+      const resps = Object.values(round.responses||{});
+      const correct = resps.filter(r=>r.correct).length;
+      const pct = resps.length ? Math.round(correct/resps.length*100) : null;
+      return { label:`Round ${round.roundNum||i+1}`, value:round.value, correct, total:resps.length, pct };
+    });
+
+    const hardestRound = [...roundStats].filter(r=>r.pct!==null).sort((a,b)=>a.pct-b.pct)[0];
+    const easiestRound = [...roundStats].filter(r=>r.pct!==null).sort((a,b)=>b.pct-a.pct)[0];
+
+    // Stat cards
+    const statCard = (val, label, sub='') => `<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;text-align:center">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent)">${val}</div>
+      <div style="font-family:monospace;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px">${label}</div>
+      ${sub?`<div style="font-family:monospace;font-size:.62rem;color:var(--muted)">${sub}</div>`:''}
+    </div>`;
+
+    // Per-round table
+    const roundRows = roundStats.map((r,i) => {
+      const col = r.pct===null?'var(--muted)':r.pct>=80?'var(--cl)':r.pct>=60?'var(--accent)':'var(--wl)';
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 12px;font-weight:600">${r.label}</td>
+        <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:.82rem">${r.value?(r.value.toFixed(4)+'"'):'—'}</td>
+        <td style="padding:8px 10px;text-align:center">${r.total} students</td>
+        <td style="padding:8px 10px;text-align:center;font-weight:700;color:${col}">${r.pct!==null?r.pct+'%':'—'}</td>
+        <td style="padding:8px 10px"><div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;max-width:100px"><div style="height:100%;width:${r.pct||0}%;background:${col}"></div></div></td>
+      </tr>`;
+    }).join('');
+
+    // Student rows with integrity
+    const simIntKey = `sim_${sessionNum}`;
+    const stuRows = stuStats.map(s => {
+      const col = s.pct===null?'var(--muted)':s.pct>=80?'var(--cl)':s.pct>=60?'var(--accent)':'var(--wl)';
+      // Integrity: look through all integrityLog keys that start with sim_{sessionNum}
+      let tabs=0, blurs=0, exits=0, rejoins=0, pageClosed=0;
+      if(iLog){
+        for(const [logKey, stuEntries] of Object.entries(iLog)){
+          if(!logKey.startsWith(`sim_${sessionNum}_`)) continue;
+          const evList = Object.values(stuEntries?.[s.key]||{});
+          tabs      += evList.filter(e=>e.type==='tab_switch').length;
+          blurs     += evList.filter(e=>e.type==='window_blur').length;
+          exits     += evList.filter(e=>e.type==='session_exit').length;
+          rejoins   += evList.filter(e=>e.type==='session_rejoin').length;
+          pageClosed+= evList.filter(e=>e.type==='page_close').length;
+        }
+      }
+      const totalFlags = tabs+blurs+exits+rejoins+pageClosed;
+      const intCell = totalFlags > 0
+        ? `<span style="font-family:monospace;font-size:.72rem;color:var(--wl);font-weight:700;cursor:help" title="${tabs} tab switch(es), ${blurs} window left(s), ${exits} exit(s), ${pageClosed} page close(s)">⚠ ${totalFlags}</span>`
+        : `<span style="font-family:monospace;font-size:.72rem;color:var(--cl)">✓</span>`;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 12px;font-weight:600;color:var(--blue)">${esc(s.name)}</td>
+        <td style="padding:8px 10px;text-align:center;font-family:monospace;font-weight:700;color:${col}">${s.pct!==null?s.pct+'%':'—'}</td>
+        <td style="padding:8px 10px;text-align:center;font-family:monospace">${s.correct}/${s.attempted}</td>
+        <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:.75rem;color:var(--muted)">${s.attempted}/${total} rounds</td>
+        <td style="padding:8px 10px;text-align:center">${intCell}</td>
+      </tr>`;
+    }).join('');
+
+    const thSt = 'padding:7px 10px;text-align:left;border-bottom:2px solid var(--border);font-family:monospace;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted)';
+
+    content.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:22px">
+        ${statCard(finished.length,'Students','responded')}
+        ${statCard(avg+'%','Class Average','')}
+        ${statCard(highest+'%','Highest','')}
+        ${statCard(lowest+'%','Lowest','')}
+        ${statCard(passPct+'%','Pass Rate','≥70%')}
+        ${statCard(total,'Total Rounds','')}
+      </div>
+
+      <div style="margin-bottom:22px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px">ROUND-BY-ROUND ACCURACY</div>
+        <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.82rem">
+          <thead><tr style="background:var(--panel2)">
+            <th style="${thSt}">Round</th><th style="${thSt}">Reading</th><th style="${thSt}">Responses</th><th style="${thSt}">Accuracy</th><th style="${thSt}">Bar</th>
+          </tr></thead><tbody>${roundRows}</tbody>
+        </table></div>
+      </div>
+
+      <div style="margin-bottom:22px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px">STUDENT RESULTS & INTEGRITY</div>
+        <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.82rem">
+          <thead><tr style="background:var(--panel2)">
+            <th style="${thSt}">Student</th><th style="${thSt}">Accuracy</th><th style="${thSt}">Correct</th><th style="${thSt}">Rounds</th><th style="${thSt}">Integrity</th>
+          </tr></thead><tbody>${stuRows}</tbody>
+        </table></div>
+      </div>
+
+      <div id="cdPerfAISummary"><div class="empty-state" style="padding:16px">Generating instructor insights...</div></div>`;
+
+    // AI analysis
+    const hardInfo = hardestRound ? `Hardest round: ${hardestRound.label} (${hardestRound.value?.toFixed(4)}"): ${hardestRound.pct}% correct.` : '';
+    const easyInfo = easiestRound ? `Easiest round: ${easiestRound.label} (${easiestRound.value?.toFixed(4)}"): ${easiestRound.pct}% correct.` : '';
+    const prompt = `You are an aviation maintenance training instructor assistant. A class of ${finished.length} students just completed Micrometer Session ${sessionNum} with ${total} live reading rounds. Class average accuracy: ${avg}%. Pass rate (≥70%): ${passPct}%. ${hardInfo} ${easyInfo} Common errors: students averaging below 60% may struggle with vernier scale reading or thimble graduation identification. Write a concise instructor report (3-4 short paragraphs) with practical recommendations for re-teaching or follow-up. Be direct. Plain text, no markdown.`;
+    try{
+      const resp = await fetch('https://api.classroomamt.com/api/anthropic',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,messages:[{role:'user',content:prompt}]})});
+      const data = await resp.json();
+      const summary = data.content?.[0]?.text||'';
+      const aiEl = document.getElementById('cdPerfAISummary');
+      if(aiEl && summary) aiEl.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r);padding:18px 20px"><div style="font-family:monospace;font-size:.83rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px">🤖 Instructor Insights</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:.97rem;line-height:1.7;color:var(--text);white-space:pre-line">${esc(summary)}</div></div>`;
+      else if(aiEl) aiEl.innerHTML='';
+    }catch(e){ const aiEl=document.getElementById('cdPerfAISummary'); if(aiEl) aiEl.innerHTML=''; }
+  }catch(e){ content.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
+}
+
+async function loadInstrumentGradebook(classId, sessionNum){
+  const el = document.getElementById('gradeBook');
+  if(!el) return;
+  el.innerHTML = '<div class="empty-state">Loading micrometer grades...</div>';
+  try{
+    const [session, students, iLog] = await Promise.all([
+      dbGet(`instrumentSessions/${classId}/sessions/${sessionNum}`),
+      dbGet(`classroomStudents/${classId}`),
+      dbGet(`integrityLog/${classId}`)
+    ]);
+    const stuList = Object.values(students||{}).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const stuKeys = Object.keys(students||{});
+    const rounds = session?.rounds || {};
+    const roundEntries = Object.entries(rounds).sort((a,b)=>(a[1].sentAt||0)-(b[1].sentAt||0));
+    const total = roundEntries.length;
+    if(!total){ el.innerHTML='<div class="empty-state">No rounds completed.</div>'; return; }
+
+    const rows = stuList.map(s => {
+      const key = s.uid || safeKey(s.name||'');
+      let correct=0, attempted=0;
+      for(const [,round] of roundEntries){
+        const resp = round.responses?.[key];
+        if(resp){ attempted++; if(resp.correct) correct++; }
+      }
+      const pct = attempted ? Math.round(correct/attempted*100) : 0;
+      const grade = attempted ? (pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F') : '—';
+      const gc = pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
+      const col = pct>=70?'var(--cl)':'var(--wl)';
+
+      // Integrity
+      let tabs=0, blurs=0, exits=0, pageClosed=0;
+      if(iLog){
+        for(const [logKey, stuEntries] of Object.entries(iLog)){
+          if(!logKey.startsWith(`sim_${sessionNum}_`)) continue;
+          const evList = Object.values(stuEntries?.[key]||{});
+          tabs      += evList.filter(e=>e.type==='tab_switch').length;
+          blurs     += evList.filter(e=>e.type==='window_blur').length;
+          exits     += evList.filter(e=>e.type==='session_exit').length;
+          pageClosed+= evList.filter(e=>e.type==='page_close').length;
+        }
+      }
+      const totalFlags = tabs+blurs+exits+pageClosed;
+      const intCell = totalFlags>0
+        ? `<td title="${tabs} tab switch, ${blurs} window left, ${exits} exit, ${pageClosed} page close"><span style="font-family:monospace;font-size:.75rem;color:var(--wl);font-weight:700;cursor:help">⚠ ${totalFlags}</span></td>`
+        : `<td style="font-family:monospace;font-size:.75rem;color:var(--cl)">✓</td>`;
+
+      return `<tr>
+        <td style="font-weight:600;font-size:.9rem;color:var(--blue)">${esc(s.name||key)}</td>
+        <td style="font-family:monospace;font-weight:700;color:${col}">${correct}/${attempted}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div></div><span style="font-family:monospace;font-size:.75rem">${attempted?pct+'%':'—'}</span></div></td>
+        <td>${attempted?`<span class="grade-pill ${gc}">${grade}</span>`:'—'}</td>
+        <td style="font-family:monospace;font-size:.72rem">${attempted}/${total} rounds</td>
+        ${intCell}
+      </tr>`;
+    });
+
+    el.innerHTML = `
+      <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-bottom:10px">📐 Micrometer Session ${sessionNum} · ${total} round${total!==1?'s':''}</div>
+      <table class="grade-table">
+        <thead><tr>
+          <th>Student</th><th>Score</th><th>Accuracy</th><th>Grade</th><th>Rounds</th>
+          <th style="font-family:monospace;font-size:.7rem;letter-spacing:1px">Integrity</th>
+        </tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table>`;
+  }catch(e){ el.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
 }
 // ══════════════════════════════════════════════════════════════════
 // END MEASUREMENT SIMULATOR
