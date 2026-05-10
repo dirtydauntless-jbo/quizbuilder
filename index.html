@@ -925,8 +925,16 @@ setTimeout(function(){
       </div>
 
       <div id="instSimResponsesWrap" class="hidden">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:10px">Student Responses — Round <span id="instSimRoundLabel">1</span></div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px">Student Responses — Round <span id="instSimRoundLabel">1</span></div>
+          <button class="btn btn-ghost btn-sm" onclick="instSimToggleHistory()" id="instSimHistoryBtn" style="font-size:.72rem;margin-left:auto">📋 View All Rounds</button>
+        </div>
         <div id="instSimResponses"></div>
+        <!-- Session history — all rounds -->
+        <div id="instSimHistoryWrap" class="hidden" style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">SESSION HISTORY — ALL ROUNDS</div>
+          <div id="instSimHistory"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1305,6 +1313,12 @@ setTimeout(function(){
 
     <!-- Session history (practice mode only) -->
     <div id="stuSimHistory" style="font-family:monospace;font-size:.72rem;color:var(--muted)"></div>
+
+    <!-- Live session previous rounds (shown during live session) -->
+    <div id="stuSimLiveHistory" class="hidden" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">YOUR PREVIOUS ROUNDS THIS SESSION</div>
+      <div id="stuSimLiveHistoryList"></div>
+    </div>
   </div>
 
   <!-- Active quiz -->
@@ -2791,9 +2805,9 @@ async function masterDashLoad(){
       </div>
     `, true)}
 
-    ${panel('md-top','Most Active Students (30d)','🏆',`<div id="masterDashTopStudents"></div>`, true)
+    ${panel('md-top','Most Active Students (30d)','🏆',`<div id="masterDashTopStudents"></div>`, true)}
 
-    ${panel('md-signupslist','Recent Signups','📝',`<div id="masterDashNewSignups"></div>`, true)
+    ${panel('md-signupslist','Recent Signups','📝',`<div id="masterDashNewSignups"></div>`, true)}
   `;
 
   if(el) el.innerHTML = html;
@@ -3098,6 +3112,131 @@ function initLang(){
 }
 initLang();
 // ── END i18n ─────────────────────────────────────────────────────────────
+
+// ── SIM SESSION HISTORY ───────────────────────────────────────────────────
+async function instSimToggleHistory(){
+  const wrap=document.getElementById('instSimHistoryWrap');
+  const btn=document.getElementById('instSimHistoryBtn');
+  if(!wrap) return;
+  if(wrap.classList.contains('hidden')){
+    wrap.classList.remove('hidden');
+    if(btn) btn.textContent='📋 Hide All Rounds';
+    await instSimLoadHistory();
+  } else {
+    wrap.classList.add('hidden');
+    if(btn) btn.textContent='📋 View All Rounds';
+  }
+}
+
+async function instSimLoadHistory(){
+  const classId=document.getElementById('instSimClassPicker')?.value;
+  const el=document.getElementById('instSimHistory');
+  if(!classId||!el) return;
+  el.innerHTML='<div class="empty-state" style="font-size:.75rem">Loading…</div>';
+  try{
+    const sessions=await dbGet(`${SIM_PATH(classId)}/sessions`)||{};
+    const students=await dbGet(`classroomStudents/${classId}`)||{};
+    const stuCount=Object.keys(students).length;
+    if(!Object.keys(sessions).length){el.innerHTML='<div class="empty-state" style="font-size:.75rem">No sessions recorded yet.</div>';return;}
+    let html='';
+    for(const [sNum,session] of Object.entries(sessions).sort((a,b)=>Number(a[0])-Number(b[0]))){
+      const rounds=session.rounds||{};
+      html+=`<div style="margin-bottom:14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:1px;color:var(--accent);margin-bottom:6px">Session ${sNum}</div>`;
+      for(const [rId,round] of Object.entries(rounds)){
+        const responses=Object.values(round.responses||{});
+        const correct=responses.filter(r=>r.correct).length;
+        const value=round.value?round.value.toFixed(4)+'"':'—';
+        const date=round.sentAt?new Date(round.sentAt).toLocaleString():'—';
+        html+=`<div style="border:1px solid var(--border);border-radius:6px;margin-bottom:6px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel2);cursor:pointer;flex-wrap:wrap" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+            <div style="font-family:monospace;font-size:.72rem;flex:1">
+              <span style="color:var(--accent);font-weight:700">Round ${round.roundNum||rId}</span>
+              <span style="color:var(--muted);margin-left:8px">${value}</span>
+              <span style="color:var(--muted);margin-left:8px;font-size:.65rem">${date}</span>
+            </div>
+            <span style="font-family:monospace;font-size:.72rem"><span style="color:var(--cl)">${correct}✓</span> <span style="color:var(--wl)">${responses.length-correct}✗</span> <span style="color:var(--muted)">/ ${stuCount}</span></span>
+          </div>
+          <div style="display:none;padding:8px 12px">
+            ${responses.length?responses.map(r=>`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-size:.72rem">
+              <span style="font-weight:600">${esc(r.studentName||'—')}</span>
+              <span style="font-family:monospace;color:${r.correct?'var(--cl)':'var(--wl)'}">${r.correct?'✓':'✗'} ${(r.answer||0).toFixed(4)}"</span>
+            </div>`).join(''):'<div style="color:var(--muted);font-size:.72rem">No responses.</div>'}
+          </div>
+        </div>`;
+      }
+      html+='</div>';
+    }
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`;}
+}
+
+async function stuSimLoadLiveHistory(){
+  const el=document.getElementById('stuSimLiveHistoryList');
+  const wrap=document.getElementById('stuSimLiveHistory');
+  if(!el||!_stuSimClassId||!_stuSimSessionNum) return;
+  try{
+    const key=stuSession?.uid||safeKey(stuSession?.name||'student');
+    const rounds=await dbGet(`${SIM_PATH(_stuSimClassId)}/sessions/${_stuSimSessionNum}/rounds`)||{};
+    const entries=Object.entries(rounds).sort((a,b)=>Number(a[0])-Number(b[0]));
+    if(entries.length<=1){wrap?.classList.add('hidden');return;}
+    wrap?.classList.remove('hidden');
+    el.innerHTML=entries.slice(0,-1).reverse().map(([rId,round])=>{
+      const resp=round.responses?.[key];
+      const value=round.value?round.value.toFixed(4)+'"':'—';
+      const roundNum=round.roundNum||rId;
+      if(!resp) return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem">
+        <span style="font-family:monospace;color:var(--muted)">Round ${roundNum} — ${value}</span>
+        <span style="font-family:monospace;font-size:.68rem;color:var(--muted)">Not submitted</span></div>`;
+      return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem">
+        <span style="font-family:monospace">Round ${roundNum} — <span style="color:var(--muted)">${value}</span></span>
+        <span style="font-family:monospace;font-weight:700;color:${resp.correct?'var(--cl)':'var(--wl)'}">${resp.correct?'✓ Correct':'✗ '+(resp.answer||0).toFixed(4)+'"'}</span>
+      </div>`;
+    }).join('')||'<div style="color:var(--muted);font-size:.72rem">No previous rounds.</div>';
+  }catch(e){if(el)el.innerHTML='';}
+}
+
+async function adminLoadSimGradebook(classId, container){
+  try{
+    const sessions=await dbGet(`${SIM_PATH(classId)}/sessions`)||{};
+    if(!Object.keys(sessions).length) return;
+    const students=await dbGet(`classroomStudents/${classId}`)||{};
+    const stuEntries=Object.entries(students).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+    const stuStats={};
+    for(const [,session] of Object.entries(sessions)){
+      for(const [,round] of Object.entries(session.rounds||{})){
+        for(const [key,resp] of Object.entries(round.responses||{})){
+          if(!stuStats[key]) stuStats[key]={total:0,correct:0};
+          stuStats[key].total++;
+          if(resp.correct) stuStats[key].correct++;
+        }
+      }
+    }
+    if(!Object.keys(stuStats).length) return;
+    const totalRounds=Object.values(sessions).reduce((a,s)=>a+Object.keys(s.rounds||{}).length,0);
+    container.innerHTML+=`
+      <div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:10px;color:var(--accent)">📐 Micrometer Sim — ${totalRounds} round${totalRounds!==1?'s':''} total</div>
+        <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.78rem">
+          <thead><tr style="background:var(--panel2)">
+            <th style="padding:7px 12px;text-align:left;border:1px solid var(--border)">Student</th>
+            <th style="padding:7px 10px;text-align:center;border:1px solid var(--border)">Rounds</th>
+            <th style="padding:7px 10px;text-align:center;border:1px solid var(--border)">Correct</th>
+            <th style="padding:7px 10px;text-align:center;border:1px solid var(--border)">Accuracy</th>
+          </tr></thead><tbody>
+          ${stuEntries.map(([key,s])=>{
+            const stat=stuStats[key]||{total:0,correct:0};
+            const pct=stat.total?Math.round(stat.correct/stat.total*100):null;
+            const col=pct===null?'var(--muted)':pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+            return `<tr><td style="padding:7px 12px;border:1px solid var(--border);font-weight:600">${esc(s.name||key)}</td>
+              <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:monospace">${stat.total||'—'}</td>
+              <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:monospace">${stat.correct||'—'}</td>
+              <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col}">${pct!==null?pct+'%':'—'}</td>
+            </tr>`;
+          }).join('')}
+          </tbody></table></div></div>`;
+  }catch(e){}
+}
+// ── END SIM HISTORY ───────────────────────────────────────────────────────
 
 let _isSuperAdmin = false;
 let _isMasterAdmin = false;
@@ -3415,6 +3554,8 @@ async function adminLoadClassGradebook(){
 
     _gbData = { quizzes, rows, classId };
     adminRenderGradebook();
+    // Also load sim session performance below the quiz gradebook
+    await adminLoadSimGradebook(classId, el);
   } catch(e){ el.innerHTML = `<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
 }
 
@@ -14610,7 +14751,9 @@ async function stuSimJoinLive(){
   if(revb) revb.disabled = true;
   if(joinBtn) joinBtn.style.display = 'none';
   const exitBtn = document.getElementById('stuSimExitBtn');
-  if(exitBtn) exitBtn.classList.remove('hidden'); // hide Join after joining
+  if(exitBtn) exitBtn.classList.remove('hidden');
+  // Load previous rounds from this session
+  stuSimLoadLiveHistory();
 
   if(stuSession?.uid){
     const key = stuSession.uid || safeKey(stuSession.name||'student');
