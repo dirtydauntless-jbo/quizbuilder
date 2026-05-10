@@ -505,15 +505,14 @@ a{color:var(--accent);text-decoration:none}
 </style>
 </head>
 <body>
-<div id="jsLoadingIndicator" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0c0f;display:flex;align-items:center;justify-content:center;z-index:1;font-family:monospace;color:#5a6370;font-size:.9rem;letter-spacing:2px">
+<div id="jsLoadingIndicator" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0c0f;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:monospace;color:#5a6370;font-size:.9rem;letter-spacing:2px">
   LOADING...
 </div>
 <script>
-// Force-hide loading indicator after 6s as a fallback in case auth hangs
 setTimeout(function(){
   var ind = document.getElementById('jsLoadingIndicator');
   if(ind) ind.style.display='none';
-}, 6000);
+}, 2000);
 </script>
 
 <!-- ============== LANDING ============== -->
@@ -1853,6 +1852,8 @@ function showLanding(){ hideAll(); show('landingScreen'); }
 function showInstructorAuth(){ pendingAuthRole='instructor'; hideAll(); show('instAuthScreen'); }
 function showStudentJoin(){ pendingAuthRole='student'; hideAll(); show('stuAuthScreen'); }
 function hideAll(){
+  const ind = document.getElementById('jsLoadingIndicator');
+  if(ind) ind.style.display = 'none';
   ['landingScreen','instAuthScreen','stuAuthScreen','stuJoinScreen','instApp','stuApp'].forEach(id => {
     const el = document.getElementById(id);
     if(el){ el.classList.add('hidden'); el.style.display = 'none'; }
