@@ -1274,7 +1274,7 @@ setTimeout(function(){
       <div id="stuSimLiveClassInfo" style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:rgba(0,0,0,.2);border-radius:4px"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button id="stuSimJoinBtn" class="btn btn-primary" onclick="stuSimJoinLive()" style="font-size:.85rem;padding:10px 20px;background:var(--accent);color:#000;font-weight:700">▶ Join Live Session</button>
-        <button class="btn btn-ghost btn-sm" onclick="stuSimExitLive()" style="font-size:.7rem;color:var(--wl);border-color:var(--wl)" title="Exit live session and return to practice mode">✕ Exit Live Session</button>
+        <button id="stuSimExitBtn" class="btn btn-ghost btn-sm hidden" onclick="stuSimExitLive()" style="font-size:.7rem;color:var(--wl);border-color:var(--wl)" title="Exit live session and return to practice mode">✕ Exit Live Session</button>
       </div>
     </div>
 
@@ -14221,6 +14221,8 @@ async function stuSimExitLive(){
   if(revb) revb.disabled = false;
   // Show Rejoin button in banner (keep banner visible since session may still be active)
   if(joinBtn){ joinBtn.textContent = '↩ Rejoin Live Session'; joinBtn.style.display = ''; }
+  const exitBtn2 = document.getElementById('stuSimExitBtn');
+  if(exitBtn2) exitBtn2.classList.add('hidden');
   if(fb){ fb.textContent = 'You exited the live session. Practice mode active — click Rejoin if you want to participate.'; fb.style.background = 'rgba(240,165,0,.12)'; fb.style.color = 'var(--accent)'; fb.classList.remove('hidden'); }
 }
 
@@ -14281,6 +14283,9 @@ function stuSimHandleLiveUpdate(data){
 
     // Update Join button — check Firebase for prior exit (covers page reload case)
     const joinBtn = document.getElementById('stuSimJoinBtn');
+    const exitBtn = document.getElementById('stuSimExitBtn');
+    // Always reset: show Join, hide Exit when banner first appears for a round
+    if(exitBtn) exitBtn.classList.add('hidden');
     const hasExitedMemory = _stuSimExitedRounds && _stuSimExitedRounds.has(data.roundId);
     if(joinBtn){
       joinBtn.textContent = hasExitedMemory ? '↩ Rejoin Live Session' : '▶ Join Live Session';
@@ -14384,7 +14389,9 @@ async function stuSimJoinLive(){
   if(gb){ gb.disabled = true; gb.style.opacity = '0.4'; gb.title = 'Guide line is controlled by your instructor during live sessions'; }
   if(rb) rb.disabled = true;
   if(revb) revb.disabled = true;
-  if(joinBtn) joinBtn.style.display = 'none'; // hide Join after joining
+  if(joinBtn) joinBtn.style.display = 'none';
+  const exitBtn = document.getElementById('stuSimExitBtn');
+  if(exitBtn) exitBtn.classList.remove('hidden'); // hide Join after joining
 
   if(stuSession?.uid){
     const key = stuSession.uid || safeKey(stuSession.name||'student');
