@@ -929,51 +929,13 @@ setTimeout(function(){
   </div>
 
   <!-- MASTER DASHBOARD TAB (master admin only) -->
-  <div id="inst-tab-masterdash" style="display:none;padding:24px;max-width:1100px;margin:0 auto">
+  <div id="inst-tab-masterdash" style="display:none;padding:24px;max-width:860px;margin:0 auto">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:3px;color:var(--accent)">📊 Master Dashboard</div>
       <button class="btn btn-ghost btn-sm" onclick="masterDashLoad()" style="margin-left:auto">↻ Refresh</button>
     </div>
-    <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:24px">Platform-wide analytics · Master admin only</div>
-    <div id="masterDashCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:28px"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">STUDENT LOGINS — LAST 24 HRS</div>
-        <div id="masterDash24hr">Loading…</div>
-      </div>
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">INSTRUCTOR LOGINS — LAST 24 HRS</div>
-        <div id="masterDashInst24hr">Loading…</div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MONTHLY USAGE — STUDENTS</div>
-        <div id="masterDashStuMonth">Loading…</div>
-      </div>
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MONTHLY USAGE — INSTRUCTORS</div>
-        <div id="masterDashInstMonth">Loading…</div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">QUIZZES ISSUED — LAST 30 DAYS</div>
-        <div id="masterDashQuizzesIssued">Loading…</div>
-      </div>
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">QUIZZES TAKEN — LAST 30 DAYS</div>
-        <div id="masterDashQuizzesTaken">Loading…</div>
-      </div>
-    </div>
-    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MOST ACTIVE STUDENTS — LAST 30 DAYS</div>
-      <div id="masterDashTopStudents">Loading…</div>
-    </div>
-    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px;margin-top:18px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">RECENT SIGNUPS</div>
-      <div id="masterDashNewSignups">Loading…</div>
-    </div>
+    <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:20px">Platform-wide analytics · Master admin only</div>
+    <div id="masterDashCards"></div>
   </div>
 
   <!-- ADMIN TAB (super-admins only) -->
@@ -2765,7 +2727,7 @@ async function masterDashLoad(){
           ${row('Logins last 12 months',instLogins12mo)}
         </div>
       </div>
-    `)}
+    `, true)}
 
     ${panel('md-signups','New Signups','🆕',`
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -2783,7 +2745,7 @@ async function masterDashLoad(){
         </div>
       </div>
       ${stuMetas.length===0?'<div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:10px">⚠ Signup tracking started after last deployment — data accumulates as users log in.</div>':''}
-    `)}
+    `, true)}
 
     ${panel('md-quizzes','Quiz Activity','📋',`
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -2798,7 +2760,7 @@ async function masterDashLoad(){
           ${row('Last 12 months',qTaken12mo,'#7c3aed')}
         </div>
       </div>
-    `)}
+    `, true)}
 
     ${panel('md-activity24','Who\'s Online — Last 24 Hours','🟢',`
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -2811,7 +2773,7 @@ async function masterDashLoad(){
           <div id="masterDashInst24hr"></div>
         </div>
       </div>
-    `)}
+    `, true)}
 
     ${panel('md-monthly','Monthly Usage Charts','📊',`
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -2824,11 +2786,11 @@ async function masterDashLoad(){
           <div id="masterDashInstMonth"></div>
         </div>
       </div>
-    `)}
+    `, true)}
 
-    ${panel('md-top','Most Active Students (30d)','🏆',`<div id="masterDashTopStudents"></div>`)}
+    ${panel('md-top','Most Active Students (30d)','🏆',`<div id="masterDashTopStudents"></div>`, true)
 
-    ${panel('md-signupslist','Recent Signups','📝',`<div id="masterDashNewSignups"></div>`)}
+    ${panel('md-signupslist','Recent Signups','📝',`<div id="masterDashNewSignups"></div>`, true)
   `;
 
   if(el) el.innerHTML = html;
