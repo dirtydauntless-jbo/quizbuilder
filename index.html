@@ -2800,7 +2800,7 @@ async function adminLoadInstructors(){
           <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:2px">Registered: ${created} · UID: ${esc(uid)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" onclick="adminOpenInstructorProfile('${esc(uid)}','${name}')">👁 View Profile</button>
+          <button class="btn btn-primary btn-sm" onclick="adminOpenInstructorProfile('${esc(uid)}','${name}')">View Profile</button>
           ${!isSelf ? `<button class="btn btn-danger btn-sm" onclick="adminDeleteInstructor('${esc(uid)}','${name}')">Delete</button>` : ''}
         </div>
       </div>`;
@@ -2886,7 +2886,7 @@ async function adminLoadClassRoster(){
             <div style="font-family:monospace;font-size:.65rem;color:var(--muted)">Joined: ${joined} · UID: ${uid}</div>
           </div>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-primary btn-sm" onclick="adminOpenStudentProfile('${esc(classId)}','${esc(key)}','${name}','${uid}')">👁 Profile</button>
+            <button class="btn btn-primary btn-sm" onclick="adminOpenStudentProfile('${esc(classId)}','${esc(key)}','${name}','${uid}')">Profile</button>
             <button class="btn btn-ghost btn-sm" onclick="adminGrantRetake('${esc(classId)}','${esc(key)}','${name}')">Retake</button>
             <button class="btn btn-danger btn-sm" onclick="adminRemoveStudent('${esc(classId)}','${esc(key)}','${name}','${uid}')">Remove</button>
           </div>
@@ -2904,8 +2904,9 @@ async function adminLoadClassQuizzes(){
     const assigned = Object.entries(classroom?.assignedQuizzes||{});
     if(!assigned.length){ el.innerHTML = '<div class="empty-state">No quizzes assigned.</div>'; return; }
     const rows = await Promise.all(assigned.map(async ([qid, info]) => {
-      const stuProgress = await dbGet(`quizProgress/${classId}/${qid}`) || {};
-      const allAttempts = Object.values(stuProgress).flatMap(s => Object.values(s.attempts||{}));
+      // quizSessions/{classId}/{quizId}/{stuKey}/{attemptId}
+      const quizSessions = await dbGet(`quizSessions/${classId}/${qid}`) || {};
+      const allAttempts = Object.values(quizSessions).flatMap(stuAttempts => Object.values(stuAttempts||{}));
       const scores = allAttempts.map(a => a.score).filter(s => s != null);
       const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
       const best = scores.length ? Math.max(...scores).toFixed(1) : '—';
@@ -2937,8 +2938,8 @@ async function adminLoadClassGradebook(){
     const stuEntries = Object.entries(students||{}).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
     if(!quizzes.length || !stuEntries.length){ el.innerHTML = '<div class="empty-state">No quizzes or students yet.</div>'; return; }
 
-    // Read all progress for this class — path: quizProgress/{classId}/{quizId}/{stuKey}/attempts
-    const allProgress = await dbGet(`quizProgress/${classId}`) || {};
+    // quizSessions/{classId}/{quizId}/{stuKey}/{attemptId}
+    const allSessions = await dbGet(`quizSessions/${classId}`) || {};
 
     const colW = 110;
     let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem">
@@ -2951,10 +2952,10 @@ async function adminLoadClassGradebook(){
     for(const [stuKey, stuData] of stuEntries){
       const scores = [];
       const cells = quizzes.map(([qid]) => {
-        const stuProgress = allProgress[qid]?.[stuKey] || {};
-        const attempts = Object.values(stuProgress.attempts||{}).filter(a=>a.score!=null);
-        if(!attempts.length) return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
-        const best = Math.max(...attempts.map(a=>a.score));
+        // quizSessions/{classId}/{quizId}/{stuKey}/{attemptId}
+        const stuAttempts = Object.values(allSessions[qid]?.[stuKey] || {}).filter(a=>a.score!=null);
+        if(!stuAttempts.length) return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
+        const best = Math.max(...stuAttempts.map(a=>a.score));
         scores.push(best);
         const col = best>=80?'#16a34a':best>=60?'#d97706':'#dc2626';
         return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col}">${best.toFixed(0)}%</td>`;
@@ -3095,8 +3096,9 @@ async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
 
     const classBlocks = await Promise.all(allStudentRecords.map(async ({classId: cid, className, key, data, classroom}) => {
       const quizzes = Object.entries(classroom.assignedQuizzes||{});
-      // Correct path: quizSessions/{classId}/{stuKey}/{qid}
-      const stuSessions = await dbGet(`quizSessions/${cid}/${key}`) || {};
+      // Path: quizSessions/{classId}/{quizId}/{stuKey}
+      // Load all quiz sessions for this class, then index by quizId
+      const allClassSessions = await dbGet(`quizSessions/${cid}`) || {};
       const integrityAll = await dbGet(`integrityLog/${cid}`) || {};
       const intFlags = [];
       for(const [qid, stuEntries] of Object.entries(integrityAll)){
@@ -3108,7 +3110,9 @@ async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
       const joined = data.joinedAt ? new Date(data.joinedAt).toLocaleDateString() : '—';
 
       const quizRows = quizzes.map(([qid, qinfo]) => {
-        const attempts = Object.entries(stuSessions[qid]||{})
+        // quizSessions/{classId}/{quizId}/{stuKey}/{attemptId}
+        const quizStuData = allClassSessions[qid]?.[key] || allClassSessions[qid]?.[stuUid] || {};
+        const attempts = Object.entries(quizStuData)
           .map(([aid, a]) => ({...a, aid}))
           .filter(a => a.score != null)
           .sort((a,b) => (b.submittedAt||b.endedAt||0) - (a.submittedAt||a.endedAt||0));
@@ -3307,7 +3311,7 @@ async function adminLoadClassrooms(){
             <div style="font-family:monospace;font-size:.62rem;color:var(--muted);margin-top:2px">ID: ${esc(id)} · Code: ${esc(c.joinCode||'—')}</div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
-            <button class="btn btn-primary btn-sm" onclick="adminOpenClassModal('${esc(id)}','${esc(c.name||'')}')">👁 View Class</button>
+            <button class="btn btn-primary btn-sm" onclick="adminOpenClassModal('${esc(id)}','${esc(c.name||'')}')">View Class</button>
             <button class="btn btn-ghost btn-sm" onclick="adminManageClassroomCoInst('${esc(id)}','${esc(c.name||'')}')">Co-Instructors</button>
             <button class="btn btn-danger btn-sm" onclick="adminDeleteClassroom('${esc(id)}','${esc(c.name||'')}','${esc(c.instructorId||'')}')">Delete</button>
           </div>
@@ -3404,7 +3408,7 @@ async function adminLoadStudents(){
           <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:2px">Joined: ${joined} · UID: ${uid}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-primary btn-sm" onclick="adminOpenStudentProfile('${esc(classId)}','${esc(key)}','${name}','${uid}')">👁 View</button>
+          <button class="btn btn-primary btn-sm" onclick="adminOpenStudentProfile('${esc(classId)}','${esc(key)}','${name}','${uid}')">View</button>
           <button class="btn btn-ghost btn-sm" onclick="adminGrantRetake('${esc(classId)}','${esc(key)}','${name}')">Grant Retake</button>
           <button class="btn btn-danger btn-sm" onclick="adminRemoveStudent('${esc(classId)}','${esc(key)}','${name}','${uid}')">Remove</button>
         </div>
