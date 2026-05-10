@@ -3456,30 +3456,35 @@ let _gbSortCol = 'name', _gbSortDir = 1, _gbData = null;
 
 function adminRenderGradebook(){
   if(!_gbData) return;
-  const { quizzes, rows, classId } = _gbData;
+  const { quizzes, rows, classId, simStats, totalRounds } = _gbData;
   const el = document.getElementById('acmPane-gradebook');
-
-  // Sort rows
-  const sorted = [...rows].sort((a, b) => {
-    if(_gbSortCol === 'name'){
-      return _gbSortDir * a.lastName.localeCompare(b.lastName);
-    } else {
-      // Sort by specific quiz index or avg
-      const idx = parseInt(_gbSortCol);
-      const va = isNaN(idx) ? a.avg : (a.scores[idx] ?? -1);
-      const vb = isNaN(idx) ? b.avg : (b.scores[idx] ?? -1);
-      return _gbSortDir * (va - vb);
-    }
-  });
+  if(!el) return;
 
   const arrowFor = col => _gbSortCol===col ? (_gbSortDir===1?'↑':'↓') : '↕';
   const thStyle = `padding:8px 10px;text-align:center;border:1px solid var(--border);cursor:pointer;user-select:none;font-size:.68rem`;
   const stickyTh = `padding:8px 12px;text-align:left;border:1px solid var(--border);position:sticky;left:0;background:var(--panel2);min-width:160px;cursor:pointer;user-select:none`;
 
+  const sorted = [...rows].sort((a, b) => {
+    if(_gbSortCol === 'name') return _gbSortDir * a.lastName.localeCompare(b.lastName);
+    if(_gbSortCol === 'sim'){
+      const va = simStats?.[a.stuKey]?.pct ?? -1;
+      const vb = simStats?.[b.stuKey]?.pct ?? -1;
+      return _gbSortDir * (va - vb);
+    }
+    const idx = parseInt(_gbSortCol);
+    const va = isNaN(idx) ? a.avg : (a.scores[idx] ?? -1);
+    const vb = isNaN(idx) ? b.avg : (b.scores[idx] ?? -1);
+    return _gbSortDir * (va - vb);
+  });
+
+  const hasSimData = simStats && Object.keys(simStats).length > 0;
+  const simHeader = hasSimData ? `<th style="${thStyle};background:rgba(99,102,241,.1)" onclick="adminGbSort('sim')">📐 Sim ${arrowFor('sim')}<br><span style="font-weight:400;font-size:.6rem">${totalRounds} rounds</span></th>` : '';
+
   let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem">
     <thead><tr style="background:var(--panel2)">
       <th style="${stickyTh}" onclick="adminGbSort('name')">Student ${arrowFor('name')}</th>
       ${quizzes.map(([qid,q],i)=>`<th style="${thStyle}" onclick="adminGbSort('${i}')">${esc((q.quizTitle||qid).substring(0,18))} ${arrowFor(String(i))}</th>`).join('')}
+      ${simHeader}
       <th style="${thStyle};min-width:70px;background:rgba(240,165,0,.08)" onclick="adminGbSort('avg')">Avg ${arrowFor('avg')}</th>
     </tr></thead><tbody>
     ${sorted.map(r => {
@@ -3490,15 +3495,69 @@ function adminRenderGradebook(){
         const col = s>=80?'#16a34a':s>=60?'#d97706':'#dc2626';
         return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col}">${s}%</td>`;
       }).join('');
+      let simCell = '';
+      if(hasSimData){
+        const stat = simStats[r.stuKey] || {correct:0, total:0, pct:null};
+        const simCol = stat.pct===null?'var(--muted)':stat.pct>=80?'#16a34a':stat.pct>=60?'#d97706':'#dc2626';
+        simCell = stat.total > 0
+          ? `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);background:rgba(99,102,241,.06)">
+              <span style="font-weight:700;color:${simCol}">${stat.pct}%</span>
+              <div style="font-family:monospace;font-size:.6rem;color:var(--muted)">${stat.correct}/${stat.total}</div>
+            </td>`
+          : `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted);background:rgba(99,102,241,.03)">—</td>`;
+      }
       return `<tr>
         <td style="padding:7px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg)">
           <span style="cursor:pointer;color:var(--accent);text-decoration:underline dotted" onclick="adminOpenStudentProfile('${esc(classId)}','${esc(r.stuKey)}','${esc(r.name)}','${esc(r.uid)}')">${esc(r.name)}</span>
         </td>
-        ${scoreCells}
+        ${scoreCells}${simCell}
         <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${avgCol};background:rgba(240,165,0,.06)">${avgStr}</td>
       </tr>`;
     }).join('')}
     </tbody></table></div>`;
+
+  // Sim session round-by-round breakdown below main table
+  if(hasSimData && _gbData.simSessions){
+    html += `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;margin-bottom:12px;color:var(--accent)">📐 Micrometer Simulator — Round Detail</div>`;
+    for(const [sNum, session] of Object.entries(_gbData.simSessions)){
+      const rounds = Object.entries(session.rounds||{}).sort((a,b)=>a[1].sentAt-b[1].sentAt);
+      if(!rounds.length) continue;
+      html += `<div style="margin-bottom:14px">
+        <div style="font-family:monospace;font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:1px">SESSION ${sNum}</div>
+        <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.78rem">
+          <thead><tr style="background:var(--panel2)">
+            <th style="padding:6px 12px;text-align:left;border:1px solid var(--border);position:sticky;left:0;background:var(--panel2)">Student</th>
+            ${rounds.map(([,r],i)=>`<th style="padding:6px 8px;text-align:center;border:1px solid var(--border);font-size:.65rem;min-width:70px">
+              R${i+1}<br><span style="font-weight:400;color:var(--muted)">${r.value?(r.value.toFixed(4)+'"'):'—'}</span>
+            </th>`).join('')}
+            <th style="padding:6px 8px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.08);font-size:.65rem">Score</th>
+          </tr></thead><tbody>
+          ${sorted.map(r=>{
+            let stuCorrect=0, stuTotal=0;
+            const cells = rounds.map(([,round])=>{
+              const resp = round.responses?.[r.stuKey];
+              if(!resp) return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);color:var(--muted);font-size:.7rem">—</td>`;
+              stuTotal++; if(resp.correct) stuCorrect++;
+              return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);font-size:.75rem;font-weight:700;color:${resp.correct?'var(--cl)':'var(--wl)'}">
+                ${resp.correct?'✓':'✗'}<div style="font-family:monospace;font-size:.55rem;font-weight:400;color:var(--muted)">${(resp.answer||0).toFixed(3)}"</div>
+              </td>`;
+            }).join('');
+            const pct = stuTotal?Math.round(stuCorrect/stuTotal*100):null;
+            const pctCol = pct===null?'var(--muted)':pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+            return `<tr>
+              <td style="padding:6px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg)">${esc(r.name)}</td>
+              ${cells}
+              <td style="padding:5px 8px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.06)">
+                ${pct!==null?`<span style="font-weight:700;color:${pctCol}">${pct}%</span><div style="font-family:monospace;font-size:.6rem;color:var(--muted)">${stuCorrect}/${stuTotal}</div>`:'—'}
+              </td>
+            </tr>`;
+          }).join('')}
+          </tbody></table></div></div>`;
+    }
+    html += '</div>';
+  }
+
   el.innerHTML = html;
 }
 
@@ -3553,9 +3612,31 @@ async function adminLoadClassGradebook(){
     });
 
     _gbData = { quizzes, rows, classId };
+
+    // Load sim session data and compute per-student stats
+    try{
+      const simSessions = await dbGet(`${SIM_PATH(classId)}/sessions`) || {};
+      const simStats = {};
+      let totalRounds = 0;
+      for(const [,session] of Object.entries(simSessions)){
+        for(const [,round] of Object.entries(session.rounds||{})){
+          totalRounds++;
+          for(const [stuKey, resp] of Object.entries(round.responses||{})){
+            if(!simStats[stuKey]) simStats[stuKey]={correct:0,total:0,pct:null};
+            simStats[stuKey].total++;
+            if(resp.correct) simStats[stuKey].correct++;
+          }
+        }
+      }
+      for(const stat of Object.values(simStats)){
+        stat.pct = stat.total ? Math.round(stat.correct/stat.total*100) : null;
+      }
+      _gbData.simStats = simStats;
+      _gbData.simSessions = simSessions;
+      _gbData.totalRounds = totalRounds;
+    }catch(e){ _gbData.simStats={}; _gbData.simSessions={}; _gbData.totalRounds=0; }
+
     adminRenderGradebook();
-    // Also load sim session performance below the quiz gradebook
-    await adminLoadSimGradebook(classId, el);
   } catch(e){ el.innerHTML = `<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
 }
 
