@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- AMT Classroom v9.24d | Built: 2026-05-07ty | Changes: Vernier micrometer simulator — zoom panel + photo reference frame, U-frame body, sliding thimble, knurl/ratchet graphics, guide line toggle, reveal/hide answer, instructor class demo submit, Left Window integrity flag, submit-from-review button, Google OAuth access code fix -->
+<!-- AMT Classroom v9.24d | Built: 2026-05-07 | Changes: Vernier micrometer simulator — zoom panel + photo reference frame, U-frame body, sliding thimble, knurl/ratchet graphics, guide line toggle, reveal/hide answer, instructor class demo submit, Left Window integrity flag, submit-from-review button, Google OAuth access code fix -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -509,10 +509,18 @@ a{color:var(--accent);text-decoration:none}
   LOADING...
 </div>
 <script>
+// Hide loading indicator only after all scripts are loaded (window.onload)
+// plus a hard 8s fallback in case Firebase auth hangs
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    var ind = document.getElementById('jsLoadingIndicator');
+    if(ind) ind.style.display='none';
+  }, 500);
+});
 setTimeout(function(){
   var ind = document.getElementById('jsLoadingIndicator');
   if(ind) ind.style.display='none';
-}, 2000);
+}, 8000);
 </script>
 
 <!-- ============== LANDING ============== -->
@@ -522,12 +530,12 @@ setTimeout(function(){
     <div class="landing-sub">Aviation Mechanic Training Platform</div>
   </div>
   <div class="landing-cards">
-    <div class="landing-card" onclick="try{showInstructorAuth()}catch(e){alert('Error: '+e.message)}">
+    <div class="landing-card" onclick="if(typeof showInstructorAuth==='function')showInstructorAuth()">
       <div class="landing-card-icon">📋</div>
       <div class="landing-card-title">Instructor</div>
       <div class="landing-card-desc">Create classrooms, build quizzes, automatic grading, and track student progress in real time</div>
     </div>
-    <div class="landing-card" onclick="try{showStudentJoin()}catch(e){alert('Error: '+e.message)}">
+    <div class="landing-card" onclick="if(typeof showStudentJoin==='function')showStudentJoin();else showInstructorAuth()">
       <div class="landing-card-icon">✈</div>
       <div class="landing-card-title">Student</div>
       <div class="landing-card-desc">FREE space to study FAA Oral and Practical Questions<br><span style="color:var(--muted);font-size:.78rem">+ take quizzes assigned by your instructor</span></div>
@@ -2749,7 +2757,6 @@ async function _checkSuperAdmin(){
   if(masterBtn) masterBtn.classList.toggle('hidden', !_isMasterAdmin);
   // Log access for master admin analytics
   if(instUser?.uid){ try{ dbSet(`accessLog/instructors/${instUser.uid}/${Date.now()}`,{ts:ts(),name:instProfile?.name||''}); }catch(e){} }
-}
 }
 
 function adminSubTab(tab){
