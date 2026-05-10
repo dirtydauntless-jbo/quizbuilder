@@ -2904,10 +2904,15 @@ async function adminLoadClassQuizzes(){
     const assigned = Object.entries(classroom?.assignedQuizzes||{});
     if(!assigned.length){ el.innerHTML = '<div class="empty-state">No quizzes assigned.</div>'; return; }
     const rows = await Promise.all(assigned.map(async ([qid, info]) => {
-      // quizSessions/{classId}/{quizId}/{stuKey}/{attemptId}
-      const quizSessions = await dbGet(`quizSessions/${classId}/${qid}`) || {};
-      const allAttempts = Object.values(quizSessions).flatMap(stuAttempts => Object.values(stuAttempts||{}));
-      const scores = allAttempts.map(a => a.score).filter(s => s != null);
+      // quizProgress/{classId}/{quizId}/{stuKey}/attempts/attempt_N
+      const quizProgress = await dbGet(`quizProgress/${classId}/${qid}`) || {};
+      const allAttempts = Object.values(quizProgress).flatMap(s => Object.values(s.attempts||{}));
+      const scores = allAttempts.map(a => {
+        if(typeof a.score==='string'&&a.score.includes('/')){const[c,t]=a.score.split('/').map(Number);return t>0?Math.round(c/t*100):null;}
+        if(typeof a.score==='number') return a.score;
+        if(a.correctCount!=null&&a.totalCount) return Math.round(a.correctCount/a.totalCount*100);
+        return null;
+      }).filter(s=>s!=null);
       const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
       const best = scores.length ? Math.max(...scores).toFixed(1) : '—';
       const assigned_on = info.assignedAt ? new Date(info.assignedAt).toLocaleDateString() : '—';
@@ -2938,8 +2943,8 @@ async function adminLoadClassGradebook(){
     const stuEntries = Object.entries(students||{}).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
     if(!quizzes.length || !stuEntries.length){ el.innerHTML = '<div class="empty-state">No quizzes or students yet.</div>'; return; }
 
-    // quizSessions/{classId}/{quizId}/{stuKey}/{attemptId}
-    const allSessions = await dbGet(`quizSessions/${classId}`) || {};
+    // quizProgress/{classId}/{quizId}/{stuKey}/attempts/attempt_N
+    const allProgress = await dbGet(`quizProgress/${classId}`) || {};
 
     const colW = 110;
     let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem">
@@ -2952,13 +2957,28 @@ async function adminLoadClassGradebook(){
     for(const [stuKey, stuData] of stuEntries){
       const scores = [];
       const cells = quizzes.map(([qid]) => {
-        // quizSessions/{classId}/{quizId}/{stuKey}/{attemptId}
-        const stuAttempts = Object.values(allSessions[qid]?.[stuKey] || {}).filter(a=>a.score!=null);
-        if(!stuAttempts.length) return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
-        const best = Math.max(...stuAttempts.map(a=>a.score));
+        const prog = allProgress[qid]?.[stuKey];
+        if(!prog) return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
+        // Score from attempts or from direct correctCount/totalCount
+        let best = null;
+        const attempts = Object.values(prog.attempts||{});
+        if(attempts.length){
+          for(const a of attempts){
+            let pct = null;
+            if(typeof a.score === 'string' && a.score.includes('/')){
+              const [c,t] = a.score.split('/').map(Number);
+              if(t>0) pct = Math.round((c/t)*100);
+            } else if(typeof a.score === 'number'){ pct = a.score; }
+            else if(a.correctCount!=null && a.totalCount){ pct = Math.round((a.correctCount/a.totalCount)*100); }
+            if(pct!=null && (best===null||pct>best)) best=pct;
+          }
+        } else if(prog.correctCount!=null && prog.totalCount){
+          best = Math.round((prog.correctCount/prog.totalCount)*100);
+        }
+        if(best===null) return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
         scores.push(best);
         const col = best>=80?'#16a34a':best>=60?'#d97706':'#dc2626';
-        return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col}">${best.toFixed(0)}%</td>`;
+        return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col}">${best}%</td>`;
       }).join('');
       const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(0)+'%' : '—';
       html += `<tr><td style="padding:7px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg)">${esc(stuData.name||stuKey)}</td>${cells}<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;background:rgba(240,165,0,.06)">${avg}</td></tr>`;
@@ -3096,9 +3116,8 @@ async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
 
     const classBlocks = await Promise.all(allStudentRecords.map(async ({classId: cid, className, key, data, classroom}) => {
       const quizzes = Object.entries(classroom.assignedQuizzes||{});
-      // Path: quizSessions/{classId}/{quizId}/{stuKey}
-      // Load all quiz sessions for this class, then index by quizId
-      const allClassSessions = await dbGet(`quizSessions/${cid}`) || {};
+      // quizProgress/{classId}/{quizId}/{stuKey}/attempts/attempt_N
+      const allClassProgress = await dbGet(`quizProgress/${cid}`) || {};
       const integrityAll = await dbGet(`integrityLog/${cid}`) || {};
       const intFlags = [];
       for(const [qid, stuEntries] of Object.entries(integrityAll)){
@@ -3110,12 +3129,20 @@ async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
       const joined = data.joinedAt ? new Date(data.joinedAt).toLocaleDateString() : '—';
 
       const quizRows = quizzes.map(([qid, qinfo]) => {
-        // quizSessions/{classId}/{quizId}/{stuKey}/{attemptId}
-        const quizStuData = allClassSessions[qid]?.[key] || allClassSessions[qid]?.[stuUid] || {};
-        const attempts = Object.entries(quizStuData)
-          .map(([aid, a]) => ({...a, aid}))
-          .filter(a => a.score != null)
-          .sort((a,b) => (b.submittedAt||b.endedAt||0) - (a.submittedAt||a.endedAt||0));
+        // quizProgress/{classId}/{quizId}/{stuKey}/attempts/attempt_N
+        const prog = allClassProgress[qid]?.[key] || allClassProgress[qid]?.[stuUid];
+        const rawAttempts = prog ? Object.values(prog.attempts||{}) : [];
+        // Also handle legacy: correctCount/totalCount directly on prog
+        if(!rawAttempts.length && prog?.correctCount!=null && prog?.totalCount){
+          rawAttempts.push({ correctCount: prog.correctCount, totalCount: prog.totalCount, finishedAt: prog.finishedAt });
+        }
+        const attempts = rawAttempts.map(a => {
+          let pct = null;
+          if(typeof a.score==='string'&&a.score.includes('/')){const[c,t]=a.score.split('/').map(Number);pct=t>0?Math.round(c/t*100):null;}
+          else if(typeof a.score==='number') pct=a.score;
+          else if(a.correctCount!=null&&a.totalCount) pct=Math.round(a.correctCount/a.totalCount*100);
+          return {...a, pct};
+        }).filter(a=>a.pct!=null).sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0));
 
         if(!attempts.length) return `<tr>
           <td style="padding:5px 10px;border:1px solid var(--border)">${esc(qinfo.quizTitle||qid)}</td>
@@ -3124,24 +3151,22 @@ async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
           <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;color:var(--muted)">—</td>
         </tr>`;
 
-        const best = Math.max(...attempts.map(a=>a.score));
+        const best = Math.max(...attempts.map(a=>a.pct));
         const last = attempts[0];
-        const lastDate = (last?.submittedAt||last?.endedAt) ? new Date(last.submittedAt||last.endedAt).toLocaleDateString() : '—';
+        const lastDate = last?.finishedAt ? new Date(last.finishedAt).toLocaleDateString() : '—';
         const col = best>=80?'#16a34a':best>=60?'#d97706':'#dc2626';
         const attemptsLabel = attempts.length > 1 ? `${attempts.length} attempts` : '1 attempt';
 
-        // Build attempt drill-down rows
         const attemptRows = attempts.map((a, i) => {
-          const aDate = (a.submittedAt||a.endedAt) ? new Date(a.submittedAt||a.endedAt).toLocaleString() : '—';
-          const aCol = a.score>=80?'#16a34a':a.score>=60?'#d97706':'#dc2626';
-          const answers = Object.values(a.answers||{});
-          const qCount = answers.length;
-          const correct = answers.filter(x=>x.correct).length;
+          const aDate = a.finishedAt ? new Date(a.finishedAt).toLocaleString() : '—';
+          const aCol = a.pct>=80?'#16a34a':a.pct>=60?'#d97706':'#dc2626';
+          const qCount = a.totalCount || 0;
+          const correct = a.correctCount || 0;
           return `<tr style="background:rgba(0,0,0,.15)">
             <td style="padding:4px 10px 4px 22px;border:1px solid var(--border);font-family:monospace;font-size:.68rem;color:var(--muted)">
               Attempt ${attempts.length - i} — ${aDate}
             </td>
-            <td style="padding:4px 10px;border:1px solid var(--border);text-align:center;font-weight:700;font-size:.8rem;color:${aCol}">${a.score.toFixed(0)}%</td>
+            <td style="padding:4px 10px;border:1px solid var(--border);text-align:center;font-weight:700;font-size:.8rem;color:${aCol}">${a.pct}%</td>
             <td style="padding:4px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.68rem;color:var(--muted)">${qCount ? `${correct}/${qCount} correct` : '—'}</td>
             <td style="padding:4px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.65rem;color:var(--muted)">${i===0?'Latest':''}</td>
           </tr>`;
@@ -3149,7 +3174,7 @@ async function adminOpenStudentProfile(classId, stuKey, stuName, stuUid){
 
         return `<tr style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
           <td style="padding:6px 10px;border:1px solid var(--border)">${esc(qinfo.quizTitle||qid)} <span style="font-family:monospace;font-size:.62rem;color:var(--muted)">▼</span></td>
-          <td style="padding:6px 10px;border:1px solid var(--border);text-align:center;font-weight:700;color:${col}">${best.toFixed(0)}%</td>
+          <td style="padding:6px 10px;border:1px solid var(--border);text-align:center;font-weight:700;color:${col}">${best}%</td>
           <td style="padding:6px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.68rem">${lastDate}</td>
           <td style="padding:6px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.65rem;color:var(--muted)">${attemptsLabel}</td>
         </tr>
