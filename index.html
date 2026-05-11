@@ -5443,6 +5443,19 @@ async function loadAssignedQuizzes(classId){
 
   if(!Object.keys(assigned).length){
     el.innerHTML = '<div class="empty-state">No quizzes assigned. Click "Assign Quiz" above.</div>';
+    // Still populate picker with sim sessions even if no quizzes
+    try{
+      const picker = document.getElementById('cdProgressQuizPicker');
+      const instrSessions = await dbGet(`instrumentSessions/${selectedClassId}/sessions`) || {};
+      const sessionNums = Object.keys(instrSessions).sort((a,b)=>Number(a)-Number(b));
+      if(sessionNums.length && picker){
+        picker.innerHTML = sessionNums.map(n=>`<option value="instr::${n}">📐 Micrometer Session ${n}</option>`).join('');
+        picker.onchange = function(){ loadClassroomProgressAny(); };
+        loadClassroomProgressAny();
+      } else if(picker){
+        picker.innerHTML = '<option value="">No grades yet</option>';
+      }
+    }catch(e){}
     return;
   }
 
