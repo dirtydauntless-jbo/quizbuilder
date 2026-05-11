@@ -6,9 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Classroom AMT — Aviation Maintenance Technician training platform for FAA certification students.">
   <meta name="robots" content="noindex, nofollow">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
@@ -1914,7 +1911,7 @@ function switchAuthTab(tab){
   hideEl('authErr');
 }
 
-async async function doForgotPassword(role){
+async function doForgotPassword(role){
   const emailId = role === 'inst' ? 'authEmail' : 'stuAuthEmail';
   const errId   = role === 'inst' ? 'authErr'   : 'stuAuthErr';
   const email   = document.getElementById(emailId)?.value.trim();
