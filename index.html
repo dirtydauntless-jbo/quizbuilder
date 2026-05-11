@@ -7,7 +7,6 @@
   <meta name="description" content="Classroom AMT — Aviation Maintenance Technician training platform for FAA certification students.">
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
-  <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
   <meta http-equiv="Permissions-Policy" content="camera=(), microphone=()">
   <title>Classroom AMT</title>
@@ -545,7 +544,7 @@ setTimeout(function(){
       <div class="landing-card-title" id="i18n-inst-card-title">Instructor</div>
       <div class="landing-card-desc" id="i18n-inst-card-desc">Create classrooms, build quizzes, automatic grading, and track student progress in real time</div>
     </div>
-    <div class="landing-card" onclick="if(typeof showStudentJoin==='function')showStudentJoin();else showInstructorAuth()">
+    <div class="landing-card" onclick="if(typeof showStudentJoin==='function')showStudentJoin()">
       <div class="landing-card-icon">✈</div>
       <div class="landing-card-title" id="i18n-stu-card-title">Student</div>
       <div class="landing-card-desc" id="i18n-stu-card-desc">FREE space to study FAA Oral and Practical Questions<br><span style="color:var(--muted);font-size:.78rem" id="i18n-stu-card-sub">+ take quizzes assigned by your instructor</span></div>
@@ -1941,7 +1940,7 @@ async function doForgotPassword(role){
   }
 }
 
-function doEmailAuth(){
+async function doEmailAuth(){
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
   const errEl = document.getElementById('authErr');
