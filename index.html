@@ -773,7 +773,7 @@ setTimeout(function(){
     <div id="cd-tab-progress" class="tab-pane" style="display:none;padding:20px 22px">
       <div style="margin-bottom:14px">
         <label class="label">Select Quiz</label>
-        <select class="select" id="cdProgressQuizPicker" onchange="loadClassroomProgress()" style="max-width:360px"></select>
+        <select class="select" id="cdProgressQuizPicker" onchange="loadClassroomProgressAny()" style="max-width:360px"></select>
       </div>
       <!-- GRADE BOOK -->
       <div class="card">
@@ -5508,7 +5508,7 @@ async function loadAssignedQuizzes(classId){
     const sessionNums = Object.keys(instrSessions).sort((a,b)=>Number(a)-Number(b));
     if(sessionNums.length){
       pickerOptions += sessionNums.map(n =>
-        `<option value="instr::${n}">Instruments Session ${n}</option>`
+        `<option value="instr::${n}">📐 Micrometer Session ${n}</option>`
       ).join('');
     }
   } catch(e){}
