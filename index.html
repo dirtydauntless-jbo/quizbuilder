@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- AMT Classroom v9.24d | Built: 2026-05-07 | Changes: Vernier micrometer simulator — zoom panel + photo reference frame, U-frame body, sliding thimble, knurl/ratchet graphics, guide line toggle, reveal/hide answer, instructor class demo submit, Left Window integrity flag, submit-from-review button, Google OAuth access code fix -->
+<!-- AMT Classroom v9.24e | Built: 2026-05-10 | Changes: i18n language system (EN/ES/FR/ZH), master dashboard accordion UI, student/instructor total fix, duplicate id auth fix, page-close integrity flag, absent/not-in-session tracking -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -7,7 +7,6 @@
   <meta name="description" content="Classroom AMT — Aviation Maintenance Technician training platform for FAA certification students.">
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
-  <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
   <meta http-equiv="Permissions-Policy" content="camera=(), microphone=()">
   <title>Classroom AMT</title>
@@ -527,18 +526,28 @@ setTimeout(function(){
 <div id="landingScreen" class="landing">
   <div>
     <div class="landing-logo">Classroom AMT</div>
-    <div class="landing-sub">Aviation Mechanic Training Platform</div>
+    <div class="landing-sub" id="i18n-landing-sub">Aviation Mechanic Training Platform</div>
+    <!-- Language selector -->
+    <div style="margin:10px 0 20px;display:flex;align-items:center;gap:8px;justify-content:center">
+      <span style="font-family:monospace;font-size:.72rem;color:var(--muted)">🌐</span>
+      <select class="lang-select" onchange="applyLanguage(this.value)" style="font-family:monospace;font-size:.78rem;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;cursor:pointer">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="fr">Français</option>
+        <option value="zh">中文</option>
+      </select>
+    </div>
   </div>
   <div class="landing-cards">
     <div class="landing-card" onclick="if(typeof showInstructorAuth==='function')showInstructorAuth()">
       <div class="landing-card-icon">📋</div>
-      <div class="landing-card-title">Instructor</div>
-      <div class="landing-card-desc">Create classrooms, build quizzes, automatic grading, and track student progress in real time</div>
+      <div class="landing-card-title" id="i18n-inst-card-title">Instructor</div>
+      <div class="landing-card-desc" id="i18n-inst-card-desc">Create classrooms, build quizzes, automatic grading, and track student progress in real time</div>
     </div>
-    <div class="landing-card" onclick="if(typeof showStudentJoin==='function')showStudentJoin();else showInstructorAuth()">
+    <div class="landing-card" onclick="if(typeof showStudentJoin==='function')showStudentJoin()">
       <div class="landing-card-icon">✈</div>
-      <div class="landing-card-title">Student</div>
-      <div class="landing-card-desc">FREE space to study FAA Oral and Practical Questions<br><span style="color:var(--muted);font-size:.78rem">+ take quizzes assigned by your instructor</span></div>
+      <div class="landing-card-title" id="i18n-stu-card-title">Student</div>
+      <div class="landing-card-desc" id="i18n-stu-card-desc">FREE space to study FAA Oral and Practical Questions<br><span style="color:var(--muted);font-size:.78rem" id="i18n-stu-card-sub">+ take quizzes assigned by your instructor</span></div>
     </div>
   </div>
 </div>
@@ -546,22 +555,20 @@ setTimeout(function(){
 <!-- ============== INSTRUCTOR AUTH ============== -->
 <div id="instAuthScreen" class="landing hidden">
   <div class="auth-box">
-    <div class="auth-title">Instructor Sign In</div>
+    <div class="auth-title" id="i18n-inst-auth-title">Instructor Sign In</div>
     <div class="auth-sub">Classroom AMT Platform</div>
     <div class="auth-tabs">
-      <button class="auth-tab active" id="authTabLogin" onclick="switchAuthTab('login')">Sign In</button>
-      <button class="auth-tab" id="authTabRegister" onclick="switchAuthTab('register')">Create Account</button>
+      <button class="auth-tab active" id="authTabLogin" onclick="switchAuthTab('login')"><span id="i18n-inst-signin-tab">Sign In</span></button>
+      <button class="auth-tab" id="authTabRegister" onclick="switchAuthTab('register')"><span id="i18n-inst-register-tab">Create Account</span></button>
     </div>
-
-    <!-- Email/Password form -->
     <div id="authFormWrap">
-      <label class="label">Email Address</label>
+      <label class="label" id="i18n-inst-email-lbl">Email Address</label>
       <input class="input" id="authEmail" type="email" placeholder="your@email.com" autocomplete="email" style="margin-bottom:14px"/>
-      <label class="label">Password</label>
+      <label class="label" id="i18n-inst-pass-lbl">Password</label>
       <input class="input" id="authPassword" type="password" placeholder="Password" autocomplete="current-password" style="margin-bottom:6px"/>
       <div id="authNameWrap" class="hidden">
         <br>
-        <label class="label">Your Name</label>
+        <label class="label" id="i18n-inst-name-lbl">Your Name</label>
         <input class="input" id="authDisplayName" type="text" placeholder="Full name" style="margin-bottom:10px"/>
         <label class="label">Instructor Access Code</label>
         <input class="input" id="authAccessCode" type="password" placeholder="Required to register" style="margin-bottom:6px"/>
@@ -571,15 +578,16 @@ setTimeout(function(){
         <input type="checkbox" id="rememberMe" style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer">
         <label for="rememberMe" style="font-family:monospace;font-size:.65rem;color:var(--muted);cursor:pointer">Remember me</label>
       </div>
-      <button class="btn btn-primary" id="authSubmitBtn" style="width:100%;margin-top:8px;padding:12px" onclick="doEmailAuth()">Sign In</button>
+      <button class="btn btn-primary" id="authSubmitBtn" style="width:100%;margin-top:8px;padding:12px" onclick="doEmailAuth()"><span id="i18n-inst-submit-btn">Sign In</span></button>
+      <div style="text-align:center;margin-top:10px">
+        <button onclick="doForgotPassword('inst')" id="i18n-inst-forgot" style="background:none;border:none;color:var(--muted);font-family:monospace;font-size:.72rem;cursor:pointer;text-decoration:underline">Forgot password?</button>
+      </div>
     </div>
-
     <div class="divider-or">or continue with</div>
-
     <button class="oauth-btn" onclick="doOAuthSignIn('google')" style="display:flex;align-items:center;justify-content:center;gap:10px">
-      <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;flex-shrink:0"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg> <span>Continue with Google</span>
+      <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;flex-shrink:0"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+      <span id="i18n-inst-google-btn">Continue with Google</span>
     </button>
-    
     <div style="text-align:center;margin-top:16px">
       <button class="btn btn-ghost btn-sm" onclick="showLanding()">← Back</button>
     </div>
@@ -593,17 +601,17 @@ setTimeout(function(){
     <div class="auth-title" style="color:var(--blue)">Student Sign In</div>
     <div class="auth-sub">Classroom AMT Platform</div>
     <div class="auth-tabs">
-      <button class="auth-tab active" id="stuAuthTabLogin" onclick="switchStuAuthTab('login')">Sign In</button>
-      <button class="auth-tab" id="stuAuthTabRegister" onclick="switchStuAuthTab('register')">Create Account</button>
+      <button class="auth-tab active" id="stuAuthTabLogin" onclick="switchStuAuthTab('login')"><span id="i18n-stu-signin-tab">Sign In</span></button>
+      <button class="auth-tab" id="stuAuthTabRegister" onclick="switchStuAuthTab('register')"><span id="i18n-stu-register-tab">Create Account</span></button>
     </div>
     <div id="stuAuthFormWrap">
-      <label class="label">Email Address</label>
+      <label class="label" id="i18n-stu-email-lbl">Email Address</label>
       <input class="input" id="stuAuthEmail" type="email" placeholder="your@email.com" autocomplete="email" style="margin-bottom:14px"/>
-      <label class="label">Password</label>
+      <label class="label" id="i18n-stu-pass-lbl">Password</label>
       <input class="input" id="stuAuthPassword" type="password" placeholder="Password" autocomplete="current-password" style="margin-bottom:6px"/>
       <div id="stuAuthNameWrap" class="hidden">
         <br>
-        <label class="label">Your Full Name</label>
+        <label class="label" id="i18n-stu-name-lbl">Your Full Name</label>
         <input class="input" id="stuAuthDisplayName" type="text" placeholder="First and Last Name" autocomplete="name" style="margin-bottom:6px"/>
       </div>
       <div id="stuAuthErr" class="err-msg hidden"></div>
@@ -611,14 +619,17 @@ setTimeout(function(){
         <input type="checkbox" id="stuRememberMe" style="width:14px;height:14px;accent-color:var(--blue);cursor:pointer">
         <label for="stuRememberMe" style="font-family:monospace;font-size:.65rem;color:var(--muted);cursor:pointer">Remember me</label>
       </div>
-      <button class="btn btn-primary" id="stuAuthSubmitBtn" style="width:100%;margin-top:8px;padding:12px;background:var(--blue);color:#fff" onclick="doStuEmailAuth()">Sign In</button>
+      <button class="btn btn-primary" id="stuAuthSubmitBtn" style="width:100%;margin-top:8px;padding:12px;background:var(--blue);color:#fff" onclick="doStuEmailAuth()"><span id="i18n-stu-submit-btn">Sign In</span></button>
+      <div style="text-align:center;margin-top:10px">
+        <button onclick="doForgotPassword('stu')" style="background:none;border:none;color:var(--muted);font-family:monospace;font-size:.72rem;cursor:pointer;text-decoration:underline">Forgot password?</button>
+      </div>
       <div id="stuSigningIn" style="display:none;text-align:center;font-family:monospace;font-size:.7rem;color:var(--blue);margin-top:8px">Signing in...</div>
     </div>
     <div class="divider-or">or continue with</div>
     <button class="oauth-btn" onclick="doStuOAuth('google')" style="display:flex;align-items:center;justify-content:center;gap:10px">
-      <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;flex-shrink:0"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg> <span>Continue with Google</span>
+      <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;flex-shrink:0"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+      <span id="i18n-stu-google-btn">Continue with Google</span>
     </button>
-    
     <div style="text-align:center;margin-top:16px">
       <button class="btn btn-ghost btn-sm" onclick="showLanding()">← Back</button>
     </div>
@@ -628,15 +639,24 @@ setTimeout(function(){
 <!-- Student Classroom Code Entry (shown after auth) -->
 <div id="stuJoinScreen" class="landing hidden">
   <div class="join-box">
-    <div class="join-title" style="color:var(--blue)">Join Classroom</div>
+    <div class="join-title" id="i18n-join-title" style="color:var(--blue)">Join Classroom</div>
     <div class="auth-sub" style="color:var(--muted);margin-bottom:10px">Signed in as <span id="stuJoinAsName" style="color:var(--blue)"></span></div>
-    <div style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-bottom:24px">Enter the 5-character code from your instructor</div>
+    <div id="i18n-join-sub" style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-bottom:24px">Enter the 5-character code from your instructor</div>
     <label class="label">Classroom Code</label>
     <input class="input code-input" id="joinCode" type="text" maxlength="5" placeholder="XXXXX" style="margin-bottom:6px" oninput="this.value=this.value.toUpperCase()"/>
     <div id="joinErr" class="err-msg hidden"></div>
-    <button class="btn btn-primary" style="width:100%;margin-top:14px;padding:12px;background:var(--blue);color:#fff" onclick="doStudentJoin()">Enter Classroom</button>
+    <button class="btn btn-primary" id="i18n-join-btn" style="width:100%;margin-top:14px;padding:12px;background:var(--blue);color:#fff" onclick="doStudentJoin()">Enter Classroom</button>
     <div style="text-align:center;margin-top:14px;display:flex;gap:10px;justify-content:center">
-      <button class="btn btn-ghost btn-sm" onclick="stuAuthLogout()">Sign Out</button>
+      <button class="btn btn-ghost btn-sm i18n-signout" onclick="stuAuthLogout()">Sign Out</button>
+    </div>
+    <!-- Language selector on join screen too -->
+    <div style="text-align:center;margin-top:16px">
+      <select class="lang-select" onchange="applyLanguage(this.value)" style="font-family:monospace;font-size:.72rem;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;cursor:pointer">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="fr">Français</option>
+        <option value="zh">中文</option>
+      </select>
     </div>
   </div>
 </div>
@@ -753,7 +773,7 @@ setTimeout(function(){
     <div id="cd-tab-progress" class="tab-pane" style="display:none;padding:20px 22px">
       <div style="margin-bottom:14px">
         <label class="label">Select Quiz</label>
-        <select class="select" id="cdProgressQuizPicker" onchange="loadClassroomProgress()" style="max-width:360px"></select>
+        <select class="select" id="cdProgressQuizPicker" onchange="loadClassroomProgressAny()" style="max-width:360px"></select>
       </div>
       <!-- GRADE BOOK -->
       <div class="card">
@@ -835,7 +855,7 @@ setTimeout(function(){
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;color:var(--accent);margin-bottom:2px">📐 Measurement Simulator</div>
       <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:20px">Set a measurement and broadcast to your classroom for live reading practice.</div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;max-width:600px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;max-width:700px">
         <div>
           <label class="label">Classroom</label>
           <select class="select" id="instSimClassPicker" onchange="instSimOnClassChange()">
@@ -843,6 +863,13 @@ setTimeout(function(){
           </select>
         </div>
         <div>
+          <label class="label">Instrument</label>
+          <select class="select" id="instSimInstrument" onchange="instSimSwitchInstrument()">
+            <option value="mic">🔩 Micrometer</option>
+            <option value="cal">📏 Vernier Caliper</option>
+          </select>
+        </div>
+        <div id="instSimRangeWrap">
           <label class="label">Range</label>
           <select class="select" id="instSimRange" onchange="instSimDraw()">
             <option value="0">0 – 1"</option>
@@ -863,7 +890,8 @@ setTimeout(function(){
         <button class="btn btn-danger btn-sm" onclick="instSimEndSession()">End Session</button>
       </div>
 
-      <div style="background:#1a1a2e;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px;padding:10px">
+      <!-- Micrometer SVG -->
+      <div id="instMicWrap" style="background:#1a1a2e;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px;padding:10px">
         <div id="instRangeBtns" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap"></div>
         <div style="background:#000;border:2px solid #333;border-radius:4px;overflow:hidden;margin-bottom:6px">
           <svg id="instMicBody" viewBox="0 0 920 380" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
@@ -873,6 +901,12 @@ setTimeout(function(){
         </div>
         <div id="instMicReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.0000"</div>
         <div style="font-family:monospace;font-size:.72rem;color:var(--muted);padding-bottom:4px" id="instSimRangeLabel">Range: 0–1"</div>
+      </div>
+
+      <!-- Vernier Caliper SVG (instructor) -->
+      <div id="instCalWrap" class="hidden" style="background:#1a1a2e;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px;padding:10px">
+        <svg id="instCalSvg" viewBox="0 0 1000 220" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
+        <div id="instCalReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.000"</div>
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
@@ -907,58 +941,37 @@ setTimeout(function(){
       </div>
 
       <div id="instSimResponsesWrap" class="hidden">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:10px">Student Responses — Round <span id="instSimRoundLabel">1</span></div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px">Student Responses — Round <span id="instSimRoundLabel">1</span></div>
+          <button class="btn btn-ghost btn-sm" onclick="instSimToggleHistory()" id="instSimHistoryBtn" style="font-size:.72rem;margin-left:auto">📋 View All Rounds</button>
+        </div>
         <div id="instSimResponses"></div>
+        <!-- Session history — all rounds -->
+        <div id="instSimHistoryWrap" class="hidden" style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">SESSION HISTORY — ALL ROUNDS</div>
+          <div id="instSimHistory"></div>
+        </div>
+      </div>
+
+      <!-- Permanent grades panel — shows whenever a classroom is selected -->
+      <div id="instSimGradesWrap" class="hidden" style="margin-top:24px;border-top:2px solid var(--border);padding-top:18px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">📊 Simulator Grades</div>
+          <button class="btn btn-ghost btn-sm" onclick="instSimLoadGrades()" style="font-size:.72rem">↻ Refresh</button>
+        </div>
+        <div id="instSimGradesContent"><div class="empty-state" style="font-size:.8rem">Loading grades…</div></div>
       </div>
     </div>
   </div>
 
   <!-- MASTER DASHBOARD TAB (master admin only) -->
-  <div id="inst-tab-masterdash" style="display:none;padding:24px;max-width:1100px;margin:0 auto">
+  <div id="inst-tab-masterdash" style="display:none;padding:24px;max-width:860px;margin:0 auto">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:3px;color:var(--accent)">📊 Master Dashboard</div>
       <button class="btn btn-ghost btn-sm" onclick="masterDashLoad()" style="margin-left:auto">↻ Refresh</button>
     </div>
-    <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:24px">Platform-wide analytics · Master admin only</div>
-    <div id="masterDashCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:28px"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">STUDENT LOGINS — LAST 24 HRS</div>
-        <div id="masterDash24hr">Loading…</div>
-      </div>
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">INSTRUCTOR LOGINS — LAST 24 HRS</div>
-        <div id="masterDashInst24hr">Loading…</div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MONTHLY USAGE — STUDENTS</div>
-        <div id="masterDashStuMonth">Loading…</div>
-      </div>
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MONTHLY USAGE — INSTRUCTORS</div>
-        <div id="masterDashInstMonth">Loading…</div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">QUIZZES ISSUED — LAST 30 DAYS</div>
-        <div id="masterDashQuizzesIssued">Loading…</div>
-      </div>
-      <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">QUIZZES TAKEN — LAST 30 DAYS</div>
-        <div id="masterDashQuizzesTaken">Loading…</div>
-      </div>
-    </div>
-    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">MOST ACTIVE STUDENTS — LAST 30 DAYS</div>
-      <div id="masterDashTopStudents">Loading…</div>
-    </div>
-    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px;margin-top:18px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:12px;color:var(--muted)">RECENT SIGNUPS</div>
-      <div id="masterDashNewSignups">Loading…</div>
-    </div>
+    <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:20px">Platform-wide analytics · Master admin only</div>
+    <div id="masterDashCards"></div>
   </div>
 
   <!-- ADMIN TAB (super-admins only) -->
@@ -1111,7 +1124,7 @@ setTimeout(function(){
     </div>
     <div class="user-pill">
       <span id="stuUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="stuShowMyProfile()" title="View my profile">--</span>
-      <button class="btn btn-ghost btn-sm" onclick="confirmSignOut('student')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:2px;border-radius:3px">Sign Out</button>
+      <button class="btn btn-ghost btn-sm i18n-signout" onclick="confirmSignOut('student')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:2px;border-radius:3px">Sign Out</button>
     </div>
   </div>
 
@@ -1256,7 +1269,6 @@ setTimeout(function(){
     </div>
   </div>
 
-  </div>
 
   <!-- Measurement Simulator -->
   <div id="stuSimView" class="hidden" style="padding:16px;max-width:900px;margin:0 auto">
@@ -1284,11 +1296,17 @@ setTimeout(function(){
         <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:var(--accent)">📐 Measurement Simulator</div>
         <div id="stuSimModeLabel" style="font-family:monospace;font-size:.72rem;color:var(--muted)">Practice Mode — drag the thimble or use the controls below</div>
       </div>
-      <div style="font-family:monospace;font-size:.75rem;color:var(--muted)" id="stuSimRangeLabel">Range: 0–1"</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <select id="stuSimInstrument" class="select" onchange="stuSimSwitchInstrument()" style="font-size:.78rem;padding:5px 8px;max-width:180px">
+          <option value="mic">🔩 Micrometer</option>
+          <option value="cal">📏 Vernier Caliper</option>
+        </select>
+        <div style="font-family:monospace;font-size:.75rem;color:var(--muted)" id="stuSimRangeLabel">Range: 0–1"</div>
+      </div>
     </div>
 
-    <!-- SVG Micrometer -->
-    <div style="background:#1a1a2e;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px;padding:10px">
+    <!-- Micrometer SVG (shown when instrument=mic) -->
+    <div id="stuMicWrap" style="background:#1a1a2e;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px;padding:10px">
       <div id="stuRangeBtns" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap"></div>
       <div style="background:#000;border:2px solid #333;border-radius:4px;overflow:hidden;margin-bottom:6px">
         <svg id="stuMicBody" viewBox="0 0 920 380" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
@@ -1297,6 +1315,12 @@ setTimeout(function(){
         <svg id="stuMicSvg" viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
       </div>
       <div id="stuMicReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.0000"</div>
+    </div>
+
+    <!-- Vernier Caliper SVG (shown when instrument=cal) -->
+    <div id="stuCalWrap" class="hidden" style="background:#1a1a2e;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px;padding:10px">
+      <svg id="stuCalSvg" viewBox="0 0 1000 220" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
+      <div id="stuCalReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.000"</div>
     </div>
 
     <!-- Controls row -->
@@ -1325,6 +1349,12 @@ setTimeout(function(){
 
     <!-- Session history (practice mode only) -->
     <div id="stuSimHistory" style="font-family:monospace;font-size:.72rem;color:var(--muted)"></div>
+
+    <!-- Live session previous rounds (shown during live session) -->
+    <div id="stuSimLiveHistory" class="hidden" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">YOUR PREVIOUS ROUNDS THIS SESSION</div>
+      <div id="stuSimLiveHistoryList"></div>
+    </div>
   </div>
 
   <!-- Active quiz -->
@@ -1867,7 +1897,12 @@ let _handlingRedirect = false;
 // ===============================================
 // LANDING / NAVIGATION
 // ===============================================
-function showLanding(){ hideAll(); show('landingScreen'); }
+function showLanding(){
+  hideAll();
+  show('landingScreen');
+  // Apply saved language preference
+  applyLanguage(_currentLang);
+}
 function showInstructorAuth(){ pendingAuthRole='instructor'; hideAll(); show('instAuthScreen'); }
 function showStudentJoin(){ pendingAuthRole='student'; hideAll(); show('stuAuthScreen'); }
 function hideAll(){
@@ -1899,6 +1934,36 @@ function switchAuthTab(tab){
   document.getElementById('authNameWrap').classList.toggle('hidden', tab==='login');
   document.getElementById('authSubmitBtn').textContent = tab==='login' ? 'Sign In' : 'Create Account';
   hideEl('authErr');
+}
+
+async function doForgotPassword(role){
+  const emailId = role === 'inst' ? 'authEmail' : 'stuAuthEmail';
+  const errId   = role === 'inst' ? 'authErr'   : 'stuAuthErr';
+  const email   = document.getElementById(emailId)?.value.trim();
+  if(!email){
+    const errEl = document.getElementById(errId);
+    if(errEl){ errEl.textContent = 'Enter your email address first.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+  try{
+    await auth.sendPasswordResetEmail(email);
+    const errEl = document.getElementById(errId);
+    if(errEl){
+      errEl.textContent = `✓ Password reset email sent to ${email}. Check your inbox (and spam folder).`;
+      errEl.style.color = 'var(--cl)';
+      errEl.classList.remove('hidden');
+    }
+  }catch(e){
+    const errEl = document.getElementById(errId);
+    if(errEl){
+      errEl.style.color = '';
+      const msg = e.code === 'auth/user-not-found' ? 'No account found with that email address.'
+                : e.code === 'auth/invalid-email'  ? 'Please enter a valid email address.'
+                : 'Error sending reset email. Please try again.';
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+    }
+  }
 }
 
 async function doEmailAuth(){
@@ -2613,275 +2678,743 @@ function initInstApp(){
 // ── MASTER DASHBOARD ─────────────────────────────────────────────────────────
 async function masterDashLoad(){
   if(!_isMasterAdmin) return;
-  const now = Date.now();
-  const ms24h  = 24*60*60*1000;
-  const ms30d  = 30*24*60*60*1000;
-  const cutoff24h = now - ms24h;
-  const cutoff30d = now - ms30d;
+  const el = document.getElementById('masterDashCards');
+  if(el) el.innerHTML = '<div class="empty-state">Loading platform data…</div>';
 
-  // Load all data in parallel
-  const [stuLog, instLog, allClassrooms, allQuizSessions] = await Promise.all([
-    dbGet('accessLog/students')  || {},
-    dbGet('accessLog/instructors') || {},
-    dbGet('classrooms') || {},
-    dbGet('quizSessions') || {}
+  const now = Date.now();
+  const cut24h  = now - 24*60*60*1000;
+  const cut7d   = now - 7*24*60*60*1000;
+  const cut30d  = now - 30*24*60*60*1000;
+  const cut12mo = now - 365*24*60*60*1000;
+
+  // ── Load all data ──────────────────────────────────────────────────────────
+  const [stuLog, instLog, allClassrooms, allInstructors, allQuizSessions, allProgress] = await Promise.all([
+    dbGet('accessLog/students')  .catch(()=>({})),
+    dbGet('accessLog/instructors').catch(()=>({})),
+    dbGet('classrooms')           .catch(()=>({})),
+    dbGet('instructors')          .catch(()=>({})),
+    dbGet('quizSessions')         .catch(()=>({})),
+    dbGet('quizProgress')         .catch(()=>({})),
   ]);
 
-  // ── STAT CALCULATIONS ────────────────────────────────────────────────────────
+  // ── Access log users (activity) ────────────────────────────────────────────
   const stuUsers  = Object.values(stuLog||{});
   const instUsers = Object.values(instLog||{});
-  const ms7d   = 7*24*60*60*1000;
-  const ms12mo = 365*24*60*60*1000;
-  const cutoff7d  = now - ms7d;
-  const cutoff12mo= now - ms12mo;
+  const hasSess = (u, cutoff) => Object.keys(u?.sessions||{}).some(k=>Number(k)>cutoff);
 
-  const hasSessionAfter = (u, cutoff) => Object.keys(u?.sessions||{}).some(k=>Number(k)>cutoff);
+  const stuActive24h  = stuUsers.filter(u=>hasSess(u,cut24h)).length;
+  const instActive24h = instUsers.filter(u=>hasSess(u,cut24h)).length;
+  const stuActive30d  = stuUsers.filter(u=>hasSess(u,cut30d)).length;
+  const instActive30d = instUsers.filter(u=>hasSess(u,cut30d)).length;
 
-  // Active 24h
-  const stuUnique24h  = stuUsers.filter(u=>hasSessionAfter(u,cutoff24h)).length;
-  const instUnique24h = instUsers.filter(u=>hasSessionAfter(u,cutoff24h)).length;
+  const stuLogins30d  = stuUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cut30d)).length;
+  const instLogins30d = instUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cut30d)).length;
+  const stuLogins12mo = stuUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cut12mo)).length;
+  const instLogins12mo= instUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cut12mo)).length;
 
-  // Active users = logged in within last 30 days
-  const activeStu   = stuUsers.filter(u=>hasSessionAfter(u,cutoff30d)).length;
-  const activeInst  = instUsers.filter(u=>hasSessionAfter(u,cutoff30d)).length;
-  const activeTotal = activeStu + activeInst;
+  // ── Real platform totals (from Firebase nodes, not access log) ─────────────
+  const totalInstructors = Object.keys(allInstructors||{}).length;
+  const totalClassrooms  = Object.keys(allClassrooms||{}).length;
+  // Count unique students across all classrooms
+  const stuKeySet = new Set();
+  for(const [cid] of Object.entries(allClassrooms||{})){
+    const stuData = await dbGet(`classroomStudents/${cid}`).catch(()=>({})) || {};
+    for(const k of Object.keys(stuData)) stuKeySet.add(k);
+  }
+  const totalStudents = stuKeySet.size;
 
-  // Login counts
-  const stuLogins30d  = stuUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff30d)).length;
-  const instLogins30d = instUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff30d)).length;
-  const stuLogins12mo  = stuUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff12mo)).length;
-  const instLogins12mo = instUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff12mo)).length;
-
-  // New signups
+  // ── New signups (from access log firstSeen) ────────────────────────────────
   const stuMetas  = stuUsers.map(u=>u?.meta).filter(Boolean);
   const instMetas = instUsers.map(u=>u?.meta).filter(Boolean);
-  const newStu7d   = stuMetas.filter(m=>m.firstSeen>cutoff7d).length;
-  const newStu30d  = stuMetas.filter(m=>m.firstSeen>cutoff30d).length;
-  const newStu12mo = stuMetas.filter(m=>m.firstSeen>cutoff12mo).length;
-  const newInst7d   = instMetas.filter(m=>m.firstSeen>cutoff7d).length;
-  const newInst30d  = instMetas.filter(m=>m.firstSeen>cutoff30d).length;
-  const newInst12mo = instMetas.filter(m=>m.firstSeen>cutoff12mo).length;
+  const newStu7d   = stuMetas.filter(m=>m.firstSeen>cut7d).length;
+  const newStu30d  = stuMetas.filter(m=>m.firstSeen>cut30d).length;
+  const newStu12mo = stuMetas.filter(m=>m.firstSeen>cut12mo).length;
+  const newInst7d  = instMetas.filter(m=>m.firstSeen>cut7d).length;
+  const newInst30d = instMetas.filter(m=>m.firstSeen>cut30d).length;
+  const newInst12mo= instMetas.filter(m=>m.firstSeen>cut12mo).length;
 
-  // Quizzes issued
-  let quizzesIssued30d = 0, quizzesIssued12mo = 0;
-  for(const [,c] of Object.entries(allClassrooms)){
+  // ── Quizzes ────────────────────────────────────────────────────────────────
+  let qIssued30d=0,qIssued12mo=0;
+  for(const [,c] of Object.entries(allClassrooms||{})){
     for(const [,q] of Object.entries(c.assignedQuizzes||{})){
-      const t = q.assignedAt ? new Date(q.assignedAt).getTime() : 0;
-      if(t > cutoff30d) quizzesIssued30d++;
-      if(t > cutoff12mo) quizzesIssued12mo++;
+      const t=q.assignedAt?new Date(q.assignedAt).getTime():0;
+      if(t>cut30d) qIssued30d++; if(t>cut12mo) qIssued12mo++;
     }
   }
-
-  // Quizzes taken
-  let quizzesTaken30d = 0, quizzesTaken12mo = 0;
-  for(const [,classData] of Object.entries(allQuizSessions||{})){
-    for(const [,stuData] of Object.entries(classData||{})){
-      for(const [,quizData] of Object.entries(stuData||{})){
-        for(const [,attempt] of Object.entries(quizData||{})){
-          const t = attempt.submittedAt ? new Date(attempt.submittedAt).getTime() : 0;
-          if(t > cutoff30d) quizzesTaken30d++;
-          if(t > cutoff12mo) quizzesTaken12mo++;
+  let qTaken30d=0,qTaken12mo=0;
+  for(const [,cd] of Object.entries(allQuizSessions||{})){
+    for(const [,sd] of Object.entries(cd||{})){
+      for(const [,qd] of Object.entries(sd||{})){
+        for(const [,a] of Object.entries(qd||{})){
+          const t=a.submittedAt?new Date(a.submittedAt).getTime():0;
+          if(t>cut30d) qTaken30d++; if(t>cut12mo) qTaken12mo++;
         }
       }
     }
   }
 
-  const totalClassrooms = Object.keys(allClassrooms).length;
+  // ── Render ─────────────────────────────────────────────────────────────────
+  const bigNum = (n, col='var(--accent)') =>
+    `<span style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:${col};letter-spacing:2px">${n}</span>`;
 
-  const card = (val, label, col='var(--accent)') =>
-    `<div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:16px 18px;text-align:center">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:${col};letter-spacing:2px">${val}</div>
-      <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:1px">${label}</div>
+  const row = (label, val, col) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-family:monospace;font-size:.78rem;color:var(--muted)">${label}</span>
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${col||'var(--text)'};letter-spacing:1px">${val}</span>
     </div>`;
 
-  const section = (title, cards) =>
-    `<div style="margin-bottom:22px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">${title}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px">${cards}</div>
+  const panel = (id, title, icon, content, defaultOpen=false) =>
+    `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
+      <button onclick="masterDashToggle('${id}')" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--panel2);border:none;cursor:pointer;text-align:left">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--accent)">${icon} ${title}</span>
+        <span id="${id}-arrow" style="font-size:.8rem;color:var(--muted)">${defaultOpen?'▲':'▼'}</span>
+      </button>
+      <div id="${id}-body" style="padding:${defaultOpen?'16px 18px':'0 18px'};max-height:${defaultOpen?'500px':'0'};overflow:hidden;transition:max-height .3s,padding .3s">
+        ${content}
+      </div>
     </div>`;
 
-  document.getElementById('masterDashCards').innerHTML =
-    section('🟢 Active Users (logged in last 30 days)',
-      card(activeTotal, 'Total Active Users', '#16a34a') +
-      card(activeStu,   'Active Students', 'var(--cl)') +
-      card(activeInst,  'Active Instructors', 'var(--blue)')
-    ) +
-    section('📅 Logins',
-      card(stuUnique24h,  'Students Today', 'var(--cl)') +
-      card(instUnique24h, 'Instructors Today', 'var(--blue)') +
-      card(stuLogins30d,  'Student Logins 30d', 'var(--accent)') +
-      card(instLogins30d, 'Instructor Logins 30d', 'var(--accent)') +
-      card(stuLogins12mo,  'Student Logins 12mo', 'var(--muted)') +
-      card(instLogins12mo, 'Instructor Logins 12mo', 'var(--muted)')
-    ) +
-    section('🆕 New Signups',
-      card(newStu7d,   'New Students 7d',   '#16a34a') +
-      card(newStu30d,  'New Students 30d',  '#16a34a') +
-      card(newStu12mo, 'New Students 12mo', '#16a34a') +
-      card(newInst7d,   'New Instructors 7d',   '#2563eb') +
-      card(newInst30d,  'New Instructors 30d',  '#2563eb') +
-      card(newInst12mo, 'New Instructors 12mo', '#2563eb')
-    ) +
-    section('📋 Quizzes',
-      card(quizzesIssued30d,  'Issued 30d',  '#7c3aed') +
-      card(quizzesIssued12mo, 'Issued 12mo', '#7c3aed') +
-      card(quizzesTaken30d,   'Taken 30d',   '#7c3aed') +
-      card(quizzesTaken12mo,  'Taken 12mo',  '#7c3aed')
-    ) +
-    section('🏫 Platform Totals',
-      card(stuMetas.length,   'Total Students Registered', 'var(--muted)') +
-      card(instMetas.length,  'Total Instructors', 'var(--muted)') +
-      card(totalClassrooms,   'Total Classrooms', 'var(--muted)')
-    );
+  const html = `
+    ${panel('md-overview','Platform Overview','🏫',`
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;margin-bottom:16px">
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px">
+          ${bigNum(totalStudents,'var(--cl)')}
+          <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:4px">TOTAL STUDENTS</div>
+        </div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px">
+          ${bigNum(totalInstructors,'var(--blue)')}
+          <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:4px">TOTAL INSTRUCTORS</div>
+        </div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px">
+          ${bigNum(totalClassrooms,'var(--accent)')}
+          <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:4px">CLASSROOMS</div>
+        </div>
+      </div>
+      ${row('Active Students (30d)', stuActive30d, 'var(--cl)')}
+      ${row('Active Instructors (30d)', instActive30d, 'var(--blue)')}
+      ${row('Total Active Users (30d)', stuActive30d+instActive30d, '#16a34a')}
+    `, true)}
 
-  // ── LAST 24 HRS BREAKDOWN ───────────────────────────────────────────────────
+    ${panel('md-logins','Logins & Activity','📅',`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Students</div>
+          ${row('Online today',stuActive24h,'var(--cl)')}
+          ${row('Logins last 30 days',stuLogins30d)}
+          ${row('Logins last 12 months',stuLogins12mo)}
+        </div>
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Instructors</div>
+          ${row('Online today',instActive24h,'var(--blue)')}
+          ${row('Logins last 30 days',instLogins30d)}
+          ${row('Logins last 12 months',instLogins12mo)}
+        </div>
+      </div>
+    `, true)}
+
+    ${panel('md-signups','New Signups','🆕',`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Students</div>
+          ${row('Last 7 days',newStu7d,'#16a34a')}
+          ${row('Last 30 days',newStu30d,'#16a34a')}
+          ${row('Last 12 months',newStu12mo,'#16a34a')}
+        </div>
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Instructors</div>
+          ${row('Last 7 days',newInst7d,'#2563eb')}
+          ${row('Last 30 days',newInst30d,'#2563eb')}
+          ${row('Last 12 months',newInst12mo,'#2563eb')}
+        </div>
+      </div>
+      ${stuMetas.length===0?'<div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:10px">⚠ Signup tracking started after last deployment — data accumulates as users log in.</div>':''}
+    `, true)}
+
+    ${panel('md-quizzes','Quiz Activity','📋',`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Quizzes Issued</div>
+          ${row('Last 30 days',qIssued30d,'#7c3aed')}
+          ${row('Last 12 months',qIssued12mo,'#7c3aed')}
+        </div>
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Quizzes Taken</div>
+          ${row('Last 30 days',qTaken30d,'#7c3aed')}
+          ${row('Last 12 months',qTaken12mo,'#7c3aed')}
+        </div>
+      </div>
+    `, true)}
+
+    ${panel('md-activity24','Who\'s Online — Last 24 Hours','🟢',`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:8px">STUDENTS</div>
+          <div id="masterDash24hr"></div>
+        </div>
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:8px">INSTRUCTORS</div>
+          <div id="masterDashInst24hr"></div>
+        </div>
+      </div>
+    `, true)}
+
+    ${panel('md-monthly','Monthly Usage Charts','📊',`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:8px">STUDENT LOGINS / DAY (30d)</div>
+          <div id="masterDashStuMonth"></div>
+        </div>
+        <div>
+          <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:8px">INSTRUCTOR LOGINS / DAY (30d)</div>
+          <div id="masterDashInstMonth"></div>
+        </div>
+      </div>
+    `, true)}
+
+    ${panel('md-top','Most Active Students (30d)','🏆',`<div id="masterDashTopStudents"></div>`, true)}
+
+    ${panel('md-signupslist','Recent Signups','📝',`<div id="masterDashNewSignups"></div>`, true)}
+  `;
+
+  if(el) el.innerHTML = html;
+
+  // ── Populate sub-panels ───────────────────────────────────────────────────
   function render24hr(logObj, elId){
-    const el = document.getElementById(elId); if(!el) return;
+    const panel = document.getElementById(elId); if(!panel) return;
     const recent = Object.values(logObj||{}).map(u => {
-      const sessions = Object.entries(u?.sessions||{}).filter(([k])=>Number(k)>cutoff24h);
+      const sessions = Object.entries(u?.sessions||{}).filter(([k])=>Number(k)>cut24h);
       if(!sessions.length) return null;
-      const name = u?.meta?.name || '—';
       const lastTs = Math.max(...sessions.map(([k])=>Number(k)));
-      return { name, count: sessions.length, lastTs };
+      return { name: u?.meta?.name||'—', count: sessions.length, lastTs };
     }).filter(Boolean).sort((a,b)=>b.lastTs-a.lastTs);
-    if(!recent.length){ el.innerHTML = '<div style="color:var(--muted);font-size:.8rem">No logins in the last 24 hours.</div>'; return; }
-    el.innerHTML = `<table style="border-collapse:collapse;width:100%;font-size:.78rem">
-      <thead><tr style="background:var(--panel2)">
-        <th style="padding:5px 10px;text-align:left;border:1px solid var(--border)">Name</th>
-        <th style="padding:5px 10px;text-align:center;border:1px solid var(--border)">Logins</th>
-        <th style="padding:5px 10px;text-align:center;border:1px solid var(--border)">Last Seen</th>
-      </tr></thead><tbody>
-      ${recent.map(r=>`<tr>
-        <td style="padding:5px 10px;border:1px solid var(--border);font-weight:600">${esc(r.name)}</td>
-        <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;font-family:monospace">${r.count}</td>
-        <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.65rem">${new Date(r.lastTs).toLocaleTimeString()}</td>
-      </tr>`).join('')}
-      </tbody></table>`;
+    if(!recent.length){ panel.innerHTML='<div style="color:var(--muted);font-size:.78rem">None in last 24 hours.</div>'; return; }
+    panel.innerHTML = recent.map(r=>`
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem">
+        <span style="font-weight:600">${esc(r.name)}</span>
+        <span style="font-family:monospace;font-size:.65rem;color:var(--muted)">${r.count}x · ${new Date(r.lastTs).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+      </div>`).join('');
   }
   render24hr(stuLog,  'masterDash24hr');
   render24hr(instLog, 'masterDashInst24hr');
 
-  // ── MONTHLY USAGE CHART (bar chart via div heights) ─────────────────────────
   function renderMonthChart(logObj, elId){
-    const el = document.getElementById(elId); if(!el) return;
+    const panel = document.getElementById(elId); if(!panel) return;
     const days = {};
-    for(let i=0; i<30; i++){
-      const d = new Date(now - i*24*60*60*1000);
-      days[d.toLocaleDateString('en-US',{month:'short',day:'numeric'})] = 0;
+    for(let i=0;i<30;i++){
+      const d=new Date(now-i*24*60*60*1000);
+      days[d.toLocaleDateString('en-US',{month:'short',day:'numeric'})]=0;
     }
     for(const u of Object.values(logObj||{})){
       for(const [k] of Object.entries(u?.sessions||{})){
-        const d = new Date(Number(k));
-        const label = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        const label=new Date(Number(k)).toLocaleDateString('en-US',{month:'short',day:'numeric'});
         if(label in days) days[label]++;
       }
     }
-    const entries = Object.entries(days).reverse();
-    const maxVal  = Math.max(...entries.map(([,v])=>v), 1);
-    el.innerHTML = `<div style="display:flex;align-items:flex-end;gap:3px;height:80px;overflow-x:auto">
-      ${entries.map(([label,val])=>`
-        <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:20px" title="${label}: ${val}">
-          <div style="width:100%;background:var(--cl);border-radius:2px 2px 0 0;height:${Math.max(2,Math.round(val/maxVal*72))}px;transition:height .3s"></div>
-          <div style="font-family:monospace;font-size:.5rem;color:var(--muted);margin-top:3px;writing-mode:vertical-rl;transform:rotate(180deg);height:30px;overflow:hidden">${label}</div>
-        </div>`).join('')}
+    const entries=Object.entries(days).reverse();
+    const maxVal=Math.max(...entries.map(([,v])=>v),1);
+    panel.innerHTML=`<div style="display:flex;align-items:flex-end;gap:2px;height:64px">
+      ${entries.map(([label,val])=>`<div style="flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center" title="${label}: ${val}">
+        <div style="width:100%;background:var(--cl);border-radius:2px 2px 0 0;height:${Math.max(2,Math.round(val/maxVal*56))}px"></div>
+      </div>`).join('')}
     </div>
-    <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:8px">Peak: ${maxVal} logins · Total: ${entries.reduce((a,[,v])=>a+v,0)} logins</div>`;
+    <div style="font-family:monospace;font-size:.62rem;color:var(--muted);margin-top:5px">Peak: ${maxVal} · Total: ${entries.reduce((a,[,v])=>a+v,0)}</div>`;
   }
   renderMonthChart(stuLog,  'masterDashStuMonth');
   renderMonthChart(instLog, 'masterDashInstMonth');
 
-  // ── QUIZZES ISSUED LAST 30 DAYS breakdown ──────────────────────────────────
-  const issuedByClass = [];
-  for(const [cid, c] of Object.entries(allClassrooms)){
-    let count = 0;
-    for(const [,q] of Object.entries(c.assignedQuizzes||{})){
-      if(q.assignedAt && new Date(q.assignedAt).getTime() > cutoff30d) count++;
-    }
-    if(count) issuedByClass.push({ name: c.name||cid, count });
-  }
-  issuedByClass.sort((a,b)=>b.count-a.count);
-  const issuedEl = document.getElementById('masterDashQuizzesIssued');
-  if(issuedEl) issuedEl.innerHTML = issuedByClass.length
-    ? `<div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#7c3aed;margin-bottom:8px">${quizzesIssued30d} total</div>` +
-      issuedByClass.map(r=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:.78rem"><span>${esc(r.name)}</span><span style="font-weight:700;color:#7c3aed">${r.count}</span></div>`).join('')
-    : '<div style="color:var(--muted);font-size:.8rem">No quizzes assigned in the last 30 days.</div>';
+  const stuActivity = Object.values(stuLog||{}).map(u=>{
+    const logins=Object.keys(u?.sessions||{}).filter(k=>Number(k)>cut30d).length;
+    return { name:u?.meta?.name||'—', logins };
+  }).filter(s=>s.logins>0).sort((a,b)=>b.logins-a.logins).slice(0,10);
+  const topEl=document.getElementById('masterDashTopStudents');
+  if(topEl) topEl.innerHTML = stuActivity.length
+    ? stuActivity.map((s,i)=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:.78rem">
+        <span><span style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-right:8px">${i+1}</span><span style="font-weight:600">${esc(s.name)}</span></span>
+        <span style="font-family:monospace;font-size:.72rem;color:var(--cl)">${s.logins} logins</span>
+      </div>`).join('')
+    : '<div style="color:var(--muted);font-size:.78rem">No student activity yet.</div>';
 
-  // ── QUIZZES TAKEN LAST 30 DAYS breakdown ───────────────────────────────────
-  const takenByDay = {};
-  let takenTotal = 0;
-  for(const [,classData] of Object.entries(allQuizSessions||{})){
-    for(const [,stuData] of Object.entries(classData||{})){
-      for(const [,quizData] of Object.entries(stuData||{})){
-        for(const [,attempt] of Object.entries(quizData||{})){
-          if(attempt.submittedAt){
-            const d = new Date(attempt.submittedAt);
-            if(d.getTime()>cutoff30d){
-              takenTotal++;
-              const label = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-              takenByDay[label] = (takenByDay[label]||0)+1;
-            }
-          }
+  const allSignups=[
+    ...stuMetas.map(m=>({...m,role:'Student',col:'var(--cl)'})),
+    ...instMetas.map(m=>({...m,role:'Instructor',col:'var(--blue)'}))
+  ].filter(m=>m.firstSeen).sort((a,b)=>b.firstSeen-a.firstSeen).slice(0,15);
+  const signEl=document.getElementById('masterDashNewSignups');
+  if(signEl) signEl.innerHTML = allSignups.length
+    ? allSignups.map(m=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:.78rem;flex-wrap:wrap;gap:4px">
+        <span style="font-weight:600">${esc(m.name)}</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-family:monospace;font-size:.62rem;padding:1px 6px;border-radius:3px;background:rgba(0,0,0,.2);color:${m.col}">${m.role}</span>
+          <span style="font-family:monospace;font-size:.65rem;color:var(--muted)">${new Date(m.firstSeen).toLocaleDateString()}</span>
+        </div>
+      </div>`).join('')
+    : '<div style="color:var(--muted);font-size:.78rem">No signup tracking data yet. Accumulates as users log in after deployment.</div>';
+}
+
+function masterDashToggle(id){
+  const body=document.getElementById(id+'-body');
+  const arrow=document.getElementById(id+'-arrow');
+  if(!body) return;
+  const isOpen=body.style.maxHeight!=='0px'&&body.style.maxHeight!=='0';
+  body.style.maxHeight=isOpen?'0':'500px';
+  body.style.padding=isOpen?'0 18px':'16px 18px';
+  if(arrow) arrow.textContent=isOpen?'▼':'▲';
+}
+
+// ── END MASTER DASHBOARD ─────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+// INTERNATIONALIZATION (i18n)
+// ══════════════════════════════════════════════════════════════════════════
+const LANG_STRINGS = {
+  en: {
+    landing_sub:'Aviation Mechanic Training Platform',
+    landing_instructor_title:'Instructor',
+    landing_instructor_desc:'Create classrooms, build quizzes, automatic grading, and track student progress in real time',
+    landing_student_title:'Student',
+    landing_student_desc:'FREE space to study FAA Oral and Practical Questions',
+    landing_student_sub:'+ take quizzes assigned by your instructor',
+    instructor_sign_in:'Instructor Sign In',student_sign_in:'Student Sign In',
+    sign_in:'Sign In',create_account:'Create Account',email_address:'Email Address',
+    password:'Password',your_name:'Your Name',sign_in_google:'Sign in with Google',
+    forgot_password:'Forgot password?',sign_out:'Sign Out',
+    join_title:'Join a Classroom',join_sub:'Enter the 5-character code from your instructor',
+    join_placeholder:'XXXXX',join_btn:'Join Classroom',
+    nav_study:'Study O&P Questions',nav_quizzes:'Instructor Quizzes',
+    nav_faa:'My FAA Test Codes',nav_sim:'Measurement Simulator',nav_dme:'DME Locator',
+    quiz_submit:'✓ Submit Quiz',quiz_prev:'← Prev',quiz_next:'Next →',quiz_finish:'Finish',
+    quiz_review:'Review Your Answers',quiz_keep_reviewing:'← Keep Reviewing',
+    quiz_answered:'Answered',quiz_correct:'Correct',quiz_incorrect:'Incorrect',
+    quiz_score:'Your Score',quiz_no_assigned:'No quizzes assigned yet.',quiz_results_title:'Quiz Results',
+    sim_title:'📐 Measurement Simulator',
+    sim_practice_mode:'Practice Mode — drag the thimble or use the controls below',
+    sim_live_mode:'Live Session — read the micrometer and submit your answer.',
+    sim_live_active:'LIVE SESSION ACTIVE',
+    sim_live_desc:'Your instructor has locked a measurement for you to read.',
+    sim_join:'▶ Join Live Session',sim_rejoin:'↩ Rejoin Live Session',sim_exit:'✕ Exit Live Session',
+    sim_randomize:'🎲 Randomize',sim_reveal:'👁 Reveal Answer',sim_hide:'🙈 Hide Answer',
+    sim_guide_hide:'📏 Hide Guide Line',sim_guide_show:'📏 Show Guide Line',
+    sim_check_answer:'Check Answer',sim_your_reading:'Your Reading',
+    sim_live_reading:'🔴 Live Session Reading',
+    sim_class_reading:'Class Reading — Check Answer Together',
+    sim_already_submitted:'✓ You already submitted an answer for this round.',
+    sim_exited:'You exited the live session. Practice mode active.',
+    loading:'Loading...',close:'Close',cancel:'Cancel',save:'Save',delete:'Delete',back:'Back',
+    error_generic:'Something went wrong. Please try again.',
+    switch_classroom:'Switch Classroom',view_profile:'View my profile',
+  },
+  es: {
+    landing_sub:'Plataforma de Capacitación en Mecánica de Aviación',
+    landing_instructor_title:'Instructor',
+    landing_instructor_desc:'Crea aulas, crea cuestionarios, calificación automática y seguimiento del progreso en tiempo real',
+    landing_student_title:'Estudiante',
+    landing_student_desc:'Espacio GRATUITO para estudiar Preguntas Orales y Prácticas de la FAA',
+    landing_student_sub:'+ realiza cuestionarios asignados por tu instructor',
+    instructor_sign_in:'Inicio de Sesión para Instructores',student_sign_in:'Inicio de Sesión para Estudiantes',
+    sign_in:'Iniciar Sesión',create_account:'Crear Cuenta',email_address:'Correo Electrónico',
+    password:'Contraseña',your_name:'Tu Nombre',sign_in_google:'Iniciar sesión con Google',
+    forgot_password:'¿Olvidaste tu contraseña?',sign_out:'Cerrar Sesión',
+    join_title:'Unirse a un Aula',join_sub:'Ingresa el código de 5 caracteres de tu instructor',
+    join_placeholder:'XXXXX',join_btn:'Unirse al Aula',
+    nav_study:'Estudiar Preguntas O&P',nav_quizzes:'Cuestionarios del Instructor',
+    nav_faa:'Mis Códigos de Prueba FAA',nav_sim:'Simulador de Medición',nav_dme:'Localizador DME',
+    quiz_submit:'✓ Enviar Cuestionario',quiz_prev:'← Anterior',quiz_next:'Siguiente →',quiz_finish:'Terminar',
+    quiz_review:'Revisar tus Respuestas',quiz_keep_reviewing:'← Seguir Revisando',
+    quiz_answered:'Respondidas',quiz_correct:'Correctas',quiz_incorrect:'Incorrectas',
+    quiz_score:'Tu Puntuación',quiz_no_assigned:'Aún no hay cuestionarios asignados.',quiz_results_title:'Resultados del Cuestionario',
+    sim_title:'📐 Simulador de Medición',
+    sim_practice_mode:'Modo Práctica — arrastra el dedal o usa los controles',
+    sim_live_mode:'Sesión en Vivo — lee el micrómetro y envía tu respuesta.',
+    sim_live_active:'SESIÓN EN VIVO ACTIVA',
+    sim_live_desc:'Tu instructor ha bloqueado una medida para que la leas.',
+    sim_join:'▶ Unirse a la Sesión en Vivo',sim_rejoin:'↩ Volver a la Sesión en Vivo',sim_exit:'✕ Salir de la Sesión',
+    sim_randomize:'🎲 Aleatorio',sim_reveal:'👁 Revelar Respuesta',sim_hide:'🙈 Ocultar Respuesta',
+    sim_guide_hide:'📏 Ocultar Guía',sim_guide_show:'📏 Mostrar Guía',
+    sim_check_answer:'Verificar Respuesta',sim_your_reading:'Tu Lectura',
+    sim_live_reading:'🔴 Lectura de Sesión en Vivo',
+    sim_class_reading:'Lectura de Clase — Verificar Respuesta Juntos',
+    sim_already_submitted:'✓ Ya enviaste una respuesta para esta ronda.',
+    sim_exited:'Saliste de la sesión en vivo. Modo práctica activo.',
+    loading:'Cargando...',close:'Cerrar',cancel:'Cancelar',save:'Guardar',delete:'Eliminar',back:'Atrás',
+    error_generic:'Algo salió mal. Por favor intenta de nuevo.',
+    switch_classroom:'Cambiar Aula',view_profile:'Ver mi perfil',
+  },
+  fr: {
+    landing_sub:'Plateforme de Formation en Mécanique de l\'Aviation',
+    landing_instructor_title:'Instructeur',
+    landing_instructor_desc:'Créez des salles de classe, des quiz, notation automatique et suivi des progrès en temps réel',
+    landing_student_title:'Étudiant',
+    landing_student_desc:'Espace GRATUIT pour étudier les Questions Orales et Pratiques de la FAA',
+    landing_student_sub:'+ passez les quiz assignés par votre instructeur',
+    instructor_sign_in:'Connexion Instructeur',student_sign_in:'Connexion Étudiant',
+    sign_in:'Se Connecter',create_account:'Créer un Compte',email_address:'Adresse Email',
+    password:'Mot de Passe',your_name:'Votre Nom',sign_in_google:'Se connecter avec Google',
+    forgot_password:'Mot de passe oublié?',sign_out:'Déconnexion',
+    join_title:'Rejoindre une Classe',join_sub:'Entrez le code à 5 caractères de votre instructeur',
+    join_placeholder:'XXXXX',join_btn:'Rejoindre la Classe',
+    nav_study:'Étudier les Questions O&P',nav_quizzes:'Quiz de l\'Instructeur',
+    nav_faa:'Mes Codes de Test FAA',nav_sim:'Simulateur de Mesure',nav_dme:'Localisateur DME',
+    quiz_submit:'✓ Soumettre le Quiz',quiz_prev:'← Précédent',quiz_next:'Suivant →',quiz_finish:'Terminer',
+    quiz_review:'Réviser vos Réponses',quiz_keep_reviewing:'← Continuer la Révision',
+    quiz_answered:'Répondues',quiz_correct:'Correctes',quiz_incorrect:'Incorrectes',
+    quiz_score:'Votre Score',quiz_no_assigned:'Aucun quiz assigné pour l\'instant.',quiz_results_title:'Résultats du Quiz',
+    sim_title:'📐 Simulateur de Mesure',
+    sim_practice_mode:'Mode Pratique — faites glisser le dé ou utilisez les commandes',
+    sim_live_mode:'Session en Direct — lisez le micromètre et soumettez votre réponse.',
+    sim_live_active:'SESSION EN DIRECT ACTIVE',
+    sim_live_desc:'Votre instructeur a verrouillé une mesure pour que vous la lisiez.',
+    sim_join:'▶ Rejoindre la Session en Direct',sim_rejoin:'↩ Rejoindre à Nouveau',sim_exit:'✕ Quitter la Session',
+    sim_randomize:'🎲 Aléatoire',sim_reveal:'👁 Révéler la Réponse',sim_hide:'🙈 Masquer la Réponse',
+    sim_guide_hide:'📏 Masquer le Guide',sim_guide_show:'📏 Afficher le Guide',
+    sim_check_answer:'Vérifier la Réponse',sim_your_reading:'Votre Lecture',
+    sim_live_reading:'🔴 Lecture en Direct',
+    sim_class_reading:'Lecture de Classe — Vérifier la Réponse Ensemble',
+    sim_already_submitted:'✓ Vous avez déjà soumis une réponse pour ce tour.',
+    sim_exited:'Vous avez quitté la session. Mode pratique actif.',
+    loading:'Chargement...',close:'Fermer',cancel:'Annuler',save:'Enregistrer',delete:'Supprimer',back:'Retour',
+    error_generic:'Quelque chose s\'est mal passé. Veuillez réessayer.',
+    switch_classroom:'Changer de Classe',view_profile:'Voir mon profil',
+  },
+  zh: {
+    landing_sub:'航空机械技术培训平台',
+    landing_instructor_title:'教师',
+    landing_instructor_desc:'创建课堂、建立测验、自动评分并实时跟踪学生进度',
+    landing_student_title:'学生',
+    landing_student_desc:'免费学习FAA口头和实践题目的空间',
+    landing_student_sub:'+ 完成教师布置的测验',
+    instructor_sign_in:'教师登录',student_sign_in:'学生登录',
+    sign_in:'登录',create_account:'创建账号',email_address:'电子邮件地址',
+    password:'密码',your_name:'您的姓名',sign_in_google:'使用Google登录',
+    forgot_password:'忘记密码？',sign_out:'退出登录',
+    join_title:'加入课堂',join_sub:'输入教师提供的5位代码',
+    join_placeholder:'XXXXX',join_btn:'加入课堂',
+    nav_study:'学习O&P题目',nav_quizzes:'教师测验',
+    nav_faa:'我的FAA测试代码',nav_sim:'测量模拟器',nav_dme:'DME定位器',
+    quiz_submit:'✓ 提交测验',quiz_prev:'← 上一题',quiz_next:'下一题 →',quiz_finish:'完成',
+    quiz_review:'复查您的答案',quiz_keep_reviewing:'← 继续复查',
+    quiz_answered:'已作答',quiz_correct:'正确',quiz_incorrect:'错误',
+    quiz_score:'您的分数',quiz_no_assigned:'暂无分配的测验。',quiz_results_title:'测验结果',
+    sim_title:'📐 测量模拟器',
+    sim_practice_mode:'练习模式 — 拖动套管或使用控件',
+    sim_live_mode:'直播课 — 读取千分尺并提交答案。',
+    sim_live_active:'直播课进行中',
+    sim_live_desc:'您的教师已锁定一个读数供您读取。',
+    sim_join:'▶ 加入直播课',sim_rejoin:'↩ 重新加入直播课',sim_exit:'✕ 退出直播课',
+    sim_randomize:'🎲 随机',sim_reveal:'👁 显示答案',sim_hide:'🙈 隐藏答案',
+    sim_guide_hide:'📏 隐藏引导线',sim_guide_show:'📏 显示引导线',
+    sim_check_answer:'检查答案',sim_your_reading:'您的读数',
+    sim_live_reading:'🔴 直播读数',
+    sim_class_reading:'课堂读数 — 共同检查答案',
+    sim_already_submitted:'✓ 您已提交本轮答案。',
+    sim_exited:'您已退出直播课。练习模式已激活。',
+    loading:'加载中...',close:'关闭',cancel:'取消',save:'保存',delete:'删除',back:'返回',
+    error_generic:'出现错误，请重试。',
+    switch_classroom:'切换课堂',view_profile:'查看我的资料',
+  }
+};
+
+let _currentLang = 'en';
+function t(key){ return LANG_STRINGS[_currentLang]?.[key] || LANG_STRINGS.en[key] || key; }
+
+function applyLanguage(lang){
+  if(!LANG_STRINGS[lang]) lang = 'en';
+  _currentLang = lang;
+  try{ localStorage.setItem('amtLang', lang); }catch(e){}
+  document.querySelectorAll('.lang-select').forEach(el=>{ el.value = lang; });
+  const ls=(id,key)=>{ const el=document.getElementById(id); if(el)el.textContent=t(key); };
+  const lp=(id,key)=>{ const el=document.getElementById(id); if(el)el.placeholder=t(key); };
+  // Landing
+  ls('i18n-landing-sub','landing_sub');
+  ls('i18n-inst-card-title','landing_instructor_title');
+  ls('i18n-inst-card-desc','landing_instructor_desc');
+  ls('i18n-stu-card-title','landing_student_title');
+  ls('i18n-stu-card-desc','landing_student_desc');
+  ls('i18n-stu-card-sub','landing_student_sub');
+  // Instructor auth
+  ls('i18n-inst-auth-title','instructor_sign_in');
+  ls('i18n-inst-signin-tab','sign_in');
+  ls('i18n-inst-register-tab','create_account');
+  ls('i18n-inst-email-lbl','email_address');
+  ls('i18n-inst-pass-lbl','password');
+  ls('i18n-inst-name-lbl','your_name');
+  ls('i18n-inst-submit-btn','sign_in');
+  ls('i18n-inst-google-btn','sign_in_google');
+  ls('i18n-inst-forgot','forgot_password');
+  // Student auth
+  ls('i18n-stu-auth-title','student_sign_in');
+  ls('i18n-stu-signin-tab','sign_in');
+  ls('i18n-stu-register-tab','create_account');
+  ls('i18n-stu-email-lbl','email_address');
+  ls('i18n-stu-pass-lbl','password');
+  ls('i18n-stu-name-lbl','your_name');
+  ls('i18n-stu-submit-btn','sign_in');
+  ls('i18n-stu-google-btn','sign_in_google');
+  // Join
+  ls('i18n-join-title','join_title');
+  ls('i18n-join-sub','join_sub');
+  ls('i18n-join-btn','join_btn');
+  lp('joinCode','join_placeholder');
+  // Student nav
+  ls('stuTabStudy','nav_study');
+  ls('stuTabQuizzes','nav_quizzes');
+  ls('stuTabACS','nav_faa');
+  ls('stuTabDME','nav_dme');
+  // Sign out buttons
+  document.querySelectorAll('.i18n-signout').forEach(el=>{ el.textContent=t('sign_out'); });
+  // Sim dynamic elements
+  const simJoin=document.getElementById('stuSimJoinBtn');
+  if(simJoin){ const isRejoin=simJoin.textContent.includes('↩')||simJoin.textContent.includes('Rejoin')||simJoin.textContent.includes('Volver')||simJoin.textContent.includes('Rejoindre à')||simJoin.textContent.includes('重新'); simJoin.textContent=isRejoin?t('sim_rejoin'):t('sim_join'); }
+  const simExit=document.getElementById('stuSimExitBtn'); if(simExit)simExit.textContent=t('sim_exit');
+  const simML=document.getElementById('stuSimModeLabel'); if(simML&&!_stuSimLiveMode)simML.textContent=t('sim_practice_mode');
+  const simRev=document.getElementById('stuSimRevealBtn'); if(simRev)simRev.textContent=t('sim_reveal');
+  const simRand=document.getElementById('stuSimRandomBtn'); if(simRand)simRand.textContent=t('sim_randomize');
+  const simIL=document.getElementById('stuSimInputLabel'); if(simIL&&!_stuSimLiveMode)simIL.textContent=t('sim_your_reading');
+  const simLD=document.getElementById('stuSimLiveDesc'); if(simLD)simLD.textContent=t('sim_live_desc');
+}
+
+function initLang(){
+  let saved='en';
+  try{ saved=localStorage.getItem('amtLang')||'en'; }catch(e){}
+  if(!LANG_STRINGS[saved]) saved='en';
+  _currentLang=saved;
+}
+initLang();
+// ── END i18n ─────────────────────────────────────────────────────────────
+
+// ── SIM SESSION HISTORY ───────────────────────────────────────────────────
+async function instSimLoadGrades(){
+  const classId = document.getElementById('instSimClassPicker')?.value;
+  const el = document.getElementById('instSimGradesContent');
+  if(!classId || !el) return;
+  el.innerHTML = '<div class="empty-state" style="font-size:.8rem">Loading…</div>';
+  try{
+    const [sessions, students] = await Promise.all([
+      dbGet(`${SIM_PATH(classId)}/sessions`),
+      dbGet(`classroomStudents/${classId}`)
+    ]);
+    const stuEntries = Object.entries(students||{}).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+    if(!stuEntries.length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No students enrolled.</div>'; return; }
+    if(!sessions || !Object.keys(sessions).length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No sessions recorded yet. Start a live session to begin tracking grades.</div>'; return; }
+
+    // Collect all rounds across all sessions, sorted by sentAt
+    const allRounds = []; // {sessionNum, roundId, roundNum, value, sentAt, responses}
+    for(const [sNum, session] of Object.entries(sessions)){
+      for(const [rId, round] of Object.entries(session.rounds||{})){
+        allRounds.push({ sessionNum:sNum, roundId:rId, roundNum:round.roundNum||rId, value:round.value, sentAt:round.sentAt||0, responses:round.responses||{} });
+      }
+    }
+    allRounds.sort((a,b)=>a.sentAt-b.sentAt);
+
+    if(!allRounds.length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No rounds recorded yet.</div>'; return; }
+
+    // Per-student totals
+    const stuStats = {};
+    for(const [key] of stuEntries){ stuStats[key]={correct:0,total:0}; }
+    for(const round of allRounds){
+      for(const [key, resp] of Object.entries(round.responses)){
+        if(!stuStats[key]) stuStats[key]={correct:0,total:0};
+        stuStats[key].total++;
+        if(resp.correct) stuStats[key].correct++;
+      }
+    }
+
+    // Build table — columns are rounds, rows are students
+    const roundCols = allRounds.map((r,i)=>`
+      <th style="padding:6px 8px;text-align:center;border:1px solid var(--border);font-size:.65rem;min-width:65px;white-space:nowrap">
+        S${r.sessionNum}·R${r.roundNum}<br>
+        <span style="font-weight:400;color:var(--muted)">${r.value?(r.value.toFixed(3)+'"'):'—'}</span>
+      </th>`).join('');
+
+    const stuRows = stuEntries.map(([key, s]) => {
+      const stat = stuStats[key]||{correct:0,total:0};
+      const pct = stat.total ? Math.round(stat.correct/stat.total*100) : null;
+      const avgCol = pct===null?'var(--muted)':pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+      const cells = allRounds.map(round => {
+        const resp = round.responses[key];
+        if(!resp) return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);color:var(--muted);font-size:.75rem">—</td>`;
+        const col = resp.correct?'var(--cl)':'var(--wl)';
+        return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col};font-size:.82rem">
+          ${resp.correct?'✓':'✗'}
+          <div style="font-family:monospace;font-size:.55rem;font-weight:400;color:var(--muted)">${(resp.answer||0).toFixed(3)}"</div>
+        </td>`;
+      }).join('');
+      return `<tr>
+        <td style="padding:6px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg);font-size:.8rem">${esc(s.name||key)}</td>
+        ${cells}
+        <td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.06)">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;color:${avgCol}">${pct!==null?pct+'%':'—'}</span>
+          <div style="font-family:monospace;font-size:.6rem;color:var(--muted)">${stat.correct}/${stat.total}</div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Summary row — class average per round
+    const summaryRow = `<tr style="background:var(--panel2)">
+      <td style="padding:6px 12px;border:1px solid var(--border);font-weight:700;font-size:.75rem;position:sticky;left:0;background:var(--panel2)">Class Avg</td>
+      ${allRounds.map(round=>{
+        const resps = Object.values(round.responses);
+        if(!resps.length) return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);color:var(--muted)">—</td>`;
+        const correct = resps.filter(r=>r.correct).length;
+        const pct = Math.round(correct/resps.length*100);
+        const col = pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+        return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col};font-size:.8rem">${pct}%<div style="font-family:monospace;font-size:.55rem;font-weight:400;color:var(--muted)">${correct}/${resps.length}</div></td>`;
+      }).join('')}
+      <td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.1)">
+        ${(()=>{
+          const totals = stuEntries.map(([key])=>stuStats[key]||{correct:0,total:0}).filter(s=>s.total>0);
+          if(!totals.length) return '—';
+          const avg = Math.round(totals.reduce((a,s)=>a+s.correct/s.total*100,0)/totals.length);
+          const col = avg>=80?'#16a34a':avg>=60?'#d97706':'#dc2626';
+          return `<span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;color:${col}">${avg}%</span>`;
+        })()}
+      </td>
+    </tr>`;
+
+    el.innerHTML = `
+      <div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-bottom:10px">
+        ${allRounds.length} round${allRounds.length!==1?'s':''} across ${Object.keys(sessions).length} session${Object.keys(sessions).length!==1?'s':''}
+        · ✓ correct &nbsp; ✗ incorrect &nbsp; — not in session
+      </div>
+      <div style="overflow-x:auto">
+      <table style="border-collapse:collapse;width:100%;font-size:.78rem">
+        <thead>
+          <tr style="background:var(--panel2)">
+            <th style="padding:7px 12px;text-align:left;border:1px solid var(--border);position:sticky;left:0;background:var(--panel2);min-width:150px">Student</th>
+            ${roundCols}
+            <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.08);min-width:70px">Overall</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryRow}
+          ${stuRows}
+        </tbody>
+      </table>
+      </div>`;
+  }catch(e){ el.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
+}
+
+async function instSimToggleHistory(){
+  const wrap=document.getElementById('instSimHistoryWrap');
+  const btn=document.getElementById('instSimHistoryBtn');
+  if(!wrap) return;
+  if(wrap.classList.contains('hidden')){
+    wrap.classList.remove('hidden');
+    if(btn) btn.textContent='📋 Hide All Rounds';
+    await instSimLoadHistory();
+  } else {
+    wrap.classList.add('hidden');
+    if(btn) btn.textContent='📋 View All Rounds';
+  }
+}
+
+async function instSimLoadHistory(){
+  const classId=document.getElementById('instSimClassPicker')?.value;
+  const el=document.getElementById('instSimHistory');
+  if(!classId||!el) return;
+  el.innerHTML='<div class="empty-state" style="font-size:.75rem">Loading…</div>';
+  try{
+    const sessions=await dbGet(`${SIM_PATH(classId)}/sessions`)||{};
+    const students=await dbGet(`classroomStudents/${classId}`)||{};
+    const stuCount=Object.keys(students).length;
+    if(!Object.keys(sessions).length){el.innerHTML='<div class="empty-state" style="font-size:.75rem">No sessions recorded yet.</div>';return;}
+    let html='';
+    for(const [sNum,session] of Object.entries(sessions).sort((a,b)=>Number(a[0])-Number(b[0]))){
+      const rounds=session.rounds||{};
+      html+=`<div style="margin-bottom:14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:1px;color:var(--accent);margin-bottom:6px">Session ${sNum}</div>`;
+      for(const [rId,round] of Object.entries(rounds)){
+        const responses=Object.values(round.responses||{});
+        const correct=responses.filter(r=>r.correct).length;
+        const value=round.value?round.value.toFixed(4)+'"':'—';
+        const date=round.sentAt?new Date(round.sentAt).toLocaleString():'—';
+        html+=`<div style="border:1px solid var(--border);border-radius:6px;margin-bottom:6px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel2);cursor:pointer;flex-wrap:wrap" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+            <div style="font-family:monospace;font-size:.72rem;flex:1">
+              <span style="color:var(--accent);font-weight:700">Round ${round.roundNum||rId}</span>
+              <span style="color:var(--muted);margin-left:8px">${value}</span>
+              <span style="color:var(--muted);margin-left:8px;font-size:.65rem">${date}</span>
+            </div>
+            <span style="font-family:monospace;font-size:.72rem"><span style="color:var(--cl)">${correct}✓</span> <span style="color:var(--wl)">${responses.length-correct}✗</span> <span style="color:var(--muted)">/ ${stuCount}</span></span>
+          </div>
+          <div style="display:none;padding:8px 12px">
+            ${responses.length?responses.map(r=>`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-size:.72rem">
+              <span style="font-weight:600">${esc(r.studentName||'—')}</span>
+              <span style="font-family:monospace;color:${r.correct?'var(--cl)':'var(--wl)'}">${r.correct?'✓':'✗'} ${(r.answer||0).toFixed(4)}"</span>
+            </div>`).join(''):'<div style="color:var(--muted);font-size:.72rem">No responses.</div>'}
+          </div>
+        </div>`;
+      }
+      html+='</div>';
+    }
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`;}
+}
+
+async function stuSimLoadLiveHistory(){
+  const el=document.getElementById('stuSimLiveHistoryList');
+  const wrap=document.getElementById('stuSimLiveHistory');
+  if(!el||!_stuSimClassId||!_stuSimSessionNum) return;
+  try{
+    const key=stuSession?.uid||safeKey(stuSession?.name||'student');
+    const rounds=await dbGet(`${SIM_PATH(_stuSimClassId)}/sessions/${_stuSimSessionNum}/rounds`)||{};
+    const entries=Object.entries(rounds).sort((a,b)=>Number(a[0])-Number(b[0]));
+    if(entries.length<=1){wrap?.classList.add('hidden');return;}
+    wrap?.classList.remove('hidden');
+    el.innerHTML=entries.slice(0,-1).reverse().map(([rId,round])=>{
+      const resp=round.responses?.[key];
+      const value=round.value?round.value.toFixed(4)+'"':'—';
+      const roundNum=round.roundNum||rId;
+      if(!resp) return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem">
+        <span style="font-family:monospace;color:var(--muted)">Round ${roundNum} — ${value}</span>
+        <span style="font-family:monospace;font-size:.68rem;color:var(--muted)">Not submitted</span></div>`;
+      return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem">
+        <span style="font-family:monospace">Round ${roundNum} — <span style="color:var(--muted)">${value}</span></span>
+        <span style="font-family:monospace;font-weight:700;color:${resp.correct?'var(--cl)':'var(--wl)'}">${resp.correct?'✓ Correct':'✗ '+(resp.answer||0).toFixed(4)+'"'}</span>
+      </div>`;
+    }).join('')||'<div style="color:var(--muted);font-size:.72rem">No previous rounds.</div>';
+  }catch(e){if(el)el.innerHTML='';}
+}
+
+async function adminLoadSimGradebook(classId, container){
+  try{
+    const sessions=await dbGet(`${SIM_PATH(classId)}/sessions`)||{};
+    if(!Object.keys(sessions).length) return;
+    const students=await dbGet(`classroomStudents/${classId}`)||{};
+    const stuEntries=Object.entries(students).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+    const stuStats={};
+    for(const [,session] of Object.entries(sessions)){
+      for(const [,round] of Object.entries(session.rounds||{})){
+        for(const [key,resp] of Object.entries(round.responses||{})){
+          if(!stuStats[key]) stuStats[key]={total:0,correct:0};
+          stuStats[key].total++;
+          if(resp.correct) stuStats[key].correct++;
         }
       }
     }
-  }
-  const takenEl = document.getElementById('masterDashQuizzesTaken');
-  if(takenEl) takenEl.innerHTML = takenTotal
-    ? `<div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#7c3aed;margin-bottom:8px">${takenTotal} total</div>` +
-      Object.entries(takenByDay).sort((a,b)=>new Date(b[0])-new Date(a[0])).slice(0,10)
-        .map(([d,n])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:.78rem"><span>${d}</span><span style="font-weight:700;color:#7c3aed">${n}</span></div>`).join('')
-    : '<div style="color:var(--muted);font-size:.8rem">No quizzes taken in the last 30 days.</div>';
-
-  // ── TOP ACTIVE STUDENTS ─────────────────────────────────────────────────────
-  const stuActivity = Object.values(stuLog||{}).map(u=>{
-    const logins30d = Object.keys(u?.sessions||{}).filter(k=>Number(k)>cutoff30d).length;
-    const name = u?.meta?.name || '—';
-    return { name, logins30d };
-  }).filter(s=>s.logins30d>0).sort((a,b)=>b.logins30d-a.logins30d).slice(0,15);
-
-  const topEl = document.getElementById('masterDashTopStudents');
-  if(topEl) topEl.innerHTML = stuActivity.length
-    ? `<table style="border-collapse:collapse;width:100%;font-size:.8rem">
-        <thead><tr style="background:var(--panel2)">
-          <th style="padding:6px 12px;text-align:left;border:1px solid var(--border)">#</th>
-          <th style="padding:6px 12px;text-align:left;border:1px solid var(--border)">Student</th>
-          <th style="padding:6px 12px;text-align:center;border:1px solid var(--border)">Logins (30d)</th>
-        </tr></thead><tbody>
-        ${stuActivity.map((s,i)=>`<tr>
-          <td style="padding:5px 12px;border:1px solid var(--border);font-family:monospace;font-size:.7rem;color:var(--muted)">${i+1}</td>
-          <td style="padding:5px 12px;border:1px solid var(--border);font-weight:600">${esc(s.name)}</td>
-          <td style="padding:5px 12px;border:1px solid var(--border);text-align:center;font-weight:700;color:var(--cl)">${s.logins30d}</td>
-        </tr>`).join('')}
-        </tbody></table>`
-    : '<div style="color:var(--muted);font-size:.8rem">No student activity in the last 30 days.</div>';
-
-  // ── RECENT SIGNUPS ──────────────────────────────────────────────────────────
-  const allSignups = [
-    ...stuMetas.map(m=>({...m, roleLabel:'Student', col:'var(--cl)'})),
-    ...instMetas.map(m=>({...m, roleLabel:'Instructor', col:'var(--blue)'}))
-  ].filter(m=>m.firstSeen).sort((a,b)=>b.firstSeen-a.firstSeen).slice(0,20);
-
-  const signupsEl = document.getElementById('masterDashNewSignups');
-  if(signupsEl) signupsEl.innerHTML = allSignups.length
-    ? `<table style="border-collapse:collapse;width:100%;font-size:.78rem">
-        <thead><tr style="background:var(--panel2)">
-          <th style="padding:6px 12px;text-align:left;border:1px solid var(--border)">Name</th>
-          <th style="padding:6px 10px;text-align:center;border:1px solid var(--border)">Role</th>
-          <th style="padding:6px 10px;text-align:center;border:1px solid var(--border)">Signed Up</th>
-          <th style="padding:6px 10px;text-align:left;border:1px solid var(--border)">Email</th>
-        </tr></thead><tbody>
-        ${allSignups.map(m=>`<tr>
-          <td style="padding:5px 12px;border:1px solid var(--border);font-weight:600">${esc(m.name)}</td>
-          <td style="padding:5px 10px;border:1px solid var(--border);text-align:center">
-            <span style="font-family:monospace;font-size:.62rem;padding:2px 6px;border-radius:3px;background:${m.col==='var(--cl)'?'rgba(34,197,94,.12)':'rgba(37,99,235,.12)'};color:${m.col}">${m.roleLabel}</span>
-          </td>
-          <td style="padding:5px 10px;border:1px solid var(--border);text-align:center;font-family:monospace;font-size:.68rem">${new Date(m.firstSeen).toLocaleDateString()}</td>
-          <td style="padding:5px 10px;border:1px solid var(--border);font-family:monospace;font-size:.68rem;color:var(--muted)">${esc(m.email||'—')}</td>
-        </tr>`).join('')}
-        </tbody></table>`
-    : '<div style="color:var(--muted);font-size:.8rem">No signup data yet. Data accumulates as users log in.</div>';
+    if(!Object.keys(stuStats).length) return;
+    const totalRounds=Object.values(sessions).reduce((a,s)=>a+Object.keys(s.rounds||{}).length,0);
+    container.innerHTML+=`
+      <div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:10px;color:var(--accent)">📐 Micrometer Sim — ${totalRounds} round${totalRounds!==1?'s':''} total</div>
+        <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.78rem">
+          <thead><tr style="background:var(--panel2)">
+            <th style="padding:7px 12px;text-align:left;border:1px solid var(--border)">Student</th>
+            <th style="padding:7px 10px;text-align:center;border:1px solid var(--border)">Rounds</th>
+            <th style="padding:7px 10px;text-align:center;border:1px solid var(--border)">Correct</th>
+            <th style="padding:7px 10px;text-align:center;border:1px solid var(--border)">Accuracy</th>
+          </tr></thead><tbody>
+          ${stuEntries.map(([key,s])=>{
+            const stat=stuStats[key]||{total:0,correct:0};
+            const pct=stat.total?Math.round(stat.correct/stat.total*100):null;
+            const col=pct===null?'var(--muted)':pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+            return `<tr><td style="padding:7px 12px;border:1px solid var(--border);font-weight:600">${esc(s.name||key)}</td>
+              <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:monospace">${stat.total||'—'}</td>
+              <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:monospace">${stat.correct||'—'}</td>
+              <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col}">${pct!==null?pct+'%':'—'}</td>
+            </tr>`;
+          }).join('')}
+          </tbody></table></div></div>`;
+  }catch(e){}
 }
-// ── END MASTER DASHBOARD ─────────────────────────────────────────────────────
+// ── END SIM HISTORY ───────────────────────────────────────────────────────
+
 let _isSuperAdmin = false;
 let _isMasterAdmin = false;
 let _adminCurrentSubTab = 'instructors';
@@ -3100,30 +3633,35 @@ let _gbSortCol = 'name', _gbSortDir = 1, _gbData = null;
 
 function adminRenderGradebook(){
   if(!_gbData) return;
-  const { quizzes, rows, classId } = _gbData;
+  const { quizzes, rows, classId, simStats, totalRounds } = _gbData;
   const el = document.getElementById('acmPane-gradebook');
-
-  // Sort rows
-  const sorted = [...rows].sort((a, b) => {
-    if(_gbSortCol === 'name'){
-      return _gbSortDir * a.lastName.localeCompare(b.lastName);
-    } else {
-      // Sort by specific quiz index or avg
-      const idx = parseInt(_gbSortCol);
-      const va = isNaN(idx) ? a.avg : (a.scores[idx] ?? -1);
-      const vb = isNaN(idx) ? b.avg : (b.scores[idx] ?? -1);
-      return _gbSortDir * (va - vb);
-    }
-  });
+  if(!el) return;
 
   const arrowFor = col => _gbSortCol===col ? (_gbSortDir===1?'↑':'↓') : '↕';
   const thStyle = `padding:8px 10px;text-align:center;border:1px solid var(--border);cursor:pointer;user-select:none;font-size:.68rem`;
   const stickyTh = `padding:8px 12px;text-align:left;border:1px solid var(--border);position:sticky;left:0;background:var(--panel2);min-width:160px;cursor:pointer;user-select:none`;
 
+  const sorted = [...rows].sort((a, b) => {
+    if(_gbSortCol === 'name') return _gbSortDir * a.lastName.localeCompare(b.lastName);
+    if(_gbSortCol === 'sim'){
+      const va = simStats?.[a.stuKey]?.pct ?? -1;
+      const vb = simStats?.[b.stuKey]?.pct ?? -1;
+      return _gbSortDir * (va - vb);
+    }
+    const idx = parseInt(_gbSortCol);
+    const va = isNaN(idx) ? a.avg : (a.scores[idx] ?? -1);
+    const vb = isNaN(idx) ? b.avg : (b.scores[idx] ?? -1);
+    return _gbSortDir * (va - vb);
+  });
+
+  const hasSimData = simStats && Object.keys(simStats).length > 0;
+  const simHeader = hasSimData ? `<th style="${thStyle};background:rgba(99,102,241,.1)" onclick="adminGbSort('sim')">📐 Sim ${arrowFor('sim')}<br><span style="font-weight:400;font-size:.6rem">${totalRounds} rounds</span></th>` : '';
+
   let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem">
     <thead><tr style="background:var(--panel2)">
       <th style="${stickyTh}" onclick="adminGbSort('name')">Student ${arrowFor('name')}</th>
       ${quizzes.map(([qid,q],i)=>`<th style="${thStyle}" onclick="adminGbSort('${i}')">${esc((q.quizTitle||qid).substring(0,18))} ${arrowFor(String(i))}</th>`).join('')}
+      ${simHeader}
       <th style="${thStyle};min-width:70px;background:rgba(240,165,0,.08)" onclick="adminGbSort('avg')">Avg ${arrowFor('avg')}</th>
     </tr></thead><tbody>
     ${sorted.map(r => {
@@ -3134,15 +3672,69 @@ function adminRenderGradebook(){
         const col = s>=80?'#16a34a':s>=60?'#d97706':'#dc2626';
         return `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${col}">${s}%</td>`;
       }).join('');
+      let simCell = '';
+      if(hasSimData){
+        const stat = simStats[r.stuKey] || {correct:0, total:0, pct:null};
+        const simCol = stat.pct===null?'var(--muted)':stat.pct>=80?'#16a34a':stat.pct>=60?'#d97706':'#dc2626';
+        simCell = stat.total > 0
+          ? `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);background:rgba(99,102,241,.06)">
+              <span style="font-weight:700;color:${simCol}">${stat.pct}%</span>
+              <div style="font-family:monospace;font-size:.6rem;color:var(--muted)">${stat.correct}/${stat.total}</div>
+            </td>`
+          : `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted);background:rgba(99,102,241,.03)">—</td>`;
+      }
       return `<tr>
         <td style="padding:7px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg)">
           <span style="cursor:pointer;color:var(--accent);text-decoration:underline dotted" onclick="adminOpenStudentProfile('${esc(classId)}','${esc(r.stuKey)}','${esc(r.name)}','${esc(r.uid)}')">${esc(r.name)}</span>
         </td>
-        ${scoreCells}
+        ${scoreCells}${simCell}
         <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;color:${avgCol};background:rgba(240,165,0,.06)">${avgStr}</td>
       </tr>`;
     }).join('')}
     </tbody></table></div>`;
+
+  // Sim session round-by-round breakdown below main table
+  if(hasSimData && _gbData.simSessions){
+    html += `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;margin-bottom:12px;color:var(--accent)">📐 Micrometer Simulator — Round Detail</div>`;
+    for(const [sNum, session] of Object.entries(_gbData.simSessions)){
+      const rounds = Object.entries(session.rounds||{}).sort((a,b)=>a[1].sentAt-b[1].sentAt);
+      if(!rounds.length) continue;
+      html += `<div style="margin-bottom:14px">
+        <div style="font-family:monospace;font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:1px">SESSION ${sNum}</div>
+        <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.78rem">
+          <thead><tr style="background:var(--panel2)">
+            <th style="padding:6px 12px;text-align:left;border:1px solid var(--border);position:sticky;left:0;background:var(--panel2)">Student</th>
+            ${rounds.map(([,r],i)=>`<th style="padding:6px 8px;text-align:center;border:1px solid var(--border);font-size:.65rem;min-width:70px">
+              R${i+1}<br><span style="font-weight:400;color:var(--muted)">${r.value?(r.value.toFixed(4)+'"'):'—'}</span>
+            </th>`).join('')}
+            <th style="padding:6px 8px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.08);font-size:.65rem">Score</th>
+          </tr></thead><tbody>
+          ${sorted.map(r=>{
+            let stuCorrect=0, stuTotal=0;
+            const cells = rounds.map(([,round])=>{
+              const resp = round.responses?.[r.stuKey];
+              if(!resp) return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);color:var(--muted);font-size:.7rem">—</td>`;
+              stuTotal++; if(resp.correct) stuCorrect++;
+              return `<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);font-size:.75rem;font-weight:700;color:${resp.correct?'var(--cl)':'var(--wl)'}">
+                ${resp.correct?'✓':'✗'}<div style="font-family:monospace;font-size:.55rem;font-weight:400;color:var(--muted)">${(resp.answer||0).toFixed(3)}"</div>
+              </td>`;
+            }).join('');
+            const pct = stuTotal?Math.round(stuCorrect/stuTotal*100):null;
+            const pctCol = pct===null?'var(--muted)':pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+            return `<tr>
+              <td style="padding:6px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg)">${esc(r.name)}</td>
+              ${cells}
+              <td style="padding:5px 8px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.06)">
+                ${pct!==null?`<span style="font-weight:700;color:${pctCol}">${pct}%</span><div style="font-family:monospace;font-size:.6rem;color:var(--muted)">${stuCorrect}/${stuTotal}</div>`:'—'}
+              </td>
+            </tr>`;
+          }).join('')}
+          </tbody></table></div></div>`;
+    }
+    html += '</div>';
+  }
+
   el.innerHTML = html;
 }
 
@@ -3197,6 +3789,30 @@ async function adminLoadClassGradebook(){
     });
 
     _gbData = { quizzes, rows, classId };
+
+    // Load sim session data and compute per-student stats
+    try{
+      const simSessions = await dbGet(`${SIM_PATH(classId)}/sessions`) || {};
+      const simStats = {};
+      let totalRounds = 0;
+      for(const [,session] of Object.entries(simSessions)){
+        for(const [,round] of Object.entries(session.rounds||{})){
+          totalRounds++;
+          for(const [stuKey, resp] of Object.entries(round.responses||{})){
+            if(!simStats[stuKey]) simStats[stuKey]={correct:0,total:0,pct:null};
+            simStats[stuKey].total++;
+            if(resp.correct) simStats[stuKey].correct++;
+          }
+        }
+      }
+      for(const stat of Object.values(simStats)){
+        stat.pct = stat.total ? Math.round(stat.correct/stat.total*100) : null;
+      }
+      _gbData.simStats = simStats;
+      _gbData.simSessions = simSessions;
+      _gbData.totalRounds = totalRounds;
+    }catch(e){ _gbData.simStats={}; _gbData.simSessions={}; _gbData.totalRounds=0; }
+
     adminRenderGradebook();
   } catch(e){ el.innerHTML = `<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
 }
@@ -4212,17 +4828,12 @@ async function loadCdPerfTab(){
   const content = document.getElementById('cdPerfContent');
   if(!picker || !content) return;
 
-  // Populate quiz picker if not yet loaded for this classroom
+  // Populate picker if not yet loaded for this classroom
   if(!picker.options.length || picker.dataset.classId !== selectedClassId){
     picker.dataset.classId = selectedClassId;
     const classroom = await dbGet(`classrooms/${selectedClassId}`);
     const assigned = classroom?.assignedQuizzes || {};
     const quizIds = Object.keys(assigned);
-    if(!quizIds.length){
-      picker.innerHTML = '<option>No quizzes assigned</option>';
-      content.innerHTML = '<div class="empty-state">No quizzes assigned to this classroom yet.</div>';
-      return;
-    }
     const quizzes = await Promise.all(quizIds.map(async id => {
       const info = assigned[id] || {};
       const iid = info.instructorId || (instUser && instUser.uid) || '';
@@ -4231,10 +4842,29 @@ async function loadCdPerfTab(){
       return q ? { ...q, id, assignedAt: info.assignedAt || '' } : null;
     }));
     const valid = quizzes.filter(Boolean).sort((a,b) => (b.assignedAt||'').localeCompare(a.assignedAt||''));
-    picker.innerHTML = valid.map(q => `<option value="${q.id}">${esc(q.title)}</option>`).join('');
+    let opts = valid.map(q => `<option value="quiz::${q.id}">${esc(q.title)}</option>`).join('');
+    // Add sim sessions
+    try{
+      const instrSessions = await dbGet(`instrumentSessions/${selectedClassId}/sessions`) || {};
+      const sessionNums = Object.keys(instrSessions).sort((a,b)=>Number(a)-Number(b));
+      if(sessionNums.length){
+        opts += sessionNums.map(n=>`<option value="sim::${n}">📐 Micrometer Session ${n}</option>`).join('');
+      }
+    }catch(e){}
+    picker.innerHTML = opts || '<option value="">No data yet</option>';
   }
 
-  const quizId = picker.value;
+  const val = picker.value;
+  if(!val){ content.innerHTML = '<div class="empty-state">Select a quiz or session.</div>'; return; }
+
+  // Route to sim performance if selected
+  if(val.startsWith('sim::')){
+    const sessionNum = val.split('::')[1];
+    await loadSimPerfTab(selectedClassId, sessionNum, content);
+    return;
+  }
+
+  const quizId = val.startsWith('quiz::') ? val.split('::')[1] : val;
   if(!quizId){ content.innerHTML = '<div class="empty-state">Select a quiz.</div>'; return; }
   content.innerHTML = '<div class="empty-state">Loading...</div>';
 
@@ -4839,6 +5469,19 @@ async function loadAssignedQuizzes(classId){
 
   if(!Object.keys(assigned).length){
     el.innerHTML = '<div class="empty-state">No quizzes assigned. Click "Assign Quiz" above.</div>';
+    // Still populate picker with sim sessions even if no quizzes
+    try{
+      const picker = document.getElementById('cdProgressQuizPicker');
+      const instrSessions = await dbGet(`instrumentSessions/${selectedClassId}/sessions`) || {};
+      const sessionNums = Object.keys(instrSessions).sort((a,b)=>Number(a)-Number(b));
+      if(sessionNums.length && picker){
+        picker.innerHTML = sessionNums.map(n=>`<option value="instr::${n}">📐 Micrometer Session ${n}</option>`).join('');
+        picker.onchange = function(){ loadClassroomProgressAny(); };
+        loadClassroomProgressAny();
+      } else if(picker){
+        picker.innerHTML = '<option value="">No grades yet</option>';
+      }
+    }catch(e){}
     return;
   }
 
@@ -4904,7 +5547,7 @@ async function loadAssignedQuizzes(classId){
     const sessionNums = Object.keys(instrSessions).sort((a,b)=>Number(a)-Number(b));
     if(sessionNums.length){
       pickerOptions += sessionNums.map(n =>
-        `<option value="instr::${n}">Instruments Session ${n}</option>`
+        `<option value="instr::${n}">📐 Micrometer Session ${n}</option>`
       ).join('');
     }
   } catch(e){}
@@ -6390,6 +7033,57 @@ function renderGradeBook(students, quizId, iLog){
     <th style="font-family:monospace;font-size:.7rem;letter-spacing:1px">Integrity</th>
     <th>Retake</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+
+  // Append sim grades below quiz table
+  if(selectedClassId){
+    const simDiv = document.createElement('div');
+    simDiv.id = 'gbSimSection';
+    simDiv.style.marginTop = '24px';
+    simDiv.innerHTML = '<div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Loading simulator grades…</div>';
+    el.appendChild(simDiv);
+    dbGet(`${SIM_PATH(selectedClassId)}/sessions`).then(sessions => {
+      if(!sessions || !Object.keys(sessions).length){
+        simDiv.innerHTML = '';
+        return;
+      }
+      // Reuse instSimLoadGrades logic inline
+      const allRounds = [];
+      for(const [sNum, session] of Object.entries(sessions)){
+        for(const [rId, round] of Object.entries(session.rounds||{})){
+          allRounds.push({sessionNum:sNum, roundNum:round.roundNum||rId, value:round.value, sentAt:round.sentAt||0, responses:round.responses||{}});
+        }
+      }
+      allRounds.sort((a,b)=>a.sentAt-b.sentAt);
+      if(!allRounds.length){ simDiv.innerHTML=''; return; }
+
+      const stuStats = {};
+      for(const round of allRounds){
+        for(const [key, resp] of Object.entries(round.responses)){
+          if(!stuStats[key]) stuStats[key]={correct:0,total:0,name:resp.studentName||key};
+          stuStats[key].total++;
+          if(resp.correct) stuStats[key].correct++;
+        }
+      }
+      if(!Object.keys(stuStats).length){ simDiv.innerHTML=''; return; }
+
+      const statRows = Object.entries(stuStats).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||'')).map(([key, stat])=>{
+        const pct = Math.round(stat.correct/stat.total*100);
+        const col = pct>=80?'#16a34a':pct>=60?'#d97706':'#dc2626';
+        return `<tr>
+          <td style="font-weight:600;font-size:.88rem;color:var(--blue)">${esc(stat.name)}</td>
+          <td style="font-family:monospace">${stat.correct}/${stat.total}</td>
+          <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${col}"></div></div><span style="font-family:monospace;font-size:.75rem;color:${col};font-weight:700">${pct}%</span></div></td>
+          <td style="font-family:monospace;font-size:.7rem;color:var(--muted)">${allRounds.length} round${allRounds.length!==1?'s':''}</td>
+        </tr>`;
+      }).join('');
+
+      simDiv.innerHTML = `
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--accent);margin-bottom:10px">📐 Micrometer Simulator — ${allRounds.length} Round${allRounds.length!==1?'s':''}</div>
+        <table class="grade-table"><thead><tr>
+          <th>Student</th><th>Rounds Correct</th><th>Accuracy</th><th>Rounds Attempted</th>
+        </tr></thead><tbody>${statRows}</tbody></table>`;
+    }).catch(()=>{ simDiv.innerHTML=''; });
+  }
 }
 
 function exportGrades(format){
@@ -6595,6 +7289,8 @@ function clearNewQuizBadge(){
 
 async function initStudentApp(){
   document.getElementById('stuUserName').textContent = stuSession.name;
+  // Apply saved language
+  applyLanguage(_currentLang);
   // Small delay so Firebase reads settle before checking for new quizzes
   setTimeout(checkNewQuizzes, 1500);
   // Always load quizzes data first (populates banner + quiz cards in background)
@@ -13691,10 +14387,12 @@ function dmeSetStatus(msg){
 // ══════════════════════════════════════════════════════════════════
 
 const SIM = {
-  inst: { value: 0.2500, range: 0, canvas: null, ctx: null, dragging: false, lastY: 0, animating: false, locked: false, showGuide: true },
-  stu:  { value: 0.2500, range: 0, canvas: null, ctx: null, dragging: false, lastY: 0, animating: false, locked: false, showGuide: true }
+  inst: { value: 0.2500, range: 0, canvas: null, ctx: null, dragging: false, lastY: 0, animating: false, locked: false, showGuide: true, instrument: 'mic' },
+  stu:  { value: 0.2500, range: 0, canvas: null, ctx: null, dragging: false, lastY: 0, animating: false, locked: false, showGuide: true, instrument: 'mic' }
 };
-const SIM_TOLERANCE = 0.0001;
+const SIM_TOLERANCE = 0.001; // 0.001" works for both mic (0.0001) and caliper (0.001)
+const CAL_TOLERANCE = 0.001; // Vernier caliper: 1 thou
+const MIC_TOLERANCE = 0.0001;
 const SIM_PATH = (classId) => `instrumentSessions/${classId}`;
 
 function simRandomValue(range){
@@ -13703,7 +14401,304 @@ function simRandomValue(range){
   return base + Math.round(raw * 10000) / 10000;
 }
 
-// ── SVG Micrometer Engine (from mic_preview-2 layout) ─────────────
+// ══════════════════════════════════════════════════════════════════════
+// VERNIER CALIPER ENGINE
+// Imperial, 6" range, 25-division vernier → 0.001" resolution
+// Reading = main scale (nearest 0.025") + vernier coincidence × 0.001"
+// ══════════════════════════════════════════════════════════════════════
+
+function calRandomValue(){
+  // 0.000" to 5.999" in 0.001" steps
+  return Math.round(Math.random() * 5999) / 1000;
+}
+
+function calDecompose(value){
+  // value in inches, e.g. 2.347
+  const v = Math.round(value * 1000) / 1000; // snap to 0.001"
+  const mainWhole  = Math.floor(v);           // whole inches
+  const frac       = v - mainWhole;           // 0.000 to 0.999
+  // Main scale reads to nearest 0.025"
+  const mainTicks  = Math.floor(frac / 0.025);// 0..39
+  // Vernier coincidence: which of 25 lines aligns
+  // Each vernier div = 0.001", so coincidence = round(frac % 0.025 / 0.001)
+  const remainder  = Math.round((frac - mainTicks * 0.025) * 1000); // 0..24
+  return { whole: mainWhole, mainTicks, vernier: remainder, value: v };
+}
+
+// ── SVG Caliper Renderer ──────────────────────────────────────────────
+// Coordinate system: viewBox 0 0 1000 220
+// Fixed jaw on left, sliding jaw moves right with opening
+// Main scale runs along top beam; vernier scale on sliding jaw
+
+function caliperSvgDraw(value, side, showGuide, locked){
+  const svgId = side === 'inst' ? 'instCalSvg' : 'stuCalSvg';
+  const svg = document.getElementById(svgId);
+  if(!svg) return;
+
+  const d = calDecompose(value);
+  const W = 1000, H = 220;
+
+  // Layout constants
+  const BEAM_TOP = 60, BEAM_H = 80;           // main beam
+  const JAW_LEFT_W = 80;                       // fixed left jaw width
+  const SCALE_LEFT = JAW_LEFT_W + 10;          // where 0" mark starts
+  const SCALE_W = 820;                         // total scale length (0–6")
+  const PX_PER_INCH = SCALE_W / 6;            // pixels per inch
+  const PX_PER_THOU = PX_PER_INCH / 1000;     // pixels per 0.001"
+
+  // Sliding jaw position (left edge of vernier 0-line)
+  const jawX = SCALE_LEFT + value * PX_PER_INCH;
+
+  // Colors
+  const METAL_BODY  = '#8a9ab0';
+  const METAL_DARK  = '#5a6a7a';
+  const METAL_LIGHT = '#c8d4e0';
+  const SCALE_BG    = '#f0ede8';
+  const TEXT_COL    = '#1a2030';
+  const VERNIER_COL = '#1a3a6a';
+  const GUIDE_COL   = '#e53e3e';
+  const ACCENT      = '#f0a500';
+
+  let s = `<rect width="${W}" height="${H}" fill="#1a1a2e"/>`;
+
+  // ── MAIN BEAM ──────────────────────────────────────────────────────
+  // Body of the beam
+  s += `<rect x="${JAW_LEFT_W}" y="${BEAM_TOP}" width="${SCALE_W + 80}" height="${BEAM_H}" rx="4" fill="${METAL_BODY}"/>`;
+  s += `<rect x="${JAW_LEFT_W}" y="${BEAM_TOP}" width="${SCALE_W + 80}" height="6" rx="2" fill="${METAL_LIGHT}"/>`;
+  // Scale strip
+  s += `<rect x="${SCALE_LEFT}" y="${BEAM_TOP + 8}" width="${SCALE_W}" height="38" fill="${SCALE_BG}" rx="2"/>`;
+
+  // ── MAIN SCALE GRADUATIONS ─────────────────────────────────────────
+  // Every 0.025" = one tick (40 ticks per inch)
+  for(let i = 0; i <= 240; i++){  // 0 to 6" × 40 ticks
+    const x = SCALE_LEFT + (i / 40) * PX_PER_INCH;
+    const isMajor = i % 40 === 0;           // whole inch
+    const isHalf  = i % 20 === 0 && !isMajor; // 0.500"
+    const isQtr   = i % 10 === 0 && i % 20 !== 0; // 0.250", 0.750"
+    const tickH   = isMajor ? 30 : isHalf ? 22 : isQtr ? 16 : 10;
+    const tickW   = isMajor ? 2 : 1;
+    const tickCol = isMajor ? TEXT_COL : '#555';
+    s += `<rect x="${x - tickW/2}" y="${BEAM_TOP + 8}" width="${tickW}" height="${tickH}" fill="${tickCol}"/>`;
+    // Label whole inches and halves
+    if(isMajor){
+      const label = i / 40;
+      s += `<text x="${x}" y="${BEAM_TOP + 46}" text-anchor="middle" font-size="11" font-family="monospace" font-weight="bold" fill="${TEXT_COL}">${label}"</text>`;
+    }
+  }
+
+  // ── FIXED JAW (left) ──────────────────────────────────────────────
+  s += `<rect x="0" y="${BEAM_TOP - 60}" width="${JAW_LEFT_W}" height="${BEAM_H + 60}" rx="4" fill="${METAL_BODY}"/>`;
+  // Inner jaw tip (bottom external)
+  s += `<polygon points="${JAW_LEFT_W},${BEAM_TOP + BEAM_H} ${JAW_LEFT_W - 12},${BEAM_TOP + BEAM_H + 40} ${JAW_LEFT_W},${BEAM_TOP + BEAM_H + 40}" fill="${METAL_DARK}"/>`;
+  // Internal jaw (top)
+  s += `<polygon points="${JAW_LEFT_W - 14},${BEAM_TOP - 60} ${JAW_LEFT_W},${BEAM_TOP - 60} ${JAW_LEFT_W},${BEAM_TOP - 20} ${JAW_LEFT_W - 14},${BEAM_TOP - 30}" fill="${METAL_DARK}"/>`;
+  // Labels
+  s += `<text x="40" y="${BEAM_TOP + BEAM_H + 55}" text-anchor="middle" font-size="8" font-family="monospace" fill="${METAL_LIGHT}">EXT JAW</text>`;
+  s += `<text x="40" y="${BEAM_TOP - 45}" text-anchor="middle" font-size="8" font-family="monospace" fill="${METAL_LIGHT}">INT JAW</text>`;
+
+  // ── SLIDING JAW ────────────────────────────────────────────────────
+  const SJ_W = 60;
+  s += `<rect x="${jawX - SJ_W + 12}" y="${BEAM_TOP - 50}" width="${SJ_W}" height="${BEAM_H + 110}" rx="3" fill="${METAL_DARK}"/>`;
+  s += `<rect x="${jawX - SJ_W + 12}" y="${BEAM_TOP - 50}" width="${SJ_W}" height="5" fill="${METAL_LIGHT}" rx="2"/>`;
+  // External jaw tip
+  s += `<polygon points="${jawX},${BEAM_TOP + BEAM_H} ${jawX + 12},${BEAM_TOP + BEAM_H + 40} ${jawX},${BEAM_TOP + BEAM_H + 40}" fill="${METAL_BODY}"/>`;
+  // Internal jaw tip
+  s += `<polygon points="${jawX},${BEAM_TOP - 50} ${jawX},${BEAM_TOP - 18} ${jawX + 12},${BEAM_TOP - 28}" fill="${METAL_BODY}"/>`;
+
+  // Gap between jaws (measurement opening)
+  if(value > 0.02){
+    s += `<rect x="${JAW_LEFT_W}" y="${BEAM_TOP + BEAM_H}" width="${jawX - JAW_LEFT_W}" height="6" rx="2" fill="rgba(0,180,255,0.15)"/>`;
+  }
+
+  // ── VERNIER SCALE ──────────────────────────────────────────────────
+  // Vernier scale on the sliding jaw, below main scale
+  const VY = BEAM_TOP + BEAM_H + 6;   // top of vernier area
+  const VH = 34;
+  const VW = 25 * PX_PER_THOU * 25;   // 25 divisions × pixel width each
+  // Background strip
+  s += `<rect x="${jawX - SJ_W + 12}" y="${VY}" width="${SJ_W}" height="${VH}" fill="${SCALE_BG}"/>`;
+  // Vernier ticks (25 divisions, each = 0.001")
+  // Vernier 0-line is at jawX (= measurement)
+  // Tick spacing: 24/25 of 0.025" main spacing
+  const VER_TICK_PX = (24 / 25) * (PX_PER_INCH * 0.025);
+  for(let i = 0; i <= 25; i++){
+    const vx = jawX - (d.vernier * VER_TICK_PX) + (i * VER_TICK_PX);
+    const vH = i % 5 === 0 ? VH - 6 : VH - 16;
+    const label = i % 5 === 0 ? i : null;
+    s += `<rect x="${vx - 0.5}" y="${VY}" width="1" height="${vH}" fill="${VERNIER_COL}"/>`;
+    if(label !== null && vx > SCALE_LEFT - 5 && vx < W - 10){
+      s += `<text x="${vx}" y="${VY + VH - 1}" text-anchor="middle" font-size="8" font-family="monospace" fill="${VERNIER_COL}">${label}</text>`;
+    }
+  }
+  // Vernier 0-line (reference)
+  s += `<rect x="${jawX - 1}" y="${VY}" width="2" height="${VH}" fill="${ACCENT}"/>`;
+
+  // ── GUIDE LINE (coincidence indicator) ────────────────────────────
+  if(showGuide){
+    // Highlight the coincident line on main scale
+    const coincX = SCALE_LEFT + (Math.floor(value / 0.025) * 0.025) * PX_PER_INCH;
+    s += `<rect x="${coincX - 1}" y="${BEAM_TOP + 8}" width="2" height="30" fill="${GUIDE_COL}" opacity="0.8"/>`;
+    // Arrow pointing to vernier coincidence
+    const coinVX = jawX - (d.vernier * VER_TICK_PX) + (d.vernier * VER_TICK_PX);
+    s += `<line x1="${coinVX}" y1="${VY - 4}" x2="${coinVX}" y2="${VY}" stroke="${GUIDE_COL}" stroke-width="2"/>`;
+    s += `<polygon points="${coinVX - 4},${VY - 10} ${coinVX + 4},${VY - 10} ${coinVX},${VY - 4}" fill="${GUIDE_COL}"/>`;
+  }
+
+  // ── DEPTH BLADE ───────────────────────────────────────────────────
+  const depthX = SCALE_LEFT + SCALE_W + 10;
+  s += `<rect x="${depthX}" y="${BEAM_TOP + BEAM_H - 4}" width="${jawX < depthX ? 12 : Math.min(jawX - depthX + 12, 120)}" height="8" rx="2" fill="${METAL_DARK}"/>`;
+
+  // ── LOCKING SCREW ─────────────────────────────────────────────────
+  s += `<rect x="${jawX - 5}" y="${BEAM_TOP + 10}" width="10" height="14" rx="3" fill="${METAL_DARK}"/>`;
+  s += `<rect x="${jawX - 3}" y="${BEAM_TOP + 12}" width="6" height="2" fill="${METAL_LIGHT}"/>`;
+  s += `<rect x="${jawX - 3}" y="${BEAM_TOP + 16}" width="6" height="2" fill="${METAL_LIGHT}"/>`;
+
+  // ── READING DISPLAY ────────────────────────────────────────────────
+  const readingText = value.toFixed(3) + '"';
+  s += `<rect x="${W - 110}" y="8" width="100" height="30" rx="4" fill="#0a1628" stroke="${ACCENT}" stroke-width="1.5"/>`;
+  s += `<text x="${W - 60}" y="28" text-anchor="middle" font-size="14" font-family="monospace" font-weight="bold" fill="${ACCENT}">${readingText}</text>`;
+
+  // ── LOCKED OVERLAY ────────────────────────────────────────────────
+  if(locked){
+    s += `<text x="${W - 10}" y="20" text-anchor="end" font-family="sans-serif" font-weight="bold" font-size="13" fill="#cc0000">🔒 LOCKED</text>`;
+  }
+
+  // ── LABELS ────────────────────────────────────────────────────────
+  s += `<text x="${SCALE_LEFT + SCALE_W / 2}" y="${BEAM_TOP + 60}" text-anchor="middle" font-size="9" font-family="monospace" fill="${METAL_DARK}" opacity="0.6">IMPERIAL SCALE</text>`;
+  s += `<text x="${jawX - SJ_W/2 + 20}" y="${VY + VH + 12}" text-anchor="middle" font-size="8" font-family="monospace" fill="${METAL_LIGHT}" opacity="0.7">VERNIER (0.001")</text>`;
+
+  svg.innerHTML = s;
+
+  // ── DRAG INTERACTION ─────────────────────────────────────────────
+  const s_obj = SIM[side];
+  if(!s_obj.locked){
+    svg.onmousedown = svg.ontouchstart = (e) => {
+      if(s_obj.locked || s_obj.animating) return;
+      s_obj.dragging = true;
+      s_obj.lastX = (e.touches ? e.touches[0].clientX : e.clientX);
+      e.preventDefault();
+    };
+    svg.onmousemove = svg.ontouchmove = (e) => {
+      if(!s_obj.dragging) return;
+      const cx = e.touches ? e.touches[0].clientX : e.clientX;
+      const dx = cx - s_obj.lastX;
+      s_obj.lastX = cx;
+      // Scale drag: SVG width vs element width
+      const rect = svg.getBoundingClientRect();
+      const scale = W / rect.width;
+      const dInch = (dx * scale) / PX_PER_INCH;
+      s_obj.value = Math.max(0, Math.min(5.999, Math.round((s_obj.value + dInch) * 1000) / 1000));
+      caliperRedraw(side);
+      e.preventDefault();
+    };
+    svg.onmouseup = svg.ontouchend = () => { s_obj.dragging = false; };
+    svg.onmouseleave = () => { s_obj.dragging = false; };
+  } else {
+    svg.onmousedown = svg.ontouchstart = svg.onmousemove = svg.ontouchmove = null;
+  }
+}
+
+function caliperRedraw(side){
+  const s = SIM[side];
+  caliperSvgDraw(s.value, side, s.showGuide, s.locked);
+}
+
+// ── Instrument switching ──────────────────────────────────────────────
+function instSimSwitchInstrument(){
+  const inst = document.getElementById('instSimInstrument')?.value || 'mic';
+  SIM['inst'].instrument = inst;
+  const micWrap = document.getElementById('instMicWrap');
+  const calWrap = document.getElementById('instCalWrap');
+  const rangeWrap = document.getElementById('instSimRangeWrap');
+  const guideBtn = document.getElementById('instSimGuideBtn');
+  if(inst === 'cal'){
+    if(micWrap) micWrap.style.display = 'none';
+    if(calWrap) calWrap.classList.remove('hidden');
+    if(rangeWrap) rangeWrap.style.display = 'none'; // caliper has no range select
+    if(guideBtn) guideBtn.style.display = '';
+    SIM['inst'].value = calRandomValue();
+    caliperRedraw('inst');
+  } else {
+    if(micWrap) micWrap.style.display = '';
+    if(calWrap) calWrap.classList.add('hidden');
+    if(rangeWrap) rangeWrap.style.display = '';
+    micRenderSide('inst');
+  }
+}
+
+function stuSimSwitchInstrument(){
+  const inst = document.getElementById('stuSimInstrument')?.value || 'mic';
+  SIM['stu'].instrument = inst;
+  const micWrap = document.getElementById('stuMicWrap');
+  const calWrap = document.getElementById('stuCalWrap');
+  const rangeBtns = document.getElementById('stuRangeBtns');
+  if(inst === 'cal'){
+    if(micWrap) micWrap.style.display = 'none';
+    if(calWrap) calWrap.classList.remove('hidden');
+    if(rangeBtns) rangeBtns.style.display = 'none';
+    SIM['stu'].value = calRandomValue();
+    caliperRedraw('stu');
+    const rl = document.getElementById('stuSimRangeLabel');
+    if(rl) rl.textContent = 'Range: 0–6"';
+  } else {
+    if(micWrap) micWrap.style.display = '';
+    if(calWrap) calWrap.classList.add('hidden');
+    if(rangeBtns) rangeBtns.style.display = '';
+    micRenderSide('stu');
+  }
+}
+
+// ── Override simRandomize to handle caliper ───────────────────────────
+const _origSimRandomize = simRandomize;
+simRandomize = function(side){
+  const s = SIM[side];
+  if(s.instrument === 'cal'){
+    s.value = calRandomValue();
+    caliperRedraw(side);
+    const rv = document.getElementById(`${side === 'inst' ? 'inst' : 'stu'}SimRevealVal`);
+    if(rv) rv.classList.add('hidden');
+    const fb = document.getElementById(`${side === 'stu' ? 'stu' : 'inst'}SimFeedback`);
+    if(fb){ fb.classList.add('hidden'); fb.textContent = ''; }
+  } else {
+    _origSimRandomize(side);
+  }
+};
+
+// ── Override simReveal to handle caliper ─────────────────────────────
+const _origSimReveal = simReveal;
+simReveal = function(side){
+  const s = SIM[side];
+  if(s.instrument === 'cal'){
+    const rv = document.getElementById(`${side === 'inst' ? 'instSim' : 'stuSim'}RevealVal`);
+    if(rv){ rv.textContent = s.value.toFixed(3) + '"'; rv.classList.remove('hidden'); }
+  } else {
+    _origSimReveal(side);
+  }
+};
+
+// ── Override simSubmit to route caliper tolerance ─────────────────────
+// Patched below in the existing simSubmit — see tolerance check
+
+// ── Handle live update for caliper ───────────────────────────────────
+function stuSimApplyInstrument(data){
+  // Called from stuSimJoinLive to set the correct instrument
+  const inst = data.instrumentType || 'mic';
+  SIM['stu'].instrument = inst;
+  const instrSel = document.getElementById('stuSimInstrument');
+  if(instrSel) instrSel.value = inst;
+  if(inst === 'cal'){
+    stuSimSwitchInstrument(); // ensure correct wrap shown
+    SIM['stu'].value = data.value || 0;
+    caliperRedraw('stu');
+  }
+  // mic case handled by existing simAnimateTo flow
+}
+
+// ── instSimSendRound: include instrumentType ──────────────────────────
+// Patch instSimSendRound to send instrumentType (done via existing sentAt patch below)
+// ══════════════════════════════════════════════════════════════════════
+// END VERNIER CALIPER ENGINE
+// ══════════════════════════════════════════════════════════════════════
 const MIC_COLLAR = ['#2563eb','#d97706','#059669','#dc2626'];
 
 function micDecompose(value, range){
@@ -14142,7 +15137,8 @@ async function simSubmit(side){
   if(!ans){if(fb){fb.textContent='Enter your reading first.';fb.style.background='rgba(200,50,50,.12)';fb.style.color='var(--wl)';fb.classList.remove('hidden');}return;}
   const parsed=parseFloat(ans);
   if(isNaN(parsed)){if(fb){fb.textContent='Invalid number.';fb.style.background='rgba(200,50,50,.12)';fb.style.color='var(--wl)';fb.classList.remove('hidden');}return;}
-  const correct=Math.abs(parsed-s.value)<=SIM_TOLERANCE;
+  const tol = (s.instrument === 'cal') ? CAL_TOLERANCE : MIC_TOLERANCE;
+  const correct=Math.abs(parsed-s.value)<=tol;
   // Student live-session submission (stu side only)
   if(side==='stu'&&_stuSimLiveMode&&_stuSimRoundId&&stuSession){
     const key=stuSession.uid||safeKey(stuSession.name||'student');
@@ -14335,7 +15331,15 @@ function stuSimHandleLiveUpdate(data){
     _stuSimPendingData = null;
     _stuSimLiveMode    = false;
     _stuSimRoundId     = null;
-    const s = SIM['stu']; s.locked = false;
+    const s = SIM['stu'];
+    s.locked = false;
+    s.instrument = 'mic'; // reset to default
+    const instrSel = document.getElementById('stuSimInstrument');
+    if(instrSel) instrSel.value = 'mic';
+    const micWrap = document.getElementById('stuMicWrap');
+    const calWrap = document.getElementById('stuCalWrap');
+    if(micWrap) micWrap.style.display = '';
+    if(calWrap) calWrap.classList.add('hidden');
     if(s.canvas) s.canvas.style.cursor = 'grab';
     simRedraw('stu');
     if(banner) banner.classList.add('hidden');
@@ -14362,12 +15366,25 @@ async function stuSimJoinLive(){
   const s = SIM['stu'];
   s.showGuide = data.showGuide !== false;
 
-  // Lock the micrometer and set the reading
-  simAnimateTo('stu', data.value, data.range||0, ()=>{
+  // Apply instrument type (caliper or micrometer)
+  const instType = data.instrumentType || 'mic';
+  s.instrument = instType;
+  const instrSel = document.getElementById('stuSimInstrument');
+  if(instrSel) instrSel.value = instType;
+
+  if(instType === 'cal'){
+    // Show caliper, hide micrometer
+    const micWrap = document.getElementById('stuMicWrap');
+    const calWrap = document.getElementById('stuCalWrap');
+    if(micWrap) micWrap.style.display = 'none';
+    if(calWrap) calWrap.classList.remove('hidden');
+    s.value = data.value || 0;
     s.locked = true;
-    if(s.canvas) s.canvas.style.cursor = 'not-allowed';
-    simRedraw('stu');
-  });
+    caliperRedraw('stu');
+  } else {
+    // Normal micrometer animation
+    simAnimateTo('stu', data.value, data.range||0, ()=>{s.locked=true;if(s.canvas)s.canvas.style.cursor='not-allowed';simRedraw('stu');});
+  }
 
   const fb   = document.getElementById('stuSimFeedback');
   const ans  = document.getElementById('stuSimAnswer');
@@ -14391,7 +15408,9 @@ async function stuSimJoinLive(){
   if(revb) revb.disabled = true;
   if(joinBtn) joinBtn.style.display = 'none';
   const exitBtn = document.getElementById('stuSimExitBtn');
-  if(exitBtn) exitBtn.classList.remove('hidden'); // hide Join after joining
+  if(exitBtn) exitBtn.classList.remove('hidden');
+  // Load previous rounds from this session
+  stuSimLoadLiveHistory();
 
   if(stuSession?.uid){
     const key = stuSession.uid || safeKey(stuSession.name||'student');
@@ -14439,6 +15458,12 @@ function instSimDraw(){
 
 async function instSimOnClassChange(){
   const classId=document.getElementById('instSimClassPicker')?.value;
+  // Show grades panel whenever a classroom is picked
+  const gradesWrap = document.getElementById('instSimGradesWrap');
+  if(gradesWrap){
+    if(classId){ gradesWrap.classList.remove('hidden'); instSimLoadGrades(); }
+    else { gradesWrap.classList.add('hidden'); }
+  }
   if(!classId) return;
   const active=await dbGet(`${SIM_PATH(classId)}/currentRound`);
   const sb=document.getElementById('instSimSessionBar');
@@ -14511,7 +15536,7 @@ async function instSimSendRound(){
   _instSimRoundNum++; _instSimRoundId=`r${_instSimRoundNum}`;
   const s=SIM['inst'];
   await dbSet(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}`,{value:s.value,range:s.range,sentAt:ts(),responses:{}});
-  await dbSet(`${SIM_PATH(classId)}/currentRound`,{active:true,value:s.value,range:s.range,roundId:_instSimRoundId,roundNum:_instSimRoundNum,sessionNum:_instSimSessionNum,sentAt:Date.now(),showGuide:SIM['inst'].showGuide!==false});
+  await dbSet(`${SIM_PATH(classId)}/currentRound`,{active:true,value:s.value,range:s.range,instrumentType:s.instrument||'mic',roundId:_instSimRoundId,roundNum:_instSimRoundNum,sessionNum:_instSimSessionNum,sentAt:Date.now(),showGuide:SIM['inst'].showGuide!==false});
   // Mark all enrolled students as initially absent — cleared when they join
   try{
     const students = await dbGet(`classroomStudents/${classId}`) || {};
@@ -14530,6 +15555,7 @@ async function instSimSendRound(){
   document.getElementById('instSimResponses').innerHTML='<div class="empty-state" style="font-size:.75rem">Waiting for students...</div>';
   instSimListenResponses(classId);
   _showInstToast(`📡 Round ${_instSimRoundNum} sent!`,2000);
+  instSimLoadGrades();
 }
 
 async function instSimNextRound(){
@@ -14730,30 +15756,214 @@ function instSimListenResponses(classId){
   });
 }
 
-async function loadInstrumentGradebook(classId,sessionNum){
-  const el=document.getElementById('gradeBook');
-  if(!el) return;
-  el.innerHTML='<div class="empty-state">Loading instrument grades...</div>';
+async function loadSimPerfTab(classId, sessionNum, content){
+  content.innerHTML = '<div class="empty-state">Loading micrometer session data...</div>';
   try{
-    const session=await dbGet(`instrumentSessions/${classId}/sessions/${sessionNum}`)||{};
-    const students=await dbGet(`classroomStudents/${classId}`)||{};
-    const stuList=Object.values(students).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    const rounds=session.rounds||{};
-    const roundNums=Object.keys(rounds).sort((a,b)=>Number(a.replace('r',''))-Number(b.replace('r','')));
-    const total=roundNums.length;
-    if(!total){el.innerHTML='<div class="empty-state">No rounds completed.</div>';return;}
-    const rows=stuList.map(s=>{
-      const key=s.uid||safeKey(s.name);
-      let correct=0,wrong=0;
-      roundNums.forEach(rn=>{const resp=rounds[rn]?.responses?.[key];if(resp){if(resp.correct)correct++;else wrong++;}});
-      const att=correct+wrong;
-      const pct=att?Math.round(correct/att*100):0;
-      const grade=pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
-      const gc=pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
-      return `<tr><td style="font-weight:600;font-size:.9rem;color:var(--blue)">${esc(s.name||key)}</td><td style="font-family:monospace;font-weight:700;color:${pct>=70?'var(--cl)':'var(--wl)'}">${correct}/${att}</td><td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div></div><span style="font-family:monospace;font-size:.75rem">${pct}%</span></div></td><td><span class="grade-pill ${gc}">${grade}</span></td><td style="font-family:monospace;font-size:.72rem">${att}/${total} rounds</td></tr>`;
+    const [session, students, iLog] = await Promise.all([
+      dbGet(`instrumentSessions/${classId}/sessions/${sessionNum}`),
+      dbGet(`classroomStudents/${classId}`),
+      dbGet(`integrityLog/${classId}`)
+    ]);
+    const rounds = session?.rounds || {};
+    const roundEntries = Object.entries(rounds).sort((a,b)=>(a[1].sentAt||0)-(b[1].sentAt||0));
+    const total = roundEntries.length;
+    if(!total){ content.innerHTML='<div class="empty-state">No rounds completed in this session.</div>'; return; }
+
+    // Per-student stats
+    const stuList = Object.entries(students||{}).sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
+    const allScores = [];
+    const stuStats = stuList.map(([key, s]) => {
+      let correct=0, attempted=0;
+      for(const [,round] of roundEntries){
+        const resp = round.responses?.[key];
+        if(resp){ attempted++; if(resp.correct) correct++; }
+      }
+      const pct = attempted ? Math.round(correct/attempted*100) : null;
+      if(pct !== null) allScores.push(pct);
+      return { key, name: s.name||key, correct, attempted, total, pct };
     });
-    el.innerHTML=`<div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-bottom:10px">Instruments Session ${sessionNum} · ${total} round${total!==1?'s':''}</div><table style="width:100%;border-collapse:collapse"><thead><tr style="font-family:monospace;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px 8px">Student</th><th style="text-align:left;padding:6px 8px">Score</th><th style="text-align:left;padding:6px 8px">Progress</th><th style="text-align:left;padding:6px 8px">Grade</th><th style="text-align:left;padding:6px 8px">Rounds</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
-  }catch(e){el.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`;}
+
+    const finished = stuStats.filter(s=>s.attempted>0);
+    if(!finished.length){ content.innerHTML='<div class="empty-state">No student responses recorded yet.</div>'; return; }
+    const avg = Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length);
+    const highest = Math.max(...allScores);
+    const lowest = Math.min(...allScores);
+    const passing = allScores.filter(s=>s>=70).length;
+    const passPct = Math.round(passing/allScores.length*100);
+
+    // Per-round accuracy
+    const roundStats = roundEntries.map(([rId, round], i) => {
+      const resps = Object.values(round.responses||{});
+      const correct = resps.filter(r=>r.correct).length;
+      const pct = resps.length ? Math.round(correct/resps.length*100) : null;
+      return { label:`Round ${round.roundNum||i+1}`, value:round.value, correct, total:resps.length, pct };
+    });
+
+    const hardestRound = [...roundStats].filter(r=>r.pct!==null).sort((a,b)=>a.pct-b.pct)[0];
+    const easiestRound = [...roundStats].filter(r=>r.pct!==null).sort((a,b)=>b.pct-a.pct)[0];
+
+    // Stat cards
+    const statCard = (val, label, sub='') => `<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;text-align:center">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent)">${val}</div>
+      <div style="font-family:monospace;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px">${label}</div>
+      ${sub?`<div style="font-family:monospace;font-size:.62rem;color:var(--muted)">${sub}</div>`:''}
+    </div>`;
+
+    // Per-round table
+    const roundRows = roundStats.map((r,i) => {
+      const col = r.pct===null?'var(--muted)':r.pct>=80?'var(--cl)':r.pct>=60?'var(--accent)':'var(--wl)';
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 12px;font-weight:600">${r.label}</td>
+        <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:.82rem">${r.value?(r.value.toFixed(4)+'"'):'—'}</td>
+        <td style="padding:8px 10px;text-align:center">${r.total} students</td>
+        <td style="padding:8px 10px;text-align:center;font-weight:700;color:${col}">${r.pct!==null?r.pct+'%':'—'}</td>
+        <td style="padding:8px 10px"><div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;max-width:100px"><div style="height:100%;width:${r.pct||0}%;background:${col}"></div></div></td>
+      </tr>`;
+    }).join('');
+
+    // Student rows with integrity
+    const simIntKey = `sim_${sessionNum}`;
+    const stuRows = stuStats.map(s => {
+      const col = s.pct===null?'var(--muted)':s.pct>=80?'var(--cl)':s.pct>=60?'var(--accent)':'var(--wl)';
+      // Integrity: look through all integrityLog keys that start with sim_{sessionNum}
+      let tabs=0, blurs=0, exits=0, rejoins=0, pageClosed=0;
+      if(iLog){
+        for(const [logKey, stuEntries] of Object.entries(iLog)){
+          if(!logKey.startsWith(`sim_${sessionNum}_`)) continue;
+          const evList = Object.values(stuEntries?.[s.key]||{});
+          tabs      += evList.filter(e=>e.type==='tab_switch').length;
+          blurs     += evList.filter(e=>e.type==='window_blur').length;
+          exits     += evList.filter(e=>e.type==='session_exit').length;
+          rejoins   += evList.filter(e=>e.type==='session_rejoin').length;
+          pageClosed+= evList.filter(e=>e.type==='page_close').length;
+        }
+      }
+      const totalFlags = tabs+blurs+exits+rejoins+pageClosed;
+      const intCell = totalFlags > 0
+        ? `<span style="font-family:monospace;font-size:.72rem;color:var(--wl);font-weight:700;cursor:help" title="${tabs} tab switch(es), ${blurs} window left(s), ${exits} exit(s), ${pageClosed} page close(s)">⚠ ${totalFlags}</span>`
+        : `<span style="font-family:monospace;font-size:.72rem;color:var(--cl)">✓</span>`;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 12px;font-weight:600;color:var(--blue)">${esc(s.name)}</td>
+        <td style="padding:8px 10px;text-align:center;font-family:monospace;font-weight:700;color:${col}">${s.pct!==null?s.pct+'%':'—'}</td>
+        <td style="padding:8px 10px;text-align:center;font-family:monospace">${s.correct}/${s.attempted}</td>
+        <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:.75rem;color:var(--muted)">${s.attempted}/${total} rounds</td>
+        <td style="padding:8px 10px;text-align:center">${intCell}</td>
+      </tr>`;
+    }).join('');
+
+    const thSt = 'padding:7px 10px;text-align:left;border-bottom:2px solid var(--border);font-family:monospace;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted)';
+
+    content.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:22px">
+        ${statCard(finished.length,'Students','responded')}
+        ${statCard(avg+'%','Class Average','')}
+        ${statCard(highest+'%','Highest','')}
+        ${statCard(lowest+'%','Lowest','')}
+        ${statCard(passPct+'%','Pass Rate','≥70%')}
+        ${statCard(total,'Total Rounds','')}
+      </div>
+
+      <div style="margin-bottom:22px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px">ROUND-BY-ROUND ACCURACY</div>
+        <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.82rem">
+          <thead><tr style="background:var(--panel2)">
+            <th style="${thSt}">Round</th><th style="${thSt}">Reading</th><th style="${thSt}">Responses</th><th style="${thSt}">Accuracy</th><th style="${thSt}">Bar</th>
+          </tr></thead><tbody>${roundRows}</tbody>
+        </table></div>
+      </div>
+
+      <div style="margin-bottom:22px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px">STUDENT RESULTS & INTEGRITY</div>
+        <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.82rem">
+          <thead><tr style="background:var(--panel2)">
+            <th style="${thSt}">Student</th><th style="${thSt}">Accuracy</th><th style="${thSt}">Correct</th><th style="${thSt}">Rounds</th><th style="${thSt}">Integrity</th>
+          </tr></thead><tbody>${stuRows}</tbody>
+        </table></div>
+      </div>
+
+      <div id="cdPerfAISummary"><div class="empty-state" style="padding:16px">Generating instructor insights...</div></div>`;
+
+    // AI analysis
+    const hardInfo = hardestRound ? `Hardest round: ${hardestRound.label} (${hardestRound.value?.toFixed(4)}"): ${hardestRound.pct}% correct.` : '';
+    const easyInfo = easiestRound ? `Easiest round: ${easiestRound.label} (${easiestRound.value?.toFixed(4)}"): ${easiestRound.pct}% correct.` : '';
+    const prompt = `You are an aviation maintenance training instructor assistant. A class of ${finished.length} students just completed Micrometer Session ${sessionNum} with ${total} live reading rounds. Class average accuracy: ${avg}%. Pass rate (≥70%): ${passPct}%. ${hardInfo} ${easyInfo} Common errors: students averaging below 60% may struggle with vernier scale reading or thimble graduation identification. Write a concise instructor report (3-4 short paragraphs) with practical recommendations for re-teaching or follow-up. Be direct. Plain text, no markdown.`;
+    try{
+      const resp = await fetch('https://api.classroomamt.com/api/anthropic',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,messages:[{role:'user',content:prompt}]})});
+      const data = await resp.json();
+      const summary = data.content?.[0]?.text||'';
+      const aiEl = document.getElementById('cdPerfAISummary');
+      if(aiEl && summary) aiEl.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r);padding:18px 20px"><div style="font-family:monospace;font-size:.83rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px">🤖 Instructor Insights</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:.97rem;line-height:1.7;color:var(--text);white-space:pre-line">${esc(summary)}</div></div>`;
+      else if(aiEl) aiEl.innerHTML='';
+    }catch(e){ const aiEl=document.getElementById('cdPerfAISummary'); if(aiEl) aiEl.innerHTML=''; }
+  }catch(e){ content.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
+}
+
+async function loadInstrumentGradebook(classId, sessionNum){
+  const el = document.getElementById('gradeBook');
+  if(!el) return;
+  el.innerHTML = '<div class="empty-state">Loading micrometer grades...</div>';
+  try{
+    const [session, students, iLog] = await Promise.all([
+      dbGet(`instrumentSessions/${classId}/sessions/${sessionNum}`),
+      dbGet(`classroomStudents/${classId}`),
+      dbGet(`integrityLog/${classId}`)
+    ]);
+    const stuList = Object.values(students||{}).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const stuKeys = Object.keys(students||{});
+    const rounds = session?.rounds || {};
+    const roundEntries = Object.entries(rounds).sort((a,b)=>(a[1].sentAt||0)-(b[1].sentAt||0));
+    const total = roundEntries.length;
+    if(!total){ el.innerHTML='<div class="empty-state">No rounds completed.</div>'; return; }
+
+    const rows = stuList.map(s => {
+      const key = s.uid || safeKey(s.name||'');
+      let correct=0, attempted=0;
+      for(const [,round] of roundEntries){
+        const resp = round.responses?.[key];
+        if(resp){ attempted++; if(resp.correct) correct++; }
+      }
+      const pct = attempted ? Math.round(correct/attempted*100) : 0;
+      const grade = attempted ? (pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F') : '—';
+      const gc = pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
+      const col = pct>=70?'var(--cl)':'var(--wl)';
+
+      // Integrity
+      let tabs=0, blurs=0, exits=0, pageClosed=0;
+      if(iLog){
+        for(const [logKey, stuEntries] of Object.entries(iLog)){
+          if(!logKey.startsWith(`sim_${sessionNum}_`)) continue;
+          const evList = Object.values(stuEntries?.[key]||{});
+          tabs      += evList.filter(e=>e.type==='tab_switch').length;
+          blurs     += evList.filter(e=>e.type==='window_blur').length;
+          exits     += evList.filter(e=>e.type==='session_exit').length;
+          pageClosed+= evList.filter(e=>e.type==='page_close').length;
+        }
+      }
+      const totalFlags = tabs+blurs+exits+pageClosed;
+      const intCell = totalFlags>0
+        ? `<td title="${tabs} tab switch, ${blurs} window left, ${exits} exit, ${pageClosed} page close"><span style="font-family:monospace;font-size:.75rem;color:var(--wl);font-weight:700;cursor:help">⚠ ${totalFlags}</span></td>`
+        : `<td style="font-family:monospace;font-size:.75rem;color:var(--cl)">✓</td>`;
+
+      return `<tr>
+        <td style="font-weight:600;font-size:.9rem;color:var(--blue)">${esc(s.name||key)}</td>
+        <td style="font-family:monospace;font-weight:700;color:${col}">${correct}/${attempted}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div></div><span style="font-family:monospace;font-size:.75rem">${attempted?pct+'%':'—'}</span></div></td>
+        <td>${attempted?`<span class="grade-pill ${gc}">${grade}</span>`:'—'}</td>
+        <td style="font-family:monospace;font-size:.72rem">${attempted}/${total} rounds</td>
+        ${intCell}
+      </tr>`;
+    });
+
+    el.innerHTML = `
+      <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-bottom:10px">📐 Micrometer Session ${sessionNum} · ${total} round${total!==1?'s':''}</div>
+      <table class="grade-table">
+        <thead><tr>
+          <th>Student</th><th>Score</th><th>Accuracy</th><th>Grade</th><th>Rounds</th>
+          <th style="font-family:monospace;font-size:.7rem;letter-spacing:1px">Integrity</th>
+        </tr></thead>
+        <tbody>${rows.join('')}</tbody>
+      </table>`;
+  }catch(e){ el.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
 }
 // ══════════════════════════════════════════════════════════════════
 // END MEASUREMENT SIMULATOR
