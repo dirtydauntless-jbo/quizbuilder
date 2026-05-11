@@ -2685,7 +2685,117 @@ function initInstApp(){
   }).catch(e => { console.error('loadClassrooms failed:', e); instSwitchTabRaw('classrooms'); });
 }
 
-// ── MASTER DASHBOARD ─────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+// ACRONYM QUIZ SYSTEM
+// Pulls from published Google Sheets CSV, supports MC and FIB modes
+// ══════════════════════════════════════════════════════════════════════
+
+const ACRONYM_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSVa2yCD5vNJ8JD8giIUuF7WS_lJLQcXFL29OalZBKEz6BD6KAcInwLwRLHKFNxfg/pub?output=csv';
+let _acronymCache = null;
+let _acronymCacheTime = 0;
+const ACRONYM_CACHE_MS = 5 * 60 * 1000; // 5 min
+
+async function fetchAcronyms(){
+  if(_acronymCache && Date.now() - _acronymCacheTime < ACRONYM_CACHE_MS) return _acronymCache;
+  try{
+    const res = await fetch(ACRONYM_CSV_URL);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+
+    // Robust CSV parser — handles quoted fields with commas inside
+    function parseCSVRow(row){
+      const fields = [];
+      let cur = '', inQuote = false;
+      for(let i = 0; i < row.length; i++){
+        const c = row[i];
+        if(c === '"'){
+          if(inQuote && row[i+1] === '"'){ cur += '"'; i++; }
+          else inQuote = !inQuote;
+        } else if(c === ',' && !inQuote){
+          fields.push(cur.trim()); cur = '';
+        } else { cur += c; }
+      }
+      fields.push(cur.trim());
+      return fields;
+    }
+
+    const rows = text.trim().split('\n').map(parseCSVRow);
+    // Skip header row if first cell looks like a label
+    const startRow = /^(acronym|abbr|term|abbreviation|acr)$/i.test(rows[0]?.[0]) ? 1 : 0;
+
+    const acronyms = [];
+    for(let i = startRow; i < rows.length; i++){
+      const cols = rows[i];
+      const acr     = (cols[0]||'').trim();
+      const meaning = (cols[1]||'').trim(); // Column B = full meaning
+      if(acr && meaning) acronyms.push({ acronym: acr, meaning });
+    }
+    _acronymCache = acronyms;
+    _acronymCacheTime = Date.now();
+    console.log(`Acronyms loaded: ${acronyms.length} entries`);
+    return acronyms;
+  }catch(e){
+    console.warn('Acronym fetch failed:', e.message);
+    return _acronymCache || [];
+  }
+}
+
+function shuffle(arr){ return [...arr].sort(()=>Math.random()-0.5); }
+
+async function buildAcronymQuestions(qType, count, choiceCount){
+  const all = await fetchAcronyms();
+  if(!all.length) return null;
+  const pool = shuffle(all).slice(0, Math.min(count, all.length));
+  const isMC = qType === 'acr_mc';
+
+  return pool.map((item, idx) => {
+    // Randomly ask either direction: acronym→meaning OR meaning→acronym
+    const askMeaning = Math.random() > 0.5;
+    const q_text = askMeaning
+      ? `What does the acronym "${item.acronym}" stand for?`
+      : `Which acronym stands for "${item.meaning}"?`;
+    const answer = askMeaning ? item.meaning : item.acronym;
+
+    if(!isMC){
+      return { id: idx, q: q_text, answer, type: 'acr_fib',
+               acronym: item.acronym, meaning: item.meaning, askMeaning };
+    }
+
+    // MC: pick distractors from pool
+    const distractors = shuffle(all.filter(a => a !== item))
+      .slice(0, (choiceCount||3) - 1)
+      .map(a => askMeaning ? a.meaning : a.acronym);
+    const options = shuffle([answer, ...distractors]);
+    const correct = options.indexOf(answer);
+    return { id: idx, q: q_text, answer, type: 'acr_mc',
+             options, correct, acronym: item.acronym, meaning: item.meaning, askMeaning };
+  });
+}
+
+function gradeAcronymFIB(studentAnswer, correctAnswer){
+  if(!studentAnswer) return false;
+  // Lenient grading:
+  // 1. Case insensitive
+  // 2. Ignore leading/trailing whitespace
+  // 3. Ignore punctuation differences (hyphens, slashes, periods)
+  // 4. Allow minor spelling errors via Levenshtein distance
+  const normalize = s => s.trim().toLowerCase().replace(/[-\/\.\,\(\)]/g,' ').replace(/\s+/g,' ').trim();
+  const stu = normalize(studentAnswer);
+  const cor = normalize(correctAnswer);
+  if(stu === cor) return true;
+  // Allow up to 2 character edits for answers > 8 chars, 1 edit for shorter
+  const maxEdits = cor.length > 8 ? 2 : 1;
+  return levenshtein(stu, cor) <= maxEdits;
+}
+
+function levenshtein(a, b){
+  const m = a.length, n = b.length;
+  const dp = Array.from({length:m+1}, (_,i) => Array.from({length:n+1}, (_,j) => i===0?j:j===0?i:0));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+// ── END ACRONYM QUIZ SYSTEM ───────────────────────────────────────────
 async function masterDashLoad(){
   if(!_isMasterAdmin) return;
   const el = document.getElementById('masterDashCards');
@@ -4600,9 +4710,10 @@ async function loadPerfTab(){
       if(!q) return;
       qAttempts[i]++;
       // MC: answer index must match q.correct
-      // FIB: compare string (AI grades not available server-side, use string match)
+      // FIB: compare string
       let ok = false;
-      if(q.type === 'mc') ok = (ans === q.correct);
+      if(q.type === 'mc' || q.type === 'acr_mc') ok = (ans === q.correct);
+      else if(q.type === 'acr_fib') ok = gradeAcronymFIB(String(ans||''), q.answer||q.a||'');
       else {
         const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
         ok = norm(ans) === norm(q.answer || q.a || '');
@@ -4901,7 +5012,8 @@ async function loadCdPerfTab(){
       if(!q) return;
       qAttempts[i]++;
       let ok = false;
-      if(q.type === 'mc') ok = (ans === q.correct);
+      if(q.type === 'mc' || q.type === 'acr_mc') ok = (ans === q.correct);
+      else if(q.type === 'acr_fib') ok = gradeAcronymFIB(String(ans||''), q.answer||q.a||'');
       else { const norm = v => String(v||'').toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim(); ok = norm(ans) === norm(q.answer||q.a||''); }
       if(ok) qCorrect[i]++;
     });
@@ -5535,7 +5647,7 @@ async function loadAssignedQuizzes(classId){
           </div>
           <div style="font-family:monospace;font-size:.6rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap">
             <span>${e.quiz.questions?.length||0} questions</span>
-            <span class="tag ${e.quiz.questionType==='fib'?'tag-fib':'tag-mc'}">${e.quiz.questionType==='fib'?'Fill-in-Blank':'Multiple Choice'}</span>
+            <span class="tag ${e.quiz.questionType==='fib'?'tag-fib':e.quiz.questionType?.startsWith('acr')?'tag-mc':'tag-mc'}">${e.quiz.questionType==='fib'?'Fill-in-Blank':e.quiz.questionType==='acr_mc'?'✈ Acronym MC':e.quiz.questionType==='acr_fib'?'✈ Acronym FIB':'Multiple Choice'}</span>
             <span class="tag ${e.assignTo==='all'?'tag-all':'tag-mc'}">${e.assignTo==='all'?'All Students':'Selected'}</span>
           </div>
         </div>
@@ -5862,13 +5974,19 @@ function renderBuilderPanel(quiz, id){
             <select class="select" id="qzType" onchange="onTypeChange()">
               <option value="mc" ${(quiz.questionType||'mc')==='mc'?'selected':''}>Multiple Choice (A/B/C)</option>
               <option value="fib" ${quiz.questionType==='fib'?'selected':''}>Fill in the Blank</option>
+              <option value="acr_mc" ${quiz.questionType==='acr_mc'?'selected':''}>✈ Acronym Quiz — Multiple Choice</option>
+              <option value="acr_fib" ${quiz.questionType==='acr_fib'?'selected':''}>✈ Acronym Quiz — Fill in the Blank</option>
             </select>
           </div>
           <div>
             <label class="label">Number of Questions</label>
             <input class="input" id="qzCount" type="number" min="1" max="100" value="${quiz.questionCount||10}" />
           </div>
-          <div id="choicesWrap" style="display:${(quiz.questionType||'mc')==='fib'?'none':'block'}">
+          <div id="acrQuizNote" style="display:none;background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.2);border-radius:6px;padding:10px 14px;font-family:monospace;font-size:.75rem;color:var(--blue)">
+            ✈ Questions will be pulled live from the AMT Acronyms spreadsheet.<br>
+            No topic selection needed — acronyms are fetched automatically when the quiz is taken.<br>
+            The spreadsheet is checked each time so new acronyms appear automatically.
+          </div>
             <label class="label">Answer Choices</label>
             <select class="select" id="qzChoices">
               <option value="2" ${quiz.choiceCount==2?'selected':''}>2 (A, B)</option>
@@ -5891,7 +6009,7 @@ function renderBuilderPanel(quiz, id){
           </div>
         </div>
       </div>
-      <div class="card">
+      <div class="card" id="topicsWrap">
         <label class="label">Topics</label>
         <div class="topic-grid">${topicHTML}</div>
       </div>
@@ -5923,8 +6041,15 @@ function renderBuilderPanel(quiz, id){
 }
 
 function onTypeChange(){
-  const fib = document.getElementById('qzType')?.value === 'fib';
-  if(document.getElementById('choicesWrap')) document.getElementById('choicesWrap').style.display = fib?'none':'block';
+  const t = document.getElementById('qzType')?.value || 'mc';
+  const isAcr = t.startsWith('acr_');
+  const isMC  = t === 'mc' || t === 'acr_mc';
+  const cw = document.getElementById('choicesWrap');
+  const tw = document.getElementById('topicsWrap');
+  const an = document.getElementById('acrQuizNote');
+  if(cw) cw.style.display = isMC ? 'block' : 'none';
+  if(tw) tw.style.display = isAcr ? 'none' : 'block';
+  if(an) an.style.display = isAcr ? 'block' : 'none';
 }
 
 function expandQuizPreview(quizId){
@@ -6036,6 +6161,27 @@ Enter number:`);
 
 async function generateAndSaveQuiz(id){
   const { title, qType, qCount, choiceCount, topics } = await saveCurrentSettings(id);
+
+  // ── ACRONYM QUIZ ──────────────────────────────────────────────────
+  if(qType === 'acr_mc' || qType === 'acr_fib'){
+    show('genOverlay');
+    const progEl = document.getElementById('genProg');
+    if(progEl) progEl.textContent = 'Fetching AMT acronyms from spreadsheet...';
+    try{
+      const questions = await buildAcronymQuestions(qType, qCount, choiceCount);
+      if(!questions || !questions.length){
+        hide('genOverlay');
+        alert('Could not fetch acronyms. Make sure the spreadsheet is published publicly.\n\nURL: ' + ACRONYM_CSV_URL);
+        return;
+      }
+      await dbUpdate(`quizzes/${instUser.uid}/${id}`, { questions, updatedAt:Date.now() });
+      hide('genOverlay');
+      selectQuiz(id); loadQuizBank();
+      openPrintPreview(id, true);
+    }catch(e){ hide('genOverlay'); alert('Acronym quiz error: ' + e.message); }
+    return;
+  }
+
   if(!topics.length){ alert('Please select at least one topic.'); return; }
 
   let pool = [];
@@ -13705,16 +13851,24 @@ function acsPredictPracticals(studentCodes){
 
   const scored = PRACTICALS.map(p => {
     const matchCount = p.codes.filter(c => codeSet.has(c)).length;
-    const matchRatio = matchCount / p.codes.length;
-    // Option A: base frequency score + per-code-match boost
-    // Zero-match practicals stay visible so occ growth from new data is reflected
+    const matchRatio = matchCount / Math.max(p.codes.length, 1);
+    // Score: frequency × base tier weight + code match bonus
     const score = (p.occ * TIER_SCORE[p.tier]) + (matchCount * 2);
     return { ...p, matchCount, matchRatio, score };
   });
 
-  // Sort by score descending, show all with occ >= 1 or any code match
   scored.sort((a,b) => b.score - a.score);
-  return scored.filter(p => p.score >= 1);
+  const filtered = scored.filter(p => p.score >= 1);
+
+  // Recalculate tier dynamically from score distribution
+  // Top 25% = HIGH, next 35% = MED, bottom 40% = LOW
+  const total = filtered.length;
+  filtered.forEach((p, i) => {
+    const pct = i / total;
+    p.tier = pct < 0.25 ? 'high' : pct < 0.60 ? 'medium' : 'low';
+  });
+
+  return filtered;
 }
 
 function acsRenderPracticals(studentCodes){
@@ -14638,8 +14792,136 @@ function caliperSvgBody(value, locked, side){
 
 // ── Zoom panel matching reference diagram ─────────────────────────────────
 function caliperSvgZoom(d, value, showGuide, locked, side){
-  // ViewBox 0 0 920 280
   const W = 920, H = 280;
+
+  const BG        = '#f8f6f0';
+  const TICK_COL  = '#222';
+  const VER_COL   = '#222';
+  const GUIDE     = '#cc0000';
+  const ACCENT    = '#f0a500';
+  const LABEL_COL = '#111';
+
+  let s = `<rect width="${W}" height="${H}" fill="${BG}"/>`;
+
+  // Layout
+  const BASE_Y   = 110;
+  const TICK_SM  = 22;
+  const TICK_MED = 36;
+  const TICK_LG  = 56;
+  const VER_TOP  = 168;
+  const VER_BASE = 200;
+  const VER_SM   = 16;
+  const VER_LG   = 30;
+
+  const PPI = 220;           // px per inch
+  const viewLeft = value - 0.4;
+  const vx = (v) => 60 + (v - viewLeft) * PPI;
+
+  // Vernier physics:
+  // 25 vernier divisions span 24 main divisions (each 0.025")
+  // So 1 vernier div = (24/25)*0.025" in real space = (24/25)*0.025*PPI px
+  const VER_DIV_PX = (24.0/25.0) * 0.025 * PPI;
+
+  // The vernier 0-line is fixed at the jaw position
+  const ver0X = vx(value);
+
+  // The continuous fractional overshoot past the last 0.025" main tick
+  // This is what actually drives the smooth vernier position
+  const lastMainTick = Math.floor(value / 0.025) * 0.025;
+  const overshoot = value - lastMainTick;  // 0.000 to 0.024999" continuous
+
+  // ── MAIN SCALE BASELINE ─────────────────────────────────────────
+  s += `<line x1="20" y1="${BASE_Y}" x2="${W-20}" y2="${BASE_Y}" stroke="${TICK_COL}" stroke-width="2.5"/>`;
+
+  // ── MAIN SCALE TICKS — only AT or RIGHT of ver0X (jaw position) ──
+  // No ticks to the left of the 0-line (jaw is closed on that side)
+  const tickStart = Math.ceil(value / 0.025) * 0.025;
+  for(let v = tickStart; v <= viewLeft + (W-60)/PPI + 0.05; v = Math.round((v+0.025)*10000)/10000){
+    const x = vx(v);
+    if(x < 20 || x > W-20) continue;
+
+    const isWhole = Math.abs(v % 1) < 0.0005 || Math.abs(v%1-1) < 0.0005;
+    const isTenth = !isWhole && Math.abs(Math.round(v*10)/10 - v) < 0.0005;
+
+    const tH = isWhole ? TICK_LG : isTenth ? TICK_MED : TICK_SM;
+    const tW = isWhole ? 3 : isTenth ? 2 : 1.5;
+
+    s += `<rect x="${x-tW/2}" y="${BASE_Y}" width="${tW}" height="${tH}" fill="${TICK_COL}"/>`;
+
+    if(isWhole){
+      s += `<text x="${x}" y="${BASE_Y-14}" text-anchor="middle" font-size="34" font-family="Arial Black,Arial,sans-serif" font-weight="900" fill="${LABEL_COL}">${Math.round(v)}</text>`;
+    } else if(isTenth){
+      const tenthNum = Math.round((v%1)*10);
+      if(tenthNum > 0){
+        s += `<text x="${x}" y="${BASE_Y-10}" text-anchor="middle" font-size="17" font-family="Arial,sans-serif" fill="${LABEL_COL}">${tenthNum}</text>`;
+      }
+    }
+  }
+
+  // Draw a tick AT the jaw position (the "0" reference line)
+  // This is the vernier 0-line — always visible
+  s += `<rect x="${ver0X-1.5}" y="${BASE_Y}" width="3" height="${TICK_LG}" fill="${ACCENT}"/>`;
+
+  // ── SEPARATOR ────────────────────────────────────────────────────
+  s += `<text x="${W/2}" y="${VER_TOP-2}" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="#778" font-style="italic">Vernier scale (0.001")</text>`;
+  s += `<line x1="20" y1="${VER_TOP+8}" x2="${W-20}" y2="${VER_TOP+8}" stroke="#bbb" stroke-width="1"/>`;
+
+  // ── VERNIER BASELINE ─────────────────────────────────────────────
+  s += `<line x1="20" y1="${VER_BASE}" x2="${W-20}" y2="${VER_BASE}" stroke="${VER_COL}" stroke-width="2.5"/>`;
+
+  // ── VERNIER TICKS — CONTINUOUS SMOOTH POSITION ───────────────────
+  // Key insight: The vernier 0 is at ver0X.
+  // Vernier tick i is at: ver0X + i*VER_DIV_PX
+  // The COINCIDENT tick is the one where vernier tick aligns with a main scale tick.
+  // Main scale ticks are at: vx(lastMainTick + n*0.025) for integer n
+  // Vernier tick i aligns with main tick n when:
+  //   ver0X + i*VER_DIV_PX = vx(lastMainTick + n*0.025)
+  // Since overshoot = value - lastMainTick, and vx(lastMainTick) = ver0X - overshoot*PPI:
+  //   ver0X + i*VER_DIV_PX = ver0X - overshoot*PPI + n*0.025*PPI
+  // The coincident tick index i matches d.vernier (already computed from calDecompose)
+  // But we position ALL ticks continuously based on i*VER_DIV_PX from ver0X
+
+  for(let i = 0; i <= 25; i++){
+    // Continuous position — slides smoothly with every drag pixel
+    const tvx = ver0X + i * VER_DIV_PX;
+    if(tvx < 20 || tvx > W-20) continue;
+
+    const isMaj = i % 5 === 0;
+    const tH = isMaj ? VER_LG : VER_SM;
+    const tW = isMaj ? 2.5 : 1.5;
+    const isCoin = i === d.vernier;  // highlight the coincident tick
+    const col = isCoin ? GUIDE : VER_COL;
+
+    s += `<rect x="${tvx-tW/2}" y="${VER_BASE}" width="${tW}" height="${tH}" fill="${col}"/>`;
+
+    if(isMaj){
+      s += `<text x="${tvx}" y="${VER_BASE+tH+16}" text-anchor="middle" font-size="15" font-family="Arial,sans-serif" font-weight="${isCoin?'bold':'normal'}" fill="${isCoin?GUIDE:LABEL_COL}">${i}</text>`;
+    }
+  }
+
+  // ── RED GUIDE LINE + ARROW ───────────────────────────────────────
+  if(showGuide){
+    const mainX = vx(lastMainTick + d.vernier * 0.025); // main scale line that aligns
+    // Only draw if it's in the visible area
+    if(mainX >= 20 && mainX <= W-20){
+      s += `<line x1="${mainX}" y1="${BASE_Y-2}" x2="${mainX}" y2="${VER_BASE+VER_LG+4}" stroke="${GUIDE}" stroke-width="2.5"/>`;
+      s += `<polygon points="${mainX-7},${BASE_Y-24} ${mainX+7},${BASE_Y-24} ${mainX},${BASE_Y-2}" fill="${GUIDE}"/>`;
+      s += `<text x="${mainX}" y="${BASE_Y-30}" text-anchor="middle" font-size="11" font-family="monospace" fill="${GUIDE}" font-weight="bold">${lastMainTick.toFixed(3)}"</text>`;
+      s += `<text x="${mainX}" y="${VER_BASE+VER_LG+36}" text-anchor="middle" font-size="11" font-family="monospace" fill="${GUIDE}" font-weight="bold">+.00${d.vernier}"</text>`;
+    }
+  }
+
+  // ── READING BOX ──────────────────────────────────────────────────
+  const readStr = value.toFixed(3)+'"';
+  s += `<rect x="${W/2-95}" y="${H-38}" width="190" height="32" rx="5" fill="#0a1628" stroke="${ACCENT}" stroke-width="2"/>`;
+  s += `<text x="${W/2}" y="${H-16}" text-anchor="middle" font-size="18" font-family="monospace" font-weight="bold" fill="${ACCENT}">${readStr}</text>`;
+
+  const mainPart = lastMainTick;
+  s += `<text x="12" y="${H-16}" font-size="11" font-family="monospace" fill="#889">${Math.floor(value)}" + .${(mainPart%1).toFixed(3).slice(2)} + .00${d.vernier} = ${readStr}</text>`;
+  s += `<text x="${W-10}" y="${H-16}" text-anchor="end" font-size="11" font-family="monospace" fill="${locked?'#cc0000':'#99a'}">${locked?'🔒 LOCKED':'← drag →'}</text>`;
+
+  return s;
+}
 
   // Colors
   const BG        = '#f8f6f0';
@@ -14777,7 +15059,7 @@ function caliperAttachDrag(svgId, side){
     s_obj.lastX = cx;
     const rect = svg.getBoundingClientRect();
     const scale = 920 / rect.width;
-    const PX_PER_INCH = 120;
+    const PX_PER_INCH = 220;  // must match PPI in caliperSvgZoom
     const dInch = (dx * scale) / PX_PER_INCH;
     s_obj.value = Math.max(0, Math.min(5.999, Math.round((s_obj.value + dInch) * 1000) / 1000));
     caliperRedraw(side);
