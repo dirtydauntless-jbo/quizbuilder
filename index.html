@@ -2701,74 +2701,66 @@ async function fetchAcronyms(){
     const res = await fetch(ACRONYM_CSV_URL);
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
+    if(!text || text.trim().length < 3) throw new Error('Empty spreadsheet response');
 
-    // Robust CSV parser — handles quoted fields with commas inside
-    function parseCSVRow(row){
-      const fields = [];
-      let cur = '', inQuote = false;
-      for(let i = 0; i < row.length; i++){
-        const c = row[i];
-        if(c === '"'){
-          if(inQuote && row[i+1] === '"'){ cur += '"'; i++; }
-          else inQuote = !inQuote;
-        } else if(c === ',' && !inQuote){
-          fields.push(cur.trim()); cur = '';
-        } else { cur += c; }
+    // Parse CSV with quoted field support
+    function parseRow(row){
+      const f=[]; let cur='', q=false;
+      for(let i=0;i<row.length;i++){
+        const c=row[i];
+        if(c==='"'){if(q&&row[i+1]==='"'){cur+='"';i++;}else q=!q;}
+        else if(c===','&&!q){f.push(cur.trim());cur='';}
+        else cur+=c;
       }
-      fields.push(cur.trim());
-      return fields;
+      f.push(cur.trim()); return f;
     }
 
-    const rows = text.trim().split('\n').map(parseCSVRow);
-    // Skip header row if first cell looks like a label
-    const startRow = /^(acronym|abbr|term|abbreviation|acr)$/i.test(rows[0]?.[0]) ? 1 : 0;
-
+    const rows = text.trim().split(/\r?\n/).map(parseRow);
+    const startRow = /^(acronym|abbr|term|abbreviation|acr|word)$/i.test(rows[0]?.[0]||'') ? 1 : 0;
     const acronyms = [];
-    for(let i = startRow; i < rows.length; i++){
-      const cols = rows[i];
-      const acr     = (cols[0]||'').trim();
-      const meaning = (cols[1]||'').trim(); // Column B = full meaning
-      if(acr && meaning) acronyms.push({ acronym: acr, meaning });
+    for(let i=startRow;i<rows.length;i++){
+      const acr=(rows[i][0]||'').trim(), meaning=(rows[i][1]||'').trim();
+      if(acr && meaning && acr.length<25) acronyms.push({acronym:acr, meaning});
     }
+    if(!acronyms.length) throw new Error(`No valid rows found. Check that Column A = acronym, Column B = meaning. Got ${rows.length} rows.`);
     _acronymCache = acronyms;
     _acronymCacheTime = Date.now();
-    console.log(`Acronyms loaded: ${acronyms.length} entries`);
+    console.log(`✓ Acronyms loaded: ${acronyms.length}`);
     return acronyms;
   }catch(e){
-    console.warn('Acronym fetch failed:', e.message);
-    return _acronymCache || [];
+    console.error('fetchAcronyms error:', e.message);
+    if(_acronymCache&&_acronymCache.length) return _acronymCache;
+    throw e; // re-throw so caller can show message
   }
 }
 
-function shuffle(arr){ return [...arr].sort(()=>Math.random()-0.5); }
-
 async function buildAcronymQuestions(qType, count, choiceCount){
   const all = await fetchAcronyms();
-  if(!all.length) return null;
-  const pool = shuffle(all).slice(0, Math.min(count, all.length));
+  if(!all||!all.length) return null;
   const isMC = qType === 'acr_mc';
+  const shuffled = [...all].sort(()=>Math.random()-0.5);
+  const pool = shuffled.slice(0, Math.min(count, all.length));
 
   return pool.map((item, idx) => {
-    // Randomly ask either direction: acronym→meaning OR meaning→acronym
     const askMeaning = Math.random() > 0.5;
     const q_text = askMeaning
-      ? `What does the acronym "${item.acronym}" stand for?`
+      ? `What does "${item.acronym}" stand for?`
       : `Which acronym stands for "${item.meaning}"?`;
     const answer = askMeaning ? item.meaning : item.acronym;
 
     if(!isMC){
-      return { id: idx, q: q_text, answer, type: 'acr_fib',
-               acronym: item.acronym, meaning: item.meaning, askMeaning };
+      return {id:idx, q:q_text, answer, type:'acr_fib',
+              acronym:item.acronym, meaning:item.meaning, askMeaning};
     }
 
-    // MC: pick distractors from pool
-    const distractors = shuffle(all.filter(a => a !== item))
-      .slice(0, (choiceCount||3) - 1)
-      .map(a => askMeaning ? a.meaning : a.acronym);
-    const options = shuffle([answer, ...distractors]);
+    const distractors = [...all].filter(a=>a!==item)
+      .sort(()=>Math.random()-0.5)
+      .slice(0, Math.max(1,(choiceCount||3)-1))
+      .map(a=>askMeaning?a.meaning:a.acronym);
+    const options = [answer,...distractors].sort(()=>Math.random()-0.5);
     const correct = options.indexOf(answer);
-    return { id: idx, q: q_text, answer, type: 'acr_mc',
-             options, correct, acronym: item.acronym, meaning: item.meaning, askMeaning };
+    return {id:idx, q:q_text, answer, type:'acr_mc',
+            options, correct, acronym:item.acronym, meaning:item.meaning, askMeaning};
   });
 }
 
@@ -6171,7 +6163,7 @@ async function generateAndSaveQuiz(id){
       const questions = await buildAcronymQuestions(qType, qCount, choiceCount);
       if(!questions || !questions.length){
         hide('genOverlay');
-        alert('Could not fetch acronyms. Make sure the spreadsheet is published publicly.\n\nURL: ' + ACRONYM_CSV_URL);
+        alert('Could not load acronyms from the spreadsheet.\n\nMake sure the sheet is published as CSV:\nFile → Share → Publish to web → CSV\n\nURL: ' + ACRONYM_CSV_URL);
         return;
       }
       await dbUpdate(`quizzes/${instUser.uid}/${id}`, { questions, updatedAt:Date.now() });
