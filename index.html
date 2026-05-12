@@ -14836,9 +14836,10 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
     const tH = isWhole ? TICK_LG : isTenth ? TICK_MED : TICK_SM;
     const tW = isWhole ? 3 : isTenth ? 2 : 1.5;
 
-    // Draw all ticks across the full viewport
-    s += `<rect x="${x-tW/2}" y="${BASE_Y}" width="${tW}" height="${tH}" fill="${TICK_COL}"/>`;
-
+    // Draw all ticks everywhere — but never left of the 0" mark (jaw can't open negative)
+    if(v >= 0){
+      s += `<rect x="${x-tW/2}" y="${BASE_Y}" width="${tW}" height="${tH}" fill="${TICK_COL}"/>`;
+    }
     // Always draw labels — visible to left so student knows their position
     if(isWhole){
       s += `<text x="${x}" y="${BASE_Y-14}" text-anchor="middle" font-size="34" font-family="Arial Black,Arial,sans-serif" font-weight="900" fill="${LABEL_COL}">${Math.round(v)}</text>`;
@@ -14916,60 +14917,87 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
 }
 
 
+// ── CALIPER DRAG ─────────────────────────────────────────────────────
+const _calDrag = {
+  inst: { active:false, lastX:0, acc:0, attached:false },
+  stu:  { active:false, lastX:0, acc:0, attached:false }
+};
+
+function _calGetZoomId(side){ return side==='inst' ? 'instCalSvg' : 'stuCalSvg'; }
+
+function caliperInitDrag(side){
+  if(_calDrag[side].attached) return;
+  _calDrag[side].attached = true;
+
+  document.addEventListener('mousemove', (e) => {
+    const d = _calDrag[side];
+    if(!d.active) return;
+    const s_obj = SIM[side];
+    if(!s_obj || s_obj.locked) return;
+    const svg = document.getElementById(_calGetZoomId(side));
+    if(!svg) return;
+    const dx = e.clientX - d.lastX;
+    d.lastX = e.clientX;
+    const rect = svg.getBoundingClientRect();
+    if(!rect.width) return;
+    d.acc = Math.max(0, Math.min(5.999, d.acc + (dx * 920 / rect.width) / 220));
+    s_obj.value = Math.round(d.acc * 1000) / 1000;
+    caliperRedraw(side);
+  });
+
+  document.addEventListener('touchmove', (e) => {
+    const d = _calDrag[side];
+    if(!d.active || !e.touches.length) return;
+    const s_obj = SIM[side];
+    if(!s_obj || s_obj.locked) return;
+    const svg = document.getElementById(_calGetZoomId(side));
+    if(!svg) return;
+    const dx = e.touches[0].clientX - d.lastX;
+    d.lastX = e.touches[0].clientX;
+    const rect = svg.getBoundingClientRect();
+    if(!rect.width) return;
+    d.acc = Math.max(0, Math.min(5.999, d.acc + (dx * 920 / rect.width) / 220));
+    s_obj.value = Math.round(d.acc * 1000) / 1000;
+    caliperRedraw(side);
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('mouseup',  () => { _calDrag[side].active = false; });
+  document.addEventListener('touchend', () => { _calDrag[side].active = false; });
+}
+
 function caliperAttachDrag(svgId, side){
   const svg = document.getElementById(svgId);
   const s_obj = SIM[side];
-  if(!svg || s_obj.locked) return;
-  svg.style.cursor = 'ew-resize';
-  let _dragAcc = 0;
+  if(!svg) return;
+  svg.style.cursor = s_obj && s_obj.locked ? 'not-allowed' : 'ew-resize';
+  if(!s_obj || s_obj.locked) return;
 
-  // Mousedown/touchstart on SVG
-  svg.onmousedown = svg.ontouchstart = (e) => {
-    if(s_obj.locked || s_obj.animating) return;
-    s_obj.dragging = true;
-    s_obj.lastX = (e.touches ? e.touches[0].clientX : e.clientX);
-    _dragAcc = s_obj.value;
+  // Attach document listeners once
+  caliperInitDrag(side);
+
+  // onmousedown/touchstart set on the element — survives innerHTML replacements on children
+  svg.onmousedown = (e) => {
+    const s = SIM[side];
+    if(!s || s.locked) return;
+    const d = _calDrag[side];
+    d.active = true;
+    d.lastX  = e.clientX;
+    d.acc    = s.value;
     svg.style.cursor = 'grabbing';
     e.preventDefault();
   };
-
-  // Attach move/up to DOCUMENT so cursor leaving SVG during fast drag doesn't drop it
-  const onMove = (e) => {
-    if(!s_obj.dragging) return;
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const dx = cx - s_obj.lastX;
-    s_obj.lastX = cx;
-    const rect = svg.getBoundingClientRect();
-    const dInch = (dx * (920 / rect.width)) / 220;
-    _dragAcc = Math.max(0, Math.min(5.999, _dragAcc + dInch));
-    s_obj.value = Math.round(_dragAcc * 1000) / 1000;
-    caliperRedraw(side);
+  svg.ontouchstart = (e) => {
+    const s = SIM[side];
+    if(!s || s.locked || !e.touches.length) return;
+    const d = _calDrag[side];
+    d.active = true;
+    d.lastX  = e.touches[0].clientX;
+    d.acc    = s.value;
     e.preventDefault();
   };
-
-  const onUp = () => {
-    if(!s_obj.dragging) return;
-    s_obj.dragging = false;
-    svg.style.cursor = 'ew-resize';
-  };
-
-  // Remove old listeners first to avoid duplicates
-  document.removeEventListener('mousemove', svg._calMoveHandler);
-  document.removeEventListener('mouseup',   svg._calUpHandler);
-  document.removeEventListener('touchmove', svg._calMoveHandler);
-  document.removeEventListener('touchend',  svg._calUpHandler);
-
-  svg._calMoveHandler = onMove;
-  svg._calUpHandler   = onUp;
-
-  document.addEventListener('mousemove', onMove, { passive: false });
-  document.addEventListener('mouseup',   onUp);
-  document.addEventListener('touchmove', onMove, { passive: false });
-  document.addEventListener('touchend',  onUp);
-
-  // Keep onmouseleave only for cursor style, not drag cancel
-  svg.onmouseleave = () => { if(!s_obj.dragging) svg.style.cursor = 'ew-resize'; };
 }
+// ── END CALIPER DRAG ──────────────────────────────────────────────────
 
 function instSimSwitchInstrument(){
   const inst = document.getElementById('instSimInstrument')?.value || 'mic';
