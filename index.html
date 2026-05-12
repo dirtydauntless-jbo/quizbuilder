@@ -2742,25 +2742,22 @@ async function buildAcronymQuestions(qType, count, choiceCount){
   const pool = shuffled.slice(0, Math.min(count, all.length));
 
   return pool.map((item, idx) => {
-    const askMeaning = Math.random() > 0.5;
-    const q_text = askMeaning
-      ? `What does "${item.acronym}" stand for?`
-      : `Which acronym stands for "${item.meaning}"?`;
-    const answer = askMeaning ? item.meaning : item.acronym;
+    const q_text = `What does "${item.acronym}" stand for?`;
+    const answer = item.meaning;
 
     if(!isMC){
       return {id:idx, q:q_text, answer, type:'acr_fib',
-              acronym:item.acronym, meaning:item.meaning, askMeaning};
+              acronym:item.acronym, meaning:item.meaning};
     }
 
     const distractors = [...all].filter(a=>a!==item)
       .sort(()=>Math.random()-0.5)
       .slice(0, Math.max(1,(choiceCount||3)-1))
-      .map(a=>askMeaning?a.meaning:a.acronym);
+      .map(a=>a.meaning);
     const options = [answer,...distractors].sort(()=>Math.random()-0.5);
     const correct = options.indexOf(answer);
     return {id:idx, q:q_text, answer, type:'acr_mc',
-            options, correct, acronym:item.acronym, meaning:item.meaning, askMeaning};
+            options, correct, acronym:item.acronym, meaning:item.meaning};
   });
 }
 
@@ -14825,9 +14822,10 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
   // ── MAIN SCALE BASELINE ─────────────────────────────────────────
   s += `<line x1="20" y1="${BASE_Y}" x2="${W-20}" y2="${BASE_Y}" stroke="${TICK_COL}" stroke-width="2.5"/>`;
 
-  // ── MAIN SCALE TICKS — only AT or RIGHT of ver0X (jaw position) ──
-  // No ticks to the left of the 0-line (jaw is closed on that side)
-  const tickStart = Math.ceil(value / 0.025) * 0.025;
+  // ── MAIN SCALE TICKS + LABELS ──────────────────────────────────────
+  // Tick LINES: only at or right of jaw (ver0X) — realistic, jaw covers left side
+  // Labels (numbers): drawn from left viewport so student can read position
+  const tickStart = Math.ceil(viewLeft / 0.025) * 0.025;
   for(let v = tickStart; v <= viewLeft + (W-60)/PPI + 0.05; v = Math.round((v+0.025)*10000)/10000){
     const x = vx(v);
     if(x < 20 || x > W-20) continue;
@@ -14838,8 +14836,12 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
     const tH = isWhole ? TICK_LG : isTenth ? TICK_MED : TICK_SM;
     const tW = isWhole ? 3 : isTenth ? 2 : 1.5;
 
-    s += `<rect x="${x-tW/2}" y="${BASE_Y}" width="${tW}" height="${tH}" fill="${TICK_COL}"/>`;
+    // Only draw tick LINE at or right of jaw position
+    if(x >= ver0X - 1){
+      s += `<rect x="${x-tW/2}" y="${BASE_Y}" width="${tW}" height="${tH}" fill="${TICK_COL}"/>`;
+    }
 
+    // Always draw labels — visible to left so student knows their position
     if(isWhole){
       s += `<text x="${x}" y="${BASE_Y-14}" text-anchor="middle" font-size="34" font-family="Arial Black,Arial,sans-serif" font-weight="900" fill="${LABEL_COL}">${Math.round(v)}</text>`;
     } else if(isTenth){
