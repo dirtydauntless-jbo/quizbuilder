@@ -14895,20 +14895,23 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
   }
 
   // ── AMBER JAW LINE LABEL ─────────────────────────────────────────
-  // Show the main scale reading above the amber 0-line in cyan so it's readable
+  // Show the main scale reading ABOVE the scale numbers, black text on white bg
   if(showGuide){
-    s += `<text x="${ver0X}" y="${BASE_Y-14}" text-anchor="middle" font-size="13" font-family="monospace" font-weight="bold" fill="#00cccc">${lastMainTick.toFixed(3)}"</text>`;
+    const lx = ver0X;
+    const ly = BASE_Y - 56; // well above the scale numbers
+    const lw = 68, lh = 22;
+    s += `<rect x="${lx-lw/2}" y="${ly-lh+4}" width="${lw}" height="${lh}" rx="3" fill="white" stroke="#ccc" stroke-width="1"/>`;
+    s += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="15" font-family="monospace" font-weight="bold" fill="#000">${lastMainTick.toFixed(3)}"</text>`;
+    // Small downward pointer from label to jaw line
+    s += `<line x1="${lx}" y1="${ly+4}" x2="${lx}" y2="${BASE_Y-2}" stroke="#888" stroke-width="1" stroke-dasharray="3,2"/>`;
   }
 
   // ── RED GUIDE LINE + ARROW ───────────────────────────────────────
   if(showGuide){
     const mainX = vx(lastMainTick + d.vernier * 0.025);
     if(mainX >= 20 && mainX <= W-20){
-      // Red vertical line through both scales
       s += `<line x1="${mainX}" y1="${BASE_Y-2}" x2="${mainX}" y2="${VER_BASE+VER_LG+4}" stroke="${GUIDE}" stroke-width="2.5"/>`;
-      // Downward arrow — NO label above it
       s += `<polygon points="${mainX-7},${BASE_Y-24} ${mainX+7},${BASE_Y-24} ${mainX},${BASE_Y-2}" fill="${GUIDE}"/>`;
-      // NO label below vernier — formula at bottom covers it
     }
   }
 
@@ -14924,7 +14927,7 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
     const formula  = wholeIn > 0
       ? `${wholeIn}" + ${mainFrac} + ${verFrac} = ${readStr}`
       : `${mainFrac} + ${verFrac} = ${readStr}`;
-    s += `<text x="12" y="${H-14}" font-size="14" font-family="monospace" font-weight="bold" fill="#ccd">${formula}</text>`;
+    s += `<text x="12" y="${H-14}" font-size="17" font-family="monospace" font-weight="bold" fill="#cc0000">${formula}</text>`;
   }
   s += `<text x="${W-10}" y="${H-16}" text-anchor="end" font-size="11" font-family="monospace" fill="${locked?'#cc0000':'#99a'}">${locked?'🔒 LOCKED':'← drag →'}</text>`;
 
@@ -15027,7 +15030,7 @@ function instSimSwitchInstrument(){
     if(rangeWrap) rangeWrap.style.display = 'none';
     if(guideBtn) guideBtn.style.display = '';
     SIM['inst'].value = calRandomValue();
-    SIM['inst'].showGuide = false; // hide reading until reveal clicked
+    SIM['inst'].showGuide = true; // guide shown by default for caliper
     caliperRedraw('inst');
   } else {
     if(micWrap) micWrap.style.display = '';
@@ -15048,7 +15051,7 @@ function stuSimSwitchInstrument(){
     if(calWrap) calWrap.classList.remove('hidden');
     if(rangeBtns) rangeBtns.style.display = 'none';
     SIM['stu'].value = calRandomValue();
-    SIM['stu'].showGuide = false; // hide reading until reveal clicked
+    SIM['stu'].showGuide = true; // guide shown by default for caliper
     caliperRedraw('stu');
     const rl = document.getElementById('stuSimRangeLabel');
     if(rl) rl.textContent = 'Range: 0–6"';
@@ -15068,10 +15071,10 @@ simRandomize = function(side){
     if(s.animating) return;
     const target = calRandomValue();
     const prefix = side==='inst'?'inst':'stu';
-    // Hide reveal/formula on randomize
-    s.showGuide = false;
+    // Keep guide shown after randomize (guide is on by default for caliper)
+    s.showGuide = true;
     const btn = document.getElementById(`${prefix}SimRevealBtn`);
-    if(btn) btn.textContent = '👁 Reveal Answer';
+    if(btn) btn.textContent = '🙈 Hide Answer';
     const fb = document.getElementById(`${prefix}SimFeedback`);
     if(fb){ fb.classList.add('hidden'); fb.textContent=''; }
     const ans = document.getElementById(`${prefix}SimAnswer`);
