@@ -14809,7 +14809,7 @@ function caliperSvgBody(value, locked, side){
 
 // ── Zoom panel matching reference diagram ─────────────────────────────────
 function caliperSvgZoom(d, value, showGuide, locked, side){
-  const W = 920, H = 300;
+  const W = 920, H = 320;
 
   const BEAM_BG    = '#d8dde2';
   const BEAM_LIGHT = '#eef0f2';
@@ -14829,24 +14829,26 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
   const TICK_LG   = 80;
   const TICK_MED  = 55;
   const TICK_SM   = 32;
-  const VER_OVERLAP = Math.round(TICK_SM / 2);  // 16px — covers bottom half of small ticks
+
+  // Vernier overlap = bottom half of small tick only
+  const VER_OVERLAP = Math.round(TICK_SM / 2);
   const VER_Y     = SCALE_BOT - VER_OVERLAP;
-  const VER_H     = 105;
-  const VER_BOT   = VER_Y + VER_H;
   const VTICK_LG  = 45;
   const VTICK_SM  = 28;
+  const VER_H     = VTICK_LG + 40;  // enough for ticks + labels
+  const VER_BOT   = VER_Y + VER_H;
 
   const PPI = 220;
   const viewLeft = value - 0.4;
   const vx = v => 60 + (v - viewLeft) * PPI;
 
-  // Vernier physics:
-  // The vernier 0-line is at the jaw position (value)
-  // Each vernier division = (24/25) * 0.025" in real space
-  // Tick i is at: ver0X + i * VER_DIV_PX  (continuous, no snapping)
-  // d.vernier tells us WHICH tick coincides with a main scale line (for highlight only)
+  // Vernier div in pixels — continuous, no snapping
   const VER_DIV_PX = (24.0/25.0) * 0.025 * PPI;
-  const ver0X = vx(value);  // where vernier 0-line sits = jaw opening on main scale
+  const ver0X = vx(value);
+
+  // Slider must be wide enough to show 0-25
+  // At value 0, tick 25 is at ver0X + 25*VER_DIV_PX
+  const VER_HALF = Math.ceil(25 * VER_DIV_PX) + 10;  // full vernier width + padding
 
   let s = `<rect width="${W}" height="${H}" fill="#1a1a2e"/>`;
 
@@ -14876,26 +14878,32 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
   }
 
   // ── GOLD LINE at vernier 0 ────────────────────────────────────────
-  // Protrudes UP onto main scale showing where the jaw sits
-  s += `<rect x="${ver0X-1.5}" y="${SCALE_BOT-TICK_SM-4}" width="3" height="${TICK_SM+4+VER_H}" fill="${ACCENT}" opacity="0.9" rx="1"/>`;
+  // Protrudes UP onto main scale (extra 20px above SCALE_BOT-TICK_SM)
+  // Stops at VER_Y + VTICK_SM (bottom of vernier 0-tick, NOT below vernier)
+  const goldTop    = SCALE_BOT - TICK_SM - 20;   // 20px extra above small tick
+  const goldBottom = VER_Y + VTICK_SM;            // stops at bottom of vernier 0-tick
+  s += `<rect x="${ver0X-1.5}" y="${goldTop}" width="3" height="${goldBottom-goldTop}" fill="${ACCENT}" opacity="0.9" rx="1"/>`;
 
   // ── VERNIER SLIDER ────────────────────────────────────────────────
   const clipId = `vcl_${side}`;
-  s += `<defs><clipPath id="${clipId}">
-    <rect x="${ver0X-72}" y="${VER_Y}" width="144" height="${VER_H}"/>
-  </clipPath></defs>`;
-  s += `<rect x="${ver0X-72}" y="${VER_Y}" width="144" height="${VER_H}" fill="${VER_BG}" rx="2"/>`;
-  s += `<rect x="${ver0X-72}" y="${VER_Y}" width="144" height="3" fill="${BEAM_LIGHT}" rx="1"/>`;
-  s += `<rect x="${ver0X-72}" y="${VER_Y+4}" width="144" height="${VTICK_LG+22}" fill="${VER_STRIPE}"/>`;
-  s += `<line x1="${ver0X-72}" y1="${VER_Y+6}" x2="${ver0X+72}" y2="${VER_Y+6}" stroke="${VER_COL}" stroke-width="2"/>`;
+  const sliderLeft  = ver0X - 8;          // starts just left of 0-line
+  const sliderRight = ver0X + VER_HALF;   // extends right to cover all 25 ticks
+  const sliderW     = sliderRight - sliderLeft;
 
-  // ── VERNIER TICKS (DOWN from VER_Y+6, clipped) ────────────────────
-  // Tick i positioned at: ver0X + i*VER_DIV_PX (purely continuous)
-  // d.vernier only used to highlight the coincident tick
+  s += `<defs><clipPath id="${clipId}">
+    <rect x="${sliderLeft}" y="${VER_Y}" width="${sliderW}" height="${VER_H}"/>
+  </clipPath></defs>`;
+  s += `<rect x="${sliderLeft}" y="${VER_Y}" width="${sliderW}" height="${VER_H}" fill="${VER_BG}" rx="2"/>`;
+  s += `<rect x="${sliderLeft}" y="${VER_Y}" width="${sliderW}" height="3" fill="${BEAM_LIGHT}" rx="1"/>`;
+  s += `<rect x="${sliderLeft}" y="${VER_Y+4}" width="${sliderW}" height="${VTICK_LG+22}" fill="${VER_STRIPE}"/>`;
+  s += `<line x1="${sliderLeft}" y1="${VER_Y+6}" x2="${sliderRight}" y2="${VER_Y+6}" stroke="${VER_COL}" stroke-width="2"/>`;
+
+  // ── VERNIER TICKS clipped to slider ──────────────────────────────
+  // Tick i = ver0X + i*VER_DIV_PX (continuous — no d.vernier subtraction)
+  // d.vernier only highlights coincident tick in red
   s += `<g clip-path="url(#${clipId})">`;
   for(let i=0; i<=25; i++){
-    const tvx = ver0X + i * VER_DIV_PX;  // <-- no d.vernier subtraction here
-    if(tvx < 22 || tvx > W-22) continue;
+    const tvx = ver0X + i * VER_DIV_PX;
     const isMaj = i%5===0;
     const tH = isMaj ? VTICK_LG : VTICK_SM;
     const tW = isMaj ? 2.5 : 1.5;
@@ -14908,30 +14916,36 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
   }
   s += `</g>`;
 
-  // ── RED GUIDE LINE at coincident tick ─────────────────────────────
+  // ── RED GUIDE LINE at coincident tick on vernier ──────────────────
   if(showGuide){
+    // Coincident tick x = ver0X + d.vernier * VER_DIV_PX
+    const coinX = ver0X + d.vernier * VER_DIV_PX;
+    // Label at top showing last 0.025" main scale reading
     const lastMainTick = Math.floor(value/0.025)*0.025;
-    const mainX = vx(lastMainTick);
-    // Label at top
-    s += `<rect x="${mainX-36}" y="${BEAM_Y+2}" width="72" height="20" rx="3" fill="white" stroke="#ccc" stroke-width="1"/>`;
-    s += `<text x="${mainX}" y="${BEAM_Y+16}" text-anchor="middle" font-size="13" font-family="monospace" font-weight="bold" fill="#000">${lastMainTick.toFixed(3)}"</text>`;
-    // Red line through main scale and vernier at last 0.025" mark
-    if(mainX >= 22 && mainX <= W-22){
-      s += `<line x1="${mainX}" y1="${BEAM_Y+24}" x2="${mainX}" y2="${VER_BOT-8}" stroke="${GUIDE}" stroke-width="2.5"/>`;
+    if(coinX >= 22 && coinX <= W-22){
+      s += `<line x1="${coinX}" y1="${SCALE_BOT-TICK_SM-4}" x2="${coinX}" y2="${VER_BOT-8}" stroke="${GUIDE}" stroke-width="2.5"/>`;
+      // Downward arrow on main scale
+      s += `<polygon points="${coinX-6},${SCALE_BOT-TICK_SM-16} ${coinX+6},${SCALE_BOT-TICK_SM-16} ${coinX},${SCALE_BOT-TICK_SM-4}" fill="${GUIDE}"/>`;
+    }
+    // White label above showing main scale coarse reading (at gold line position)
+    const labelX = ver0X;
+    if(labelX >= 22 && labelX <= W-22){
+      s += `<rect x="${labelX-36}" y="${BEAM_Y+2}" width="72" height="20" rx="3" fill="white" stroke="#ccc" stroke-width="1"/>`;
+      s += `<text x="${labelX}" y="${BEAM_Y+16}" text-anchor="middle" font-size="13" font-family="monospace" font-weight="bold" fill="#000">${lastMainTick.toFixed(3)}"</text>`;
     }
   }
 
-  // ── READING + FORMULA ─────────────────────────────────────────────
+  // ── READING + FORMULA (only when showGuide) ───────────────────────
   if(showGuide){
     const readStr = value.toFixed(3)+'"';
-    s += `<rect x="${W/2-95}" y="${H-42}" width="190" height="32" rx="5" fill="#0a1628" stroke="${ACCENT}" stroke-width="2"/>`;
+    s += `<rect x="${W/2-95}" y="${H-44}" width="190" height="34" rx="5" fill="#0a1628" stroke="${ACCENT}" stroke-width="2"/>`;
     s += `<text x="${W/2}" y="${H-20}" text-anchor="middle" font-size="18" font-family="monospace" font-weight="bold" fill="${ACCENT}">${readStr}</text>`;
     const lastMain = Math.floor(value/0.025)*0.025;
     const wholeIn  = Math.floor(value);
     const mainFrac = (lastMain%1).toFixed(3).slice(1);
     const verFrac  = (d.vernier*0.001).toFixed(3).slice(1);
     const formula  = wholeIn>0?`${wholeIn}" + ${mainFrac} + ${verFrac} = ${readStr}`:`${mainFrac} + ${verFrac} = ${readStr}`;
-    s += `<text x="12" y="${H-20}" font-size="14" font-family="monospace" font-weight="bold" fill="#cc0000">${formula}</text>`;
+    s += `<text x="12" y="${H-20}" font-size="17" font-family="monospace" font-weight="bold" fill="#cc0000">${formula}</text>`;
   }
   s += `<text x="${W-10}" y="${H-20}" text-anchor="end" font-size="11" font-family="monospace" fill="${locked?'#cc0000':'#99a'}">${locked?'🔒 LOCKED':'← drag →'}</text>`;
 
@@ -15033,7 +15047,7 @@ function instSimSwitchInstrument(){
     if(rangeWrap) rangeWrap.style.display = 'none';
     if(guideBtn) guideBtn.style.display = '';
     SIM['inst'].value = calRandomValue();
-    SIM['inst'].showGuide = true; // guide shown by default for caliper
+    SIM['inst'].showGuide = false; // hidden until reveal clicked
     caliperRedraw('inst');
   } else {
     if(micWrap) micWrap.style.display = '';
@@ -15054,7 +15068,7 @@ function stuSimSwitchInstrument(){
     if(calWrap) calWrap.classList.remove('hidden');
     if(rangeBtns) rangeBtns.style.display = 'none';
     SIM['stu'].value = calRandomValue();
-    SIM['stu'].showGuide = true; // guide shown by default for caliper
+    SIM['stu'].showGuide = false; // hidden until reveal clicked
     caliperRedraw('stu');
     const rl = document.getElementById('stuSimRangeLabel');
     if(rl) rl.textContent = 'Range: 0–6"';
@@ -15077,7 +15091,7 @@ simRandomize = function(side){
     // Keep guide shown after randomize (guide is on by default for caliper)
     s.showGuide = true;
     const btn = document.getElementById(`${prefix}SimRevealBtn`);
-    if(btn) btn.textContent = '🙈 Hide Answer';
+    if(btn) btn.textContent = '👁 Reveal Answer';
     const fb = document.getElementById(`${prefix}SimFeedback`);
     if(fb){ fb.classList.add('hidden'); fb.textContent=''; }
     const ans = document.getElementById(`${prefix}SimAnswer`);
