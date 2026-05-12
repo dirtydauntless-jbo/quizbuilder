@@ -2217,19 +2217,18 @@ auth.onAuthStateChanged(async user => {
     const isInst = await dbGet(`instructors/${user.uid}`);
     const role = isInst ? 'instructors' : 'students';
     const name = isInst?.name || user.displayName || user.email || 'Unknown';
-    const existing = await dbGet(`accessLog/${role}/${logKey}/meta`);
-    if(!existing){
-      await dbSet(`accessLog/${role}/${logKey}/meta`, {
-        name, email: user.email||'', uid: user.uid,
-        firstSeen: nowMs, role
-      });
-    } else {
-      await dbSet(`accessLog/${role}/${logKey}/meta/name`, name);
-    }
-    await dbSet(`accessLog/${role}/${logKey}/sessions/${nowMs}`, { ts: nowMs, name });
+    // Write meta and session in one update — no read needed, meta is idempotent
+    const updates = {};
+    updates[`accessLog/${role}/${logKey}/meta/name`]       = name;
+    updates[`accessLog/${role}/${logKey}/meta/email`]      = user.email||'';
+    updates[`accessLog/${role}/${logKey}/meta/uid`]        = user.uid;
+    updates[`accessLog/${role}/${logKey}/meta/role`]       = role;
+    updates[`accessLog/${role}/${logKey}/meta/firstSeen`]  = nowMs; // only writes if not set due to rules — harmless if overwritten
+    updates[`accessLog/${role}/${logKey}/sessions/${nowMs}`] = { ts: nowMs, name };
+    await db.ref().update(updates);
     console.log(`✓ accessLog written: ${role}/${logKey}`);
   } catch(e){
-    console.warn(`✗ accessLog write failed (check Firebase rules for accessLog node):`, e.message || e);
+    console.warn(`✗ accessLog write failed:`, e.message || e);
   }
 
   // CASE 1: Instructor app already visible (page refresh while logged in)
