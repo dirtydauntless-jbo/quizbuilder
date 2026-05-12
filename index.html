@@ -2217,15 +2217,18 @@ auth.onAuthStateChanged(async user => {
     const isInst = await dbGet(`instructors/${user.uid}`);
     const role = isInst ? 'instructors' : 'students';
     const name = isInst?.name || user.displayName || user.email || 'Unknown';
-    // Write meta and session in one scoped update — no root write needed
-    const updates = {};
-    updates[`${role}/${logKey}/meta/name`]        = name;
-    updates[`${role}/${logKey}/meta/email`]       = user.email||'';
-    updates[`${role}/${logKey}/meta/uid`]         = user.uid;
-    updates[`${role}/${logKey}/meta/role`]        = role;
-    updates[`${role}/${logKey}/meta/firstSeen`]   = nowMs;
-    updates[`${role}/${logKey}/sessions/${nowMs}`] = { ts: nowMs, name };
-    await db.ref('accessLog').update(updates);
+    // Write directly to exact paths — avoids multi-path update permission issues
+    const basePath = `accessLog/${role}/${logKey}`;
+    await db.ref(`${basePath}/meta/name`).set(name);
+    await db.ref(`${basePath}/meta/email`).set(user.email||'');
+    await db.ref(`${basePath}/meta/uid`).set(user.uid);
+    await db.ref(`${basePath}/meta/role`).set(role);
+    // firstSeen: only write if it doesn't exist yet
+    const firstSeenRef = db.ref(`${basePath}/meta/firstSeen`);
+    firstSeenRef.once('value').then(snap => {
+      if(!snap.exists()) firstSeenRef.set(nowMs);
+    }).catch(()=>{});
+    await db.ref(`${basePath}/sessions/${nowMs}`).set({ ts: nowMs, name });
     console.log(`✓ accessLog written: ${role}/${logKey}`);
   } catch(e){
     console.warn(`✗ accessLog write failed:`, e.message || e);
