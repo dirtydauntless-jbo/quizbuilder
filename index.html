@@ -2211,28 +2211,26 @@ auth.onAuthStateChanged(async user => {
   if(_handlingRedirect) return;
 
   // Log site access immediately on any authenticated page load
-  // Use email as the key (not UID) to deduplicate multi-auth users
   const logKey = (user.email||user.uid).replace(/[.#$\[\]]/g,'_');
   const nowMs = Date.now();
   try {
     const isInst = await dbGet(`instructors/${user.uid}`);
     const role = isInst ? 'instructors' : 'students';
     const name = isInst?.name || user.displayName || user.email || 'Unknown';
-    // Check if this user has logged before (first seen = new signup)
     const existing = await dbGet(`accessLog/${role}/${logKey}/meta`);
     if(!existing){
-      // First time ever — mark as new signup
       await dbSet(`accessLog/${role}/${logKey}/meta`, {
         name, email: user.email||'', uid: user.uid,
         firstSeen: nowMs, role
       });
     } else {
-      // Update name in case it changed
       await dbSet(`accessLog/${role}/${logKey}/meta/name`, name);
     }
-    // Always log this session
     await dbSet(`accessLog/${role}/${logKey}/sessions/${nowMs}`, { ts: nowMs, name });
-  } catch(e){ /* non-critical, ignore */ }
+    console.log(`✓ accessLog written: ${role}/${logKey}`);
+  } catch(e){
+    console.warn(`✗ accessLog write failed (check Firebase rules for accessLog node):`, e.message || e);
+  }
 
   // CASE 1: Instructor app already visible (page refresh while logged in)
   if(!document.getElementById('instApp').classList.contains('hidden')){
@@ -2821,6 +2819,28 @@ async function masterDashLoad(){
   const stuLogins12mo = stuUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cut12mo)).length;
   const instLogins12mo= instUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cut12mo)).length;
 
+  // ── Infer student activity from quiz submissions (historical fallback) ───────
+  // accessLog only exists since deployment — quiz submissions go back further
+  const stuActiveFromQuiz = new Set();
+  const stuActiveFromQuiz30d = new Set();
+  for(const [classId, classData] of Object.entries(allQuizSessions||{})){
+    for(const [stuKey, stuData] of Object.entries(classData||{})){
+      for(const [, quizData] of Object.entries(stuData||{})){
+        for(const [, attempt] of Object.entries(quizData||{})){
+          const t = attempt.submittedAt ? new Date(attempt.submittedAt).getTime() : 0;
+          if(t > 0){ stuActiveFromQuiz.add(stuKey); }
+          if(t > cut30d){ stuActiveFromQuiz30d.add(stuKey); }
+        }
+      }
+    }
+  }
+  // Use whichever is higher — accessLog or quiz-inferred
+  const stuActiveDisplay30d = Math.max(stuActive30d, stuActiveFromQuiz30d.size);
+  const logNote = stuLogins30d === 0 && stuActiveFromQuiz.size > 0
+    ? `<div style="font-family:monospace;font-size:.68rem;color:var(--accent);margin-top:8px;padding:6px 8px;background:rgba(240,165,0,.08);border-radius:4px;border-left:2px solid var(--accent)">
+        ⚠ Login tracking started at last deployment. Student login counts reflect logins since then only. Activity from quiz submissions is used as a fallback.
+       </div>` : '';
+
   // ── Real platform totals (from Firebase nodes, not access log) ─────────────
   const totalInstructors = Object.keys(allInstructors||{}).length;
   const totalClassrooms  = Object.keys(allClassrooms||{}).length;
@@ -2905,18 +2925,22 @@ async function masterDashLoad(){
     `, true)}
 
     ${panel('md-logins','Logins & Activity','📅',`
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      ${logNote}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;margin-top:${logNote?'10px':'0'}">
         <div>
           <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Students</div>
-          ${row('Online today',stuActive24h,'var(--cl)')}
-          ${row('Logins last 30 days',stuLogins30d)}
-          ${row('Logins last 12 months',stuLogins12mo)}
+          ${row('Online today', stuActive24h, 'var(--cl)')}
+          ${row('Active last 30 days', stuActiveDisplay30d, 'var(--cl)')}
+          ${row('Logins last 30 days', stuLogins30d || '—')}
+          ${row('Logins last 12 months', stuLogins12mo || '—')}
+          ${row('Unique quiz-takers (all time)', stuActiveFromQuiz.size, 'var(--cl)')}
         </div>
         <div>
           <div style="font-family:monospace;font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Instructors</div>
-          ${row('Online today',instActive24h,'var(--blue)')}
-          ${row('Logins last 30 days',instLogins30d)}
-          ${row('Logins last 12 months',instLogins12mo)}
+          ${row('Online today', instActive24h, 'var(--blue)')}
+          ${row('Active last 30 days', instActive30d, 'var(--blue)')}
+          ${row('Logins last 30 days', instLogins30d)}
+          ${row('Logins last 12 months', instLogins12mo)}
         </div>
       </div>
     `, true)}
