@@ -909,7 +909,7 @@ setTimeout(function(){
           <svg id="instCalBody" viewBox="0 0 1000 340" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
         </div>
         <div style="background:#fff;border:2px solid #666;border-radius:4px;overflow:hidden">
-          <svg id="instCalSvg" viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
+          <svg id="instCalSvg" viewBox="0 0 920 320" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
         </div>
         <div id="instCalReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.000"</div>
       </div>
@@ -1328,7 +1328,7 @@ setTimeout(function(){
         <svg id="stuCalBody" viewBox="0 0 1000 340" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
       </div>
       <div style="background:#fff;border:2px solid #666;border-radius:4px;overflow:hidden">
-        <svg id="stuCalSvg" viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
+        <svg id="stuCalSvg" viewBox="0 0 920 320" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
       </div>
       <div id="stuCalReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.000"</div>
     </div>
@@ -14787,8 +14787,7 @@ function caliperRedraw(side){
   const body = document.getElementById(bodyId);
   const zoom = document.getElementById(zoomId);
   if(body) body.innerHTML = caliperSvgBody(s.value, s.locked, side);
-  if(zoom) zoom.innerHTML = caliperSvgZoom(d, s.value, s.showGuide, s.locked, side);
-  // Attach drag to zoom panel
+  if(zoom) zoom.innerHTML = caliperSvgZoom(d, s.value, s.showGuide, s.locked, side, !!s.calRevealed);
   caliperAttachDrag(zoomId, side);
 }
 
@@ -14808,7 +14807,7 @@ function caliperSvgBody(value, locked, side){
 }
 
 // ── Zoom panel matching reference diagram ─────────────────────────────────
-function caliperSvgZoom(d, value, showGuide, locked, side){
+function caliperSvgZoom(d, value, showGuide, locked, side, calRevealed=false){
   const W = 920, H = 320;
 
   const BEAM_BG    = '#d8dde2';
@@ -15047,7 +15046,7 @@ function instSimSwitchInstrument(){
     if(rangeWrap) rangeWrap.style.display = 'none';
     if(guideBtn) guideBtn.style.display = '';
     SIM['inst'].value = calRandomValue();
-    SIM['inst'].showGuide = false; // hidden until reveal clicked
+    SIM['inst'].showGuide = true; // guide on by default
     caliperRedraw('inst');
   } else {
     if(micWrap) micWrap.style.display = '';
@@ -15068,7 +15067,7 @@ function stuSimSwitchInstrument(){
     if(calWrap) calWrap.classList.remove('hidden');
     if(rangeBtns) rangeBtns.style.display = 'none';
     SIM['stu'].value = calRandomValue();
-    SIM['stu'].showGuide = false; // hidden until reveal clicked
+    SIM['stu'].showGuide = true; // guide on by default
     caliperRedraw('stu');
     const rl = document.getElementById('stuSimRangeLabel');
     if(rl) rl.textContent = 'Range: 0–6"';
@@ -15088,8 +15087,8 @@ simRandomize = function(side){
     if(s.animating) return;
     const target = calRandomValue();
     const prefix = side==='inst'?'inst':'stu';
-    // Keep guide shown after randomize (guide is on by default for caliper)
     s.showGuide = true;
+    s.calRevealed = false;
     const btn = document.getElementById(`${prefix}SimRevealBtn`);
     if(btn) btn.textContent = '👁 Reveal Answer';
     const fb = document.getElementById(`${prefix}SimFeedback`);
@@ -15117,23 +15116,22 @@ simRandomize = function(side){
   }
 };
 
-// ── Override simReveal to handle caliper — toggle guide+reading ────────────────
+// ── Override simReveal to handle caliper — toggles formula/reading only ──────
 const _origSimReveal = simReveal;
 simReveal = function(side){
   const s = SIM[side];
   if(s.instrument === 'cal'){
     const prefix = side==='inst'?'inst':'stu';
     const btn = document.getElementById(`${prefix}SimRevealBtn`);
-    // Toggle: showGuide controls whether formula/reading are visible
-    s.showGuide = !s.showGuide;
-    if(btn) btn.textContent = s.showGuide ? '🙈 Hide Answer' : '👁 Reveal Answer';
+    s.calRevealed = !s.calRevealed;
+    if(btn) btn.textContent = s.calRevealed ? '🙈 Hide Answer' : '👁 Reveal Answer';
     caliperRedraw(side);
   } else {
     _origSimReveal(side);
   }
 };
 
-// ── Override simToggleGuide to handle caliper ─────────────────────────────────
+// ── Override simToggleGuide to handle caliper — toggles guide line only ───────
 const _origSimToggleGuide = simToggleGuide;
 simToggleGuide = function(side){
   const s = SIM[side];
