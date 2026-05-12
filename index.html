@@ -3426,12 +3426,14 @@ async function instSimLoadHistory(){
     if(!Object.keys(sessions).length){el.innerHTML='<div class="empty-state" style="font-size:.75rem">No sessions recorded yet.</div>';return;}
     let html='';
     for(const [sNum,session] of Object.entries(sessions).sort((a,b)=>Number(a[0])-Number(b[0]))){
-      const rounds=session.rounds||{};
-      html+=`<div style="margin-bottom:14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:1px;color:var(--accent);margin-bottom:6px">Session ${sNum}</div>`;
+      const rounds=Object.entries(session.rounds||{}).sort((a,b)=>(a[1].sentAt||0)-(b[1].sentAt||0));
+      const firstInst=rounds[0]?.[1]?.instrumentType||'mic';
+      const instLabel=firstInst==='cal'?'📏 Caliper':'🔩 Micrometer';
+      html+=`<div style="margin-bottom:14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:1px;color:var(--accent);margin-bottom:6px">Session ${sNum} <span style="font-family:monospace;font-size:.65rem;color:var(--muted);letter-spacing:0">${instLabel}</span></div>`;
       for(const [rId,round] of Object.entries(rounds)){
         const responses=Object.values(round.responses||{});
         const correct=responses.filter(r=>r.correct).length;
-        const value=round.value?round.value.toFixed(4)+'"':'—';
+        const isCal=round.instrumentType==='cal'; const value=round.value?(isCal?round.value.toFixed(3):round.value.toFixed(4))+'"':'—';
         const date=round.sentAt?new Date(round.sentAt).toLocaleString():'—';
         html+=`<div style="border:1px solid var(--border);border-radius:6px;margin-bottom:6px;overflow:hidden">
           <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel2);cursor:pointer;flex-wrap:wrap" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
@@ -3445,7 +3447,7 @@ async function instSimLoadHistory(){
           <div style="display:none;padding:8px 12px">
             ${responses.length?responses.map(r=>`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-size:.72rem">
               <span style="font-weight:600">${esc(r.studentName||'—')}</span>
-              <span style="font-family:monospace;color:${r.correct?'var(--cl)':'var(--wl)'}">${r.correct?'✓':'✗'} ${(r.answer||0).toFixed(4)}"</span>
+              <span style="font-family:monospace;color:${r.correct?'var(--cl)':'var(--wl)'}">${r.correct?'✓':'✗'} ${isCal?(r.answer||0).toFixed(3):(r.answer||0).toFixed(4)}"</span>
             </div>`).join(''):'<div style="color:var(--muted);font-size:.72rem">No responses.</div>'}
           </div>
         </div>`;
@@ -3468,7 +3470,7 @@ async function stuSimLoadLiveHistory(){
     wrap?.classList.remove('hidden');
     el.innerHTML=entries.slice(0,-1).reverse().map(([rId,round])=>{
       const resp=round.responses?.[key];
-      const value=round.value?round.value.toFixed(4)+'"':'—';
+      const isCal=round.instrumentType==='cal'; const value=round.value?(isCal?round.value.toFixed(3):round.value.toFixed(4))+'"':'—';
       const roundNum=round.roundNum||rId;
       if(!resp) return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem">
         <span style="font-family:monospace;color:var(--muted)">Round ${roundNum} — ${value}</span>
@@ -14892,25 +14894,38 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
     }
   }
 
+  // ── AMBER JAW LINE LABEL ─────────────────────────────────────────
+  // Show the main scale reading above the amber 0-line in cyan so it's readable
+  if(showGuide){
+    s += `<text x="${ver0X}" y="${BASE_Y-14}" text-anchor="middle" font-size="13" font-family="monospace" font-weight="bold" fill="#00cccc">${lastMainTick.toFixed(3)}"</text>`;
+  }
+
   // ── RED GUIDE LINE + ARROW ───────────────────────────────────────
   if(showGuide){
-    const mainX = vx(lastMainTick + d.vernier * 0.025); // main scale line that aligns
-    // Only draw if it's in the visible area
+    const mainX = vx(lastMainTick + d.vernier * 0.025);
     if(mainX >= 20 && mainX <= W-20){
+      // Red vertical line through both scales
       s += `<line x1="${mainX}" y1="${BASE_Y-2}" x2="${mainX}" y2="${VER_BASE+VER_LG+4}" stroke="${GUIDE}" stroke-width="2.5"/>`;
+      // Downward arrow — NO label above it
       s += `<polygon points="${mainX-7},${BASE_Y-24} ${mainX+7},${BASE_Y-24} ${mainX},${BASE_Y-2}" fill="${GUIDE}"/>`;
-      s += `<text x="${mainX}" y="${BASE_Y-30}" text-anchor="middle" font-size="11" font-family="monospace" fill="${GUIDE}" font-weight="bold">${lastMainTick.toFixed(3)}"</text>`;
-      s += `<text x="${mainX}" y="${VER_BASE+VER_LG+36}" text-anchor="middle" font-size="11" font-family="monospace" fill="${GUIDE}" font-weight="bold">+.00${d.vernier}"</text>`;
+      // NO label below vernier — formula at bottom covers it
     }
   }
 
-  // ── READING BOX ──────────────────────────────────────────────────
+  // ── READING BOX — only shown after reveal ────────────────────────
   const readStr = value.toFixed(3)+'"';
-  s += `<rect x="${W/2-95}" y="${H-38}" width="190" height="32" rx="5" fill="#0a1628" stroke="${ACCENT}" stroke-width="2"/>`;
-  s += `<text x="${W/2}" y="${H-16}" text-anchor="middle" font-size="18" font-family="monospace" font-weight="bold" fill="${ACCENT}">${readStr}</text>`;
-
-  const mainPart = lastMainTick;
-  s += `<text x="12" y="${H-16}" font-size="11" font-family="monospace" fill="#889">${Math.floor(value)}" + .${(mainPart%1).toFixed(3).slice(2)} + .00${d.vernier} = ${readStr}</text>`;
+  if(showGuide){
+    // Formula — larger font, only visible after reveal (showGuide doubles as reveal flag for caliper)
+    s += `<rect x="${W/2-95}" y="${H-38}" width="190" height="32" rx="5" fill="#0a1628" stroke="${ACCENT}" stroke-width="2"/>`;
+    s += `<text x="${W/2}" y="${H-16}" text-anchor="middle" font-size="18" font-family="monospace" font-weight="bold" fill="${ACCENT}">${readStr}</text>`;
+    const wholeIn  = Math.floor(value);
+    const mainFrac = (lastMainTick % 1).toFixed(3).slice(1);
+    const verFrac  = (d.vernier * 0.001).toFixed(3).slice(1);
+    const formula  = wholeIn > 0
+      ? `${wholeIn}" + ${mainFrac} + ${verFrac} = ${readStr}`
+      : `${mainFrac} + ${verFrac} = ${readStr}`;
+    s += `<text x="12" y="${H-14}" font-size="14" font-family="monospace" font-weight="bold" fill="#ccd">${formula}</text>`;
+  }
   s += `<text x="${W-10}" y="${H-16}" text-anchor="end" font-size="11" font-family="monospace" fill="${locked?'#cc0000':'#99a'}">${locked?'🔒 LOCKED':'← drag →'}</text>`;
 
   return s;
@@ -15009,9 +15024,10 @@ function instSimSwitchInstrument(){
   if(inst === 'cal'){
     if(micWrap) micWrap.style.display = 'none';
     if(calWrap) calWrap.classList.remove('hidden');
-    if(rangeWrap) rangeWrap.style.display = 'none'; // caliper has no range select
+    if(rangeWrap) rangeWrap.style.display = 'none';
     if(guideBtn) guideBtn.style.display = '';
     SIM['inst'].value = calRandomValue();
+    SIM['inst'].showGuide = false; // hide reading until reveal clicked
     caliperRedraw('inst');
   } else {
     if(micWrap) micWrap.style.display = '';
@@ -15032,6 +15048,7 @@ function stuSimSwitchInstrument(){
     if(calWrap) calWrap.classList.remove('hidden');
     if(rangeBtns) rangeBtns.style.display = 'none';
     SIM['stu'].value = calRandomValue();
+    SIM['stu'].showGuide = false; // hide reading until reveal clicked
     caliperRedraw('stu');
     const rl = document.getElementById('stuSimRangeLabel');
     if(rl) rl.textContent = 'Range: 0–6"';
@@ -15048,26 +15065,66 @@ const _origSimRandomize = simRandomize;
 simRandomize = function(side){
   const s = SIM[side];
   if(s.instrument === 'cal'){
-    s.value = calRandomValue();
-    caliperRedraw(side);
-    const rv = document.getElementById(`${side === 'inst' ? 'inst' : 'stu'}SimRevealVal`);
-    if(rv) rv.classList.add('hidden');
-    const fb = document.getElementById(`${side === 'stu' ? 'stu' : 'inst'}SimFeedback`);
-    if(fb){ fb.classList.add('hidden'); fb.textContent = ''; }
+    if(s.animating) return;
+    const target = calRandomValue();
+    const prefix = side==='inst'?'inst':'stu';
+    // Hide reveal/formula on randomize
+    s.showGuide = false;
+    const btn = document.getElementById(`${prefix}SimRevealBtn`);
+    if(btn) btn.textContent = '👁 Reveal Answer';
+    const fb = document.getElementById(`${prefix}SimFeedback`);
+    if(fb){ fb.classList.add('hidden'); fb.textContent=''; }
+    const ans = document.getElementById(`${prefix}SimAnswer`);
+    if(ans){ ans.value=''; ans.disabled=false; ans.style.borderColor=''; }
+    // Animate caliper sliding to new value
+    const start = s.value;
+    const dist  = target - start;
+    const steps = 40;
+    let   step  = 0;
+    s.animating = true;
+    const tick = () => {
+      step++;
+      const t = step / steps;
+      const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t; // ease-in-out
+      s.value = Math.round((start + dist * ease) * 1000) / 1000;
+      caliperRedraw(side);
+      if(step < steps){ requestAnimationFrame(tick); }
+      else { s.value = target; s.animating = false; caliperRedraw(side); }
+    };
+    requestAnimationFrame(tick);
   } else {
     _origSimRandomize(side);
   }
 };
 
-// ── Override simReveal to handle caliper ─────────────────────────────
+// ── Override simReveal to handle caliper — toggle guide+reading ────────────────
 const _origSimReveal = simReveal;
 simReveal = function(side){
   const s = SIM[side];
   if(s.instrument === 'cal'){
-    const rv = document.getElementById(`${side === 'inst' ? 'instSim' : 'stuSim'}RevealVal`);
-    if(rv){ rv.textContent = s.value.toFixed(3) + '"'; rv.classList.remove('hidden'); }
+    const prefix = side==='inst'?'inst':'stu';
+    const btn = document.getElementById(`${prefix}SimRevealBtn`);
+    // Toggle: showGuide controls whether formula/reading are visible
+    s.showGuide = !s.showGuide;
+    if(btn) btn.textContent = s.showGuide ? '🙈 Hide Answer' : '👁 Reveal Answer';
+    caliperRedraw(side);
   } else {
     _origSimReveal(side);
+  }
+};
+
+// ── Override simToggleGuide to handle caliper ─────────────────────────────────
+const _origSimToggleGuide = simToggleGuide;
+simToggleGuide = function(side){
+  const s = SIM[side];
+  if(s.instrument === 'cal'){
+    s.showGuide = !s.showGuide;
+    const prefix = side==='inst'?'inst':'stu';
+    const btn = document.getElementById(`${prefix}SimGuideBtn`);
+    if(btn) btn.textContent = s.showGuide ? '📏 Hide Guide Line' : '📏 Show Guide Line';
+    caliperRedraw(side);
+  } else {
+    _origSimToggleGuide(side);
   }
 };
 
@@ -15930,7 +15987,7 @@ async function instSimSendRound(){
   if(!classId||!_instSimActive){alert('Start a session first.');return;}
   _instSimRoundNum++; _instSimRoundId=`r${_instSimRoundNum}`;
   const s=SIM['inst'];
-  await dbSet(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}`,{value:s.value,range:s.range,sentAt:ts(),responses:{}});
+  await dbSet(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/rounds/${_instSimRoundId}`,{value:s.value,range:s.range,instrumentType:s.instrument||'mic',sentAt:ts(),responses:{}});
   await dbSet(`${SIM_PATH(classId)}/currentRound`,{active:true,value:s.value,range:s.range,instrumentType:s.instrument||'mic',roundId:_instSimRoundId,roundNum:_instSimRoundNum,sessionNum:_instSimSessionNum,sentAt:Date.now(),showGuide:SIM['inst'].showGuide!==false});
   // Mark all enrolled students as initially absent — cleared when they join
   try{
