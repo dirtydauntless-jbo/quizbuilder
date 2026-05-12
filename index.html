@@ -14836,10 +14836,8 @@ function caliperSvgZoom(d, value, showGuide, locked, side){
     const tH = isWhole ? TICK_LG : isTenth ? TICK_MED : TICK_SM;
     const tW = isWhole ? 3 : isTenth ? 2 : 1.5;
 
-    // Only draw tick LINE at or right of jaw position
-    if(x >= ver0X - 1){
-      s += `<rect x="${x-tW/2}" y="${BASE_Y}" width="${tW}" height="${tH}" fill="${TICK_COL}"/>`;
-    }
+    // Draw all ticks across the full viewport
+    s += `<rect x="${x-tW/2}" y="${BASE_Y}" width="${tW}" height="${tH}" fill="${TICK_COL}"/>`;
 
     // Always draw labels — visible to left so student knows their position
     if(isWhole){
@@ -14923,28 +14921,54 @@ function caliperAttachDrag(svgId, side){
   const s_obj = SIM[side];
   if(!svg || s_obj.locked) return;
   svg.style.cursor = 'ew-resize';
+  let _dragAcc = 0;
+
+  // Mousedown/touchstart on SVG
   svg.onmousedown = svg.ontouchstart = (e) => {
     if(s_obj.locked || s_obj.animating) return;
     s_obj.dragging = true;
     s_obj.lastX = (e.touches ? e.touches[0].clientX : e.clientX);
+    _dragAcc = s_obj.value;
     svg.style.cursor = 'grabbing';
     e.preventDefault();
   };
-  svg.onmousemove = svg.ontouchmove = (e) => {
+
+  // Attach move/up to DOCUMENT so cursor leaving SVG during fast drag doesn't drop it
+  const onMove = (e) => {
     if(!s_obj.dragging) return;
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const dx = cx - s_obj.lastX;
     s_obj.lastX = cx;
     const rect = svg.getBoundingClientRect();
-    const scale = 920 / rect.width;
-    const PX_PER_INCH = 220;  // must match PPI in caliperSvgZoom
-    const dInch = (dx * scale) / PX_PER_INCH;
-    s_obj.value = Math.max(0, Math.min(5.999, Math.round((s_obj.value + dInch) * 1000) / 1000));
+    const dInch = (dx * (920 / rect.width)) / 220;
+    _dragAcc = Math.max(0, Math.min(5.999, _dragAcc + dInch));
+    s_obj.value = Math.round(_dragAcc * 1000) / 1000;
     caliperRedraw(side);
     e.preventDefault();
   };
-  svg.onmouseup = svg.ontouchend = () => { s_obj.dragging = false; svg.style.cursor = 'ew-resize'; };
-  svg.onmouseleave = () => { s_obj.dragging = false; };
+
+  const onUp = () => {
+    if(!s_obj.dragging) return;
+    s_obj.dragging = false;
+    svg.style.cursor = 'ew-resize';
+  };
+
+  // Remove old listeners first to avoid duplicates
+  document.removeEventListener('mousemove', svg._calMoveHandler);
+  document.removeEventListener('mouseup',   svg._calUpHandler);
+  document.removeEventListener('touchmove', svg._calMoveHandler);
+  document.removeEventListener('touchend',  svg._calUpHandler);
+
+  svg._calMoveHandler = onMove;
+  svg._calUpHandler   = onUp;
+
+  document.addEventListener('mousemove', onMove, { passive: false });
+  document.addEventListener('mouseup',   onUp);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend',  onUp);
+
+  // Keep onmouseleave only for cursor style, not drag cancel
+  svg.onmouseleave = () => { if(!s_obj.dragging) svg.style.cursor = 'ew-resize'; };
 }
 
 function instSimSwitchInstrument(){
