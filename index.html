@@ -8345,7 +8345,7 @@ function fibSmartMatch(student, correct){
 async function aiGradeFIB(question, correctAnswer, studentAnswer){
   try{
     const resp = await callAnthropic({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 100,
         messages: [{
           role: 'user',
@@ -8373,10 +8373,8 @@ Reply with ONLY one word: CORRECT or INCORRECT`
     const result = data.content?.[0]?.text?.trim().toUpperCase();
     return result === 'CORRECT';
   } catch(e){
-    console.warn('AI grading failed, using string match:', e.message);
-    // Fallback to string match
-    const norm = s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
-    return norm(studentAnswer)===norm(correctAnswer);
+    console.warn('AI grading failed, using smart match:', e.message);
+    return fibSmartMatch(String(studentAnswer), String(correctAnswer));
   }
 }
 
@@ -13593,7 +13591,7 @@ async function acsHandleFileUpload(input){
       // Pass 1: transcribe the raw text of the document (captures all text even at odd angles)
       status.textContent = '🔍 Scanning image...';
       const pass1 = await callAnthropic({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1000,
         messages: [{
           role: 'user',
