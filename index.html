@@ -8298,11 +8298,12 @@ const stuAiGrades = {};
 
 function stuCheckOk(q, ans){
   if(ans===null) return false;
-  if(q.type==='mc') return ans===q.correct;
-  // FIB: check AI grade if available (keyed by question index in activeQuiz)
+  if(q.type==='mc' || q.type==='acr_mc') return ans===q.correct;
+  // FIB / acr_fib: check AI grade if available (keyed by question index in activeQuiz)
   const qIdx = activeQuiz?.questions ? activeQuiz.questions.indexOf(q) : -1;
   if(qIdx >= 0 && typeof stuAiGrades[qIdx] === 'boolean') return stuAiGrades[qIdx];
-  // Local smart fallback when AI grade not available (e.g. offline or mid-session)
+  // Local smart fallback when AI grade not available
+  if(q.type==='acr_fib') return gradeAcronymFIB(String(ans), q.answer||q.a||'');
   return fibSmartMatch(String(ans), String(q.answer || q.a || ''));
 }
 
@@ -8398,7 +8399,7 @@ async function stuSubmitFIB(){
 
   // Grade with AI
   const q = activeQuiz.questions[stuCur];
-  if(q.type==='fib'){
+  if(q.type==='fib' || q.type==='acr_fib'){
     const isCorrect = await aiGradeFIB(q.q || q.question || '', q.answer || q.a || '', val);
     stuAiGrades[stuCur] = isCorrect;
   }
