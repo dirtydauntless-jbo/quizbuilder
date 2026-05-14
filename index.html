@@ -2763,16 +2763,19 @@ async function buildAcronymQuestions(qType, count, choiceCount){
 
 function gradeAcronymFIB(studentAnswer, correctAnswer){
   if(!studentAnswer) return false;
-  const normalize = s => s.trim().toLowerCase().replace(/[-\/\.\,\(\)\'\"]/g,' ').replace(/\s+/g,' ').trim();
+  // Lenient grading: word-by-word with typo tolerance
+  // - First letter must match
+  // - For words >4 chars, second letter must match (blocks "minimum" vs "maximum")
+  // - Levenshtein edits allowed: 1 for <=5 chars, 2 for 6-10 chars, 3 for 11+ chars
+  // - "&" treated same as "and"
+  // - Word count can differ by 1 (handles extra/missing words like "Suggested")
+  const normalize = s => s.trim().toLowerCase()
+    .replace(/\band\b/g,'&').replace(/[-\/\.\,\(\)\'\"]/g,' ')
+    .replace(/\s+/g,' ').trim();
   const stu = normalize(studentAnswer);
   const cor = normalize(correctAnswer);
   if(stu === cor) return true;
 
-  // Word-by-word comparison with strict anchor rules:
-  //   - First letter must always match
-  //   - For words longer than 4 chars, first 2 letters must match
-  //     (catches "minimum" vs "maximum": mi≠ma; won't penalize typos like "bulliten")
-  //   - Levenshtein edits: 1 for ≤5 chars, 2 for 6-10 chars, 3 for 11+ chars
   const stuWords = stu.split(' ');
   const corWords = cor.split(' ');
   if(Math.abs(stuWords.length - corWords.length) > 1) return false;
@@ -8417,19 +8420,16 @@ function stuToggleQuizStar(){
 }
 
 async function aqNav(dir){
-  // Auto-save FIB answer if the current question is FIB and has input
+  // Auto-save FIB answer when navigating away
   const curQ = activeQuiz?.questions?.[stuCur];
   if(curQ && (curQ.type==='fib' || curQ.type==='acr_fib')){
     const val = document.getElementById('fibIn')?.value.trim()||'';
-    if(val && val !== (stuAnswers[stuCur]||'')) {
-      // Grade with AI for fib type
+    if(val && val !== (stuAnswers[stuCur]||'')){
       if(curQ.type==='fib'){
-        stuAiGrades[stuCur] = await aiGradeFIB(curQ.q || curQ.question || '', curQ.answer || curQ.a || '', val);
+        stuAiGrades[stuCur] = await aiGradeFIB(curQ.q||curQ.question||'', curQ.answer||curQ.a||'', val);
       }
       stuAnswers[stuCur] = val;
       await stuSaveProgress();
-    } else if(!val) {
-      // Don't clear a previously saved answer if field is empty and user just browsed back
     }
   }
   if(dir===1&&stuCur===activeQuiz.questions.length-1){ stuShowReviewScreen(); return; }
@@ -16144,7 +16144,6 @@ async function instSimEndSession(){
   await dbSet(`${SIM_PATH(classId)}/sessions/${sessionNum}/endedAt`,ts());
   if(_instSimResponseListener){try{_instSimResponseListener.off();}catch(e){} _instSimResponseListener=null;}
   _instSimActive=false; _instSimRoundNum=0; _instSimSessionNum=0;
-  // Remove live badge from sim nav tab
   document.querySelector('.inst-sim-live-badge')?.remove();
   document.getElementById('instSimSessionBar')?.classList.add('hidden');
   document.getElementById('instSimStartBtn')?.classList.remove('hidden');
@@ -16152,7 +16151,6 @@ async function instSimEndSession(){
   document.getElementById('instSimRandSendBtn')?.classList.add('hidden');
   document.getElementById('instSimNextBtn')?.classList.add('hidden');
   document.getElementById('instSimResponsesWrap')?.classList.add('hidden');
-  // Restore photo reference window
   const bodyDiv=document.getElementById('instMicBody')?.parentElement;
   if(bodyDiv)bodyDiv.style.display='';
   _showInstToast(`✓ Session ended. "Instruments Session ${sessionNum}" added to gradebook.`,5000);
