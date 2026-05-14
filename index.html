@@ -13968,14 +13968,15 @@ function acsRenderPracticals(studentCodes){
     return;
   }
 
-  const maxScore = predictions[0].score;
+  const top = predictions.slice(0, 25);
+  const maxScore = top[0].score;
   const codeSet = new Set(studentCodes.map(x=>x.toUpperCase()));
 
   const tierDot = { high:'🔴', medium:'🟡', low:'🟢' };
   const tierLabel = { high:'HIGH', medium:'MED', low:'LOW' };
   const tierColor = { high:'var(--wl)', medium:'var(--accent)', low:'var(--cl)' };
 
-  const rows = predictions.map((p, i) => {
+  const rows = top.map((p, i) => {
     const rank = i + 1;
     const confidencePct = Math.round((p.score / maxScore) * 100);
     const matchedCodes = p.codes.filter(c => codeSet.has(c));
@@ -14011,7 +14012,7 @@ function acsRenderPracticals(studentCodes){
 
   list.innerHTML = `
     <div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-bottom:10px;padding:0 2px">
-      ${predictions.length} task${predictions.length!==1?'s':''} matched · Ranked by exam frequency × ACS code overlap · Add more codes to refine
+      ${predictions.length > 25 ? `Top 25 of ${predictions.length}` : `${predictions.length} task${predictions.length!==1?'s':''}`} matched · Ranked by exam frequency × ACS code overlap · Add more codes to refine
     </div>
     <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">${rows}</div>`;
 }
