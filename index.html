@@ -2763,18 +2763,33 @@ async function buildAcronymQuestions(qType, count, choiceCount){
 
 function gradeAcronymFIB(studentAnswer, correctAnswer){
   if(!studentAnswer) return false;
-  // Lenient grading:
-  // 1. Case insensitive
-  // 2. Ignore leading/trailing whitespace
-  // 3. Ignore punctuation differences (hyphens, slashes, periods)
-  // 4. Allow minor spelling errors via Levenshtein distance
-  const normalize = s => s.trim().toLowerCase().replace(/[-\/\.\,\(\)]/g,' ').replace(/\s+/g,' ').trim();
+  const normalize = s => s.trim().toLowerCase().replace(/[-\/\.\,\(\)\'\"]/g,' ').replace(/\s+/g,' ').trim();
   const stu = normalize(studentAnswer);
   const cor = normalize(correctAnswer);
   if(stu === cor) return true;
-  // Allow up to 2 character edits for answers > 8 chars, 1 edit for shorter
-  const maxEdits = cor.length > 8 ? 2 : 1;
-  return levenshtein(stu, cor) <= maxEdits;
+
+  // Word-by-word comparison with strict anchor rules:
+  //   - First letter must always match
+  //   - For words longer than 4 chars, first 2 letters must match
+  //     (catches "minimum" vs "maximum": mi≠ma; won't penalize typos like "bulliten")
+  //   - Levenshtein edits: 1 for ≤5 chars, 2 for 6-10 chars, 3 for 11+ chars
+  const stuWords = stu.split(' ');
+  const corWords = cor.split(' ');
+  if(Math.abs(stuWords.length - corWords.length) > 1) return false;
+
+  const longer  = stuWords.length >= corWords.length ? stuWords : corWords;
+  const shorter = stuWords.length >= corWords.length ? corWords : stuWords;
+  const wordEditsAllowed = len => len <= 5 ? 1 : len <= 10 ? 2 : 3;
+
+  let matched = 0, si = 0;
+  for(let li = 0; li < longer.length && si < shorter.length; li++){
+    const w1 = longer[li], w2 = shorter[si];
+    if(w1[0] !== w2[0]) continue;
+    if(w1.length > 4 && w2.length > 4 && w1[1] !== w2[1]) continue;
+    const maxEdits = wordEditsAllowed(Math.max(w1.length, w2.length));
+    if(levenshtein(w1, w2) <= maxEdits){ matched++; si++; }
+  }
+  return matched === shorter.length;
 }
 
 function levenshtein(a, b){
@@ -8245,8 +8260,7 @@ function renderStuQ(){
       <input class="fib-input" id="fibIn"
         type="text" value="${isAns?esc(String(userAns)):''}"
         placeholder="Type your answer..."
-        onkeydown="if(event.key==='Enter')stuSubmitFIB()" />
-      <button class="btn btn-primary" onclick="stuSubmitFIB()">Save Answer</button>
+        onkeydown="if(event.key==='Enter')aqNav(1)" />
     </div>`;
   }
 
@@ -8403,6 +8417,21 @@ function stuToggleQuizStar(){
 }
 
 async function aqNav(dir){
+  // Auto-save FIB answer if the current question is FIB and has input
+  const curQ = activeQuiz?.questions?.[stuCur];
+  if(curQ && (curQ.type==='fib' || curQ.type==='acr_fib')){
+    const val = document.getElementById('fibIn')?.value.trim()||'';
+    if(val && val !== (stuAnswers[stuCur]||'')) {
+      // Grade with AI for fib type
+      if(curQ.type==='fib'){
+        stuAiGrades[stuCur] = await aiGradeFIB(curQ.q || curQ.question || '', curQ.answer || curQ.a || '', val);
+      }
+      stuAnswers[stuCur] = val;
+      await stuSaveProgress();
+    } else if(!val) {
+      // Don't clear a previously saved answer if field is empty and user just browsed back
+    }
+  }
   if(dir===1&&stuCur===activeQuiz.questions.length-1){ stuShowReviewScreen(); return; }
   stuCur=Math.max(0,Math.min(activeQuiz.questions.length-1,stuCur+dir)); renderStuQ();
 }
@@ -15937,6 +15966,14 @@ async function instSimInit(){
     const ids=[...new Set([...Object.keys(own),...Object.keys(co)])];
     const classes=(await Promise.all(ids.map(async id=>{const c=await dbGet(`classrooms/${id}`);return c?{id,name:c.name}:null;}))).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name));
     picker.innerHTML='<option value="">— Select classroom —</option>'+classes.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+    // Auto-select any classroom with an active live session
+    let autoClass=null;
+    for(const cls of classes){
+      try{const cur=await dbGet(`${SIM_PATH(cls.id)}/currentRound`);if(cur&&cur.active){autoClass=cls.id;break;}}catch(e){}
+    }
+    if(autoClass) picker.value=autoClass;
+    else if(classes.length===1) picker.value=classes[0].id;
+    if(picker.value) await instSimOnClassChange();
   }catch(e){}
   instSimDraw();
 }
@@ -16093,12 +16130,20 @@ async function instSimDeleteRound(){
 
 async function instSimEndSession(){
   const classId=document.getElementById('instSimClassPicker')?.value;
-  if(!classId||!_instSimActive) return;
-  if(!confirm(`End Session ${_instSimSessionNum}?\n\nScores will be added to the gradebook.`)) return;
+  if(!classId) return;
+  // Re-check Firebase in case _instSimActive is stale after a page refresh
+  if(!_instSimActive){
+    const active=await dbGet(`${SIM_PATH(classId)}/currentRound`);
+    if(!active||!active.active) return;
+    _instSimActive=true;
+    _instSimSessionNum=active.sessionNum||_instSimSessionNum;
+  }
+  const sessionNum=_instSimSessionNum;
+  if(!confirm(`End Session ${sessionNum}?\n\nScores will be added to the gradebook.`)) return;
   await dbSet(`${SIM_PATH(classId)}/currentRound`,{active:false});
-  await dbSet(`${SIM_PATH(classId)}/sessions/${_instSimSessionNum}/endedAt`,ts());
+  await dbSet(`${SIM_PATH(classId)}/sessions/${sessionNum}/endedAt`,ts());
   if(_instSimResponseListener){try{_instSimResponseListener.off();}catch(e){} _instSimResponseListener=null;}
-  _instSimActive=false; _instSimRoundNum=0;
+  _instSimActive=false; _instSimRoundNum=0; _instSimSessionNum=0;
   // Remove live badge from sim nav tab
   document.querySelector('.inst-sim-live-badge')?.remove();
   document.getElementById('instSimSessionBar')?.classList.add('hidden');
@@ -16110,8 +16155,9 @@ async function instSimEndSession(){
   // Restore photo reference window
   const bodyDiv=document.getElementById('instMicBody')?.parentElement;
   if(bodyDiv)bodyDiv.style.display='';
-  _showInstToast(`✓ Session ended. "Instruments Session ${_instSimSessionNum}" added to gradebook.`,5000);
+  _showInstToast(`✓ Session ended. "Instruments Session ${sessionNum}" added to gradebook.`,5000);
   if(selectedClassId===classId) try{loadAssignedQuizList(classId);}catch(e){}
+  try{instSimLoadGrades();}catch(e){}
 }
 
 let _instSimSortCol = 'name', _instSimSortDir = 1;
