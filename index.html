@@ -5913,7 +5913,7 @@ async function loadQuizBank(){
       <div class="quiz-item-name">${esc(q.title)}</div>
       <div class="quiz-item-meta">
         <span>${q.questions?.length||0}q</span>
-        <span class="tag ${q.questionType==='fib'?'tag-fib':'tag-mc'}">${q.questionType==='fib'?'FIB':'MC'}</span>
+        <span class="tag ${(q.questionType==='fib'||q.questionType==='acr_fib')?'tag-fib':'tag-mc'}">${q.questionType==='fib'?'FIB':q.questionType==='acr_fib'?'✈ ACR FIB':q.questionType==='acr_mc'?'✈ ACR MC':'MC'}</span>
         <span>${q.questions?'v Ready':'! Draft'}</span>
       </div>
       <div class="qi-actions">
@@ -7655,7 +7655,7 @@ async function openStuClassroomPanel(classroomId, classroomName, instName){
         <div style="font-weight:600;font-size:.97rem;color:var(--text)">${esc(quiz.title)}</div>
         ${statusBadge}
       </div>
-      <div style="font-size:.83rem;color:var(--muted);margin-bottom:8px">${quiz.questions.length} questions · ${quiz.questionType==='fib'?'Fill-in-Blank':'Multiple Choice'}${quiz.timeLimit?' · '+quiz.timeLimit+' min':''}</div>
+      <div style="font-size:.83rem;color:var(--muted);margin-bottom:8px">${quiz.questions.length} questions · ${quiz.questionType==='fib'?'Fill-in-Blank':quiz.questionType==='acr_fib'?'✈ Acronym FIB':quiz.questionType==='acr_mc'?'✈ Acronym MC':'Multiple Choice'}${quiz.timeLimit?' · '+quiz.timeLimit+' min':''}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${!progress?.finished ? `<button class="btn btn-primary btn-sm" onclick="openStudentQuiz('${qid}','${iid}','${classroomId}');closeStuClassroomModal();" style="font-size:.8rem;padding:5px 14px">${progress?.answeredCount>0?'Continue':'Start Quiz'}</button>` : ''}
         ${retakeBtn}
@@ -7990,7 +7990,7 @@ async function loadStudentQuizzes(){
     return `<div class="quiz-card" onclick="openStudentQuiz('${qid}','${resolvedIid}','${entryClassId}')">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
         <div class="quiz-card-title">${esc(quiz.title)}</div>
-        <span class="tag ${quiz.questionType==='fib'?'tag-fib':'tag-mc'}">${quiz.questionType==='fib'?'Fill-in-Blank':'Multiple Choice'}</span>
+        <span class="tag ${(quiz.questionType==='fib'||quiz.questionType==='acr_fib')?'tag-fib':'tag-mc'}">${quiz.questionType==='fib'?'Fill-in-Blank':quiz.questionType==='acr_fib'?'✈ Acronym FIB':quiz.questionType==='acr_mc'?'✈ Acronym MC':'Multiple Choice'}</span>
       </div>
       <div class="quiz-card-meta">
         <span>${quiz.questions.length} questions</span>
@@ -8242,8 +8242,8 @@ function renderStuQ(){
   document.getElementById('aqPBar').style.width = `${((stuCur+1)/TQ)*100}%`;
 
   const tag = document.getElementById('aqQTag');
-  tag.className = `tag ${q.type==='fib'?'tag-fib':'tag-mc'}`;
-  tag.textContent = q.type==='fib' ? 'Fill in the Blank' : 'Multiple Choice';
+  tag.className = `tag ${(q.type==='fib'||q.type==='acr_fib')?'tag-fib':'tag-mc'}`;
+  tag.textContent = q.type==='fib'?'Fill in the Blank':q.type==='acr_fib'?'✈ Acronym FIB':q.type==='acr_mc'?'✈ Acronym MC':'Multiple Choice';
 
   const userAns = stuAnswers[stuCur];
   const isAns = userAns !== null;
@@ -9363,7 +9363,7 @@ function renderSpAssigned(){
           <div style="font-weight:600;font-size:.88rem;margin-bottom:5px">${esc(quiz.title)}</div>
           <div style="font-family:monospace;font-size:.6rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <span>${quiz.questions?.length||0} questions</span>
-            <span class="tag ${quiz.questionType==='fib'?'tag-fib':'tag-mc'}">${quiz.questionType==='fib'?'Fill-in-Blank':'Multiple Choice'}</span>
+            <span class="tag ${(quiz.questionType==='fib'||quiz.questionType==='acr_fib')?'tag-fib':'tag-mc'}">${quiz.questionType==='fib'?'Fill-in-Blank':quiz.questionType==='acr_fib'?'✈ Acronym FIB':quiz.questionType==='acr_mc'?'✈ Acronym MC':'Multiple Choice'}</span>
             ${statusLabel}
           </div>
         </div>
