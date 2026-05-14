@@ -2768,11 +2768,6 @@ function gradeAcronymFIB(studentAnswer, correctAnswer){
   const cor = normalize(correctAnswer);
   if(stu === cor) return true;
 
-  // Word-by-word comparison with strict anchor rules:
-  //   - First letter must always match
-  //   - For words longer than 4 chars, first 2 letters must match
-  //     (catches "minimum" vs "maximum": mi≠ma; won't penalize typos like "bulliten")
-  //   - Levenshtein edits: 1 for ≤5 chars, 2 for 6-10 chars, 3 for 11+ chars
   const stuWords = stu.split(' ');
   const corWords = cor.split(' ');
   if(Math.abs(stuWords.length - corWords.length) > 1) return false;
@@ -2781,13 +2776,24 @@ function gradeAcronymFIB(studentAnswer, correctAnswer){
   const shorter = stuWords.length >= corWords.length ? corWords : stuWords;
   const wordEditsAllowed = len => len <= 5 ? 1 : len <= 10 ? 2 : 3;
 
+  const wordsMatch = (w1, w2) => {
+    if(w1[0] !== w2[0]) return false;
+    const maxEdits = wordEditsAllowed(Math.max(w1.length, w2.length));
+    const dist = levenshtein(w1, w2);
+    if(dist <= maxEdits){
+      // Second-letter anchor only fires when edit distance >= 2 (prevents minimum/maximum
+      // confusion but allows single-letter shifts like "arodynamic" → "aerodynamic")
+      if(w1.length > 4 && w2.length > 4 && dist >= 2 && w1[1] !== w2[1]) return false;
+      return true;
+    }
+    // Abbreviation check: e.g. "dept" ≈ first 4 chars of "department"
+    const [sh, lg] = w1.length <= w2.length ? [w1, w2] : [w2, w1];
+    return sh.length >= 3 && levenshtein(sh, lg.substring(0, sh.length)) <= 1;
+  };
+
   let matched = 0, si = 0;
   for(let li = 0; li < longer.length && si < shorter.length; li++){
-    const w1 = longer[li], w2 = shorter[si];
-    if(w1[0] !== w2[0]) continue;
-    if(w1.length > 4 && w2.length > 4 && w1[1] !== w2[1]) continue;
-    const maxEdits = wordEditsAllowed(Math.max(w1.length, w2.length));
-    if(levenshtein(w1, w2) <= maxEdits){ matched++; si++; }
+    if(wordsMatch(longer[li], shorter[si])){ matched++; si++; }
   }
   return matched === shorter.length;
 }
