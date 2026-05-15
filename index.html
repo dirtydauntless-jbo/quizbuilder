@@ -8561,10 +8561,14 @@ async function stuSubmitFIB(){
   if(submitBtn){ submitBtn.disabled=true; submitBtn.textContent='Checking...'; }
   if(fibIn) fibIn.disabled=true;
 
-  // Grade with AI (skip API call if instructor already approved this answer)
+  // Grade: custom memory → local fuzzy match → AI (each level skips if previous passes)
   const q = activeQuiz.questions[stuCur];
   if(q.type==='fib' || q.type==='acr_fib'){
+    const localGrade = q.type==='acr_fib'
+      ? gradeAcronymFIB(val, q.answer||q.a||'', q.altAnswers)
+      : fibSmartMatch(val, String(q.answer||q.a||''));
     const isCorrect = checkCustomAnswer(stuCur, val)
+      || localGrade
       || await aiGradeFIB(q.q || q.question || '', q.answer || q.a || '', val, q.altAnswers);
     stuAiGrades[stuCur] = isCorrect;
   }
@@ -8586,9 +8590,13 @@ async function aqNav(dir){
   if(curQ && (curQ.type==='fib' || curQ.type==='acr_fib')){
     const val = document.getElementById('fibIn')?.value.trim()||'';
     if(val && val !== (stuAnswers[stuCur]||'')) {
-      // Grade with AI for fib type (skip API call if instructor already approved this answer)
-      if(curQ.type==='fib'){
+      // Grade: custom memory → local fuzzy match → AI
+      if(curQ.type==='fib' || curQ.type==='acr_fib'){
+        const localGrade = curQ.type==='acr_fib'
+          ? gradeAcronymFIB(val, curQ.answer||curQ.a||'', curQ.altAnswers)
+          : fibSmartMatch(val, String(curQ.answer||curQ.a||''));
         stuAiGrades[stuCur] = checkCustomAnswer(stuCur, val)
+          || localGrade
           || await aiGradeFIB(curQ.q || curQ.question || '', curQ.answer || curQ.a || '', val, curQ.altAnswers);
       }
       stuAnswers[stuCur] = val;
