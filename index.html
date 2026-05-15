@@ -1399,13 +1399,20 @@ setTimeout(function(){
         </div>
         <button onclick="document.getElementById('stuReviewOverlay').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer">✕</button>
       </div>
-      <div style="font-family:monospace;font-size:.7rem;color:var(--muted);padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0">
-        Tap any question to go back and change your answer. Starred questions (★) are highlighted.
+      <!-- Filter bar + hint -->
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0">
+        <button id="stuRevFilterAll" onclick="stuFilterReviewOverlay('all')" style="font-size:.7rem;padding:3px 10px;border-radius:4px;border:1px solid var(--blue);background:var(--blue);color:#fff;cursor:pointer">All</button>
+        <button id="stuRevFilterStarred" onclick="stuFilterReviewOverlay('starred')" style="font-size:.7rem;padding:3px 10px;border-radius:4px;border:1px solid rgba(240,165,0,.5);background:transparent;color:var(--accent);cursor:pointer">★ Starred Only</button>
+        <span style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-left:4px">Tap any question to go back and edit your answer</span>
       </div>
       <div id="stuReviewList" style="flex:1;overflow-y:auto"></div>
-      <div style="padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0;background:var(--panel2)">
-        <button onclick="document.getElementById('stuReviewOverlay').style.display='none'" style="flex:1;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:var(--r);font-family:monospace;font-size:.85rem;padding:12px;cursor:pointer">← Keep Reviewing</button>
-        <button onclick="document.getElementById('stuReviewOverlay').style.display='none';stuShowResults()" style="flex:1;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:monospace;font-size:.9rem;font-weight:700;padding:12px;cursor:pointer">✓ Submit Quiz</button>
+      <!-- Bottom action bar -->
+      <div style="padding:14px 16px;border-top:1px solid var(--border);flex-shrink:0;background:var(--panel2)">
+        <div style="display:flex;gap:10px;margin-bottom:8px">
+          <button onclick="document.getElementById('stuReviewOverlay').style.display='none'" style="flex:1;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:var(--r);font-family:monospace;font-size:.85rem;padding:12px;cursor:pointer">← Back to Quiz</button>
+          <button id="stuFinalSubmitBtn" onclick="document.getElementById('stuReviewOverlay').style.display='none';stuShowResults()" style="flex:2;background:#dc2626;color:#fff;border:none;border-radius:var(--r);font-family:monospace;font-size:.9rem;font-weight:700;padding:12px;cursor:pointer">🎯 Submit for Grading</button>
+        </div>
+        <div style="font-family:monospace;font-size:.65rem;color:var(--muted);text-align:center">⚠ Submitting for grading is final — you cannot change your answers after this point</div>
       </div>
     </div>
 
@@ -1425,7 +1432,7 @@ setTimeout(function(){
       </div>
       <div class="nav-row">
         <button class="btn btn-ghost" id="aqPrev" onclick="aqNav(-1)">← Prev</button>
-        <button id="aqSubmitFromReview" class="btn btn-primary" onclick="stuSubmitFromReview()" style="display:none;background:#059669;font-size:.82rem;padding:10px 14px">✓ Submit Quiz</button>
+        <button id="aqSubmitFromReview" class="btn btn-primary" onclick="stuShowReviewScreen()" style="display:none;background:var(--blue);font-size:.82rem;padding:10px 14px">📋 Review &amp; Submit</button>
         <button class="btn btn-primary" id="aqNext" onclick="aqNav(1)">Next -></button>
       </div>
     </div>
@@ -8623,7 +8630,7 @@ function stuShowReviewScreen(){
       if(q.type==='mc' && q.options) ansText = q.options[ans];
       else ansText = String(ans);
     }
-    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.05);background:${isStarred?'rgba(240,165,0,.05)':'transparent'};cursor:pointer"
+    return `<div data-starred="${isStarred?'1':'0'}" style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.05);background:${isStarred?'rgba(240,165,0,.05)':'transparent'};cursor:pointer"
         onclick="stuCur=${i};renderStuQ();document.getElementById('stuReviewOverlay').style.display='none'">
       <div style="font-family:monospace;font-size:.72rem;color:var(--muted);min-width:28px;margin-top:2px">Q${i+1}</div>
       <div style="flex:1;min-width:0">
@@ -8648,7 +8655,47 @@ function stuShowReviewScreen(){
   document.getElementById('stuReviewStarCount').textContent = stuQuizStarred.size > 0
     ? `${stuQuizStarred.size} question${stuQuizStarred.size!==1?'s':''} starred`
     : 'No questions starred';
+  // Disable final submit if there are unanswered questions
+  const finalBtn = document.getElementById('stuFinalSubmitBtn');
+  if(finalBtn){
+    finalBtn.disabled = unanswered > 0;
+    finalBtn.style.opacity = unanswered > 0 ? '0.45' : '1';
+    finalBtn.style.cursor = unanswered > 0 ? 'not-allowed' : 'pointer';
+    finalBtn.title = unanswered > 0 ? `Answer all ${unanswered} remaining question${unanswered!==1?'s':''} before submitting` : 'Submit your quiz for grading';
+  }
+  stuFilterReviewOverlay('all'); // reset to All each time overlay opens
   overlay.style.display = 'flex';
+}
+
+function stuFilterReviewOverlay(mode){
+  const allBtn = document.getElementById('stuRevFilterAll');
+  const starBtn = document.getElementById('stuRevFilterStarred');
+  if(allBtn){
+    allBtn.style.background = mode==='all' ? 'var(--blue)' : 'transparent';
+    allBtn.style.color = mode==='all' ? '#fff' : 'var(--text)';
+  }
+  if(starBtn){
+    starBtn.style.background = mode==='starred' ? 'var(--accent)' : 'transparent';
+    starBtn.style.color = mode==='starred' ? '#000' : 'var(--accent)';
+  }
+  const items = document.querySelectorAll('#stuReviewList [data-starred]');
+  let visible = 0;
+  items.forEach(el => {
+    const show = mode==='all' || (mode==='starred' && el.dataset.starred==='1');
+    el.style.display = show ? '' : 'none';
+    if(show) visible++;
+  });
+  // Show empty state if no starred questions exist
+  const list = document.getElementById('stuReviewList');
+  const existingEmpty = list.querySelector('.rev-empty-state');
+  if(existingEmpty) existingEmpty.remove();
+  if(mode==='starred' && visible===0){
+    const div = document.createElement('div');
+    div.className = 'rev-empty-state';
+    div.style.cssText = 'padding:32px;text-align:center;font-family:monospace;font-size:.78rem;color:var(--muted)';
+    div.textContent = 'No starred questions. Star a question with ☆ while taking the quiz.';
+    list.appendChild(div);
+  }
 }
 
 async function stuShowResults(silent=false){
