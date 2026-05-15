@@ -1661,7 +1661,12 @@ setTimeout(function(){
         <div id="spAnswerReview" class="hidden">
           <button class="back-btn" onclick="spBackToHistory()">← Back to History</button>
           <div id="spReviewTitle" style="font-weight:600;font-size:.95rem;margin-bottom:4px"></div>
-          <div id="spReviewScore" style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:14px"></div>
+          <div id="spReviewScore" style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:10px"></div>
+          <div style="display:flex;gap:6px;margin-bottom:12px">
+            <button id="spFilterAll" onclick="spFilterReview('all')" style="font-size:.7rem;padding:3px 10px;border-radius:4px;border:1px solid var(--cl);background:var(--cl);color:#fff;cursor:pointer">All</button>
+            <button id="spFilterWrong" onclick="spFilterReview('wrong')" style="font-size:.7rem;padding:3px 10px;border-radius:4px;border:1px solid rgba(204,68,68,.5);background:transparent;color:#e85555;cursor:pointer">Wrong Only</button>
+            <button id="spFilterCorrect" onclick="spFilterReview('correct')" style="font-size:.7rem;padding:3px 10px;border-radius:4px;border:1px solid rgba(58,170,102,.5);background:transparent;color:var(--cl);cursor:pointer">Correct Only</button>
+          </div>
           <div class="answer-review" id="spReviewItems"></div>
         </div>
       </div>
@@ -8201,6 +8206,7 @@ async function openStudentQuiz(quizId, instructorId, classroomIdOverride){
   _quizFinished = false;
   _retakeUsedThisSession = false;
   _retakeUsedThisSession = false; // reset for new quiz session
+  loadCustomAnswers(instructorId, quizId); // async, non-blocking — available before first FIB submit
   const saved = await dbGet(`quizProgress/${_qClassId}/${quizId}/${stuKey}`);
 
   if(saved && saved.answers){
@@ -8392,6 +8398,32 @@ function renderStuQ(){
 // AI grading results: maps question index -> true/false
 const stuAiGrades = {};
 
+// Custom accepted answers learned from instructor overrides: { [qIdx]: Set<normalizedAnswer> }
+let stuCustomAnswers = {};
+
+function normFibAns(s){ return String(s).toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+
+function checkCustomAnswer(qIdx, studentAnswer){
+  const set = stuCustomAnswers[qIdx];
+  if(!set || !set.size) return false;
+  return set.has(normFibAns(studentAnswer));
+}
+
+async function loadCustomAnswers(instructorId, quizId){
+  stuCustomAnswers = {};
+  if(!instructorId || !quizId) return;
+  try {
+    const snap = await dbGet(`quizzes/${instructorId}/${quizId}/customAnswers`);
+    if(snap && typeof snap === 'object'){
+      Object.entries(snap).forEach(([qIdxStr, answers]) => {
+        if(answers && typeof answers === 'object'){
+          stuCustomAnswers[parseInt(qIdxStr)] = new Set(Object.keys(answers).map(k => k.replace(/_/g,' ')));
+        }
+      });
+    }
+  } catch(e){ /* non-fatal */ }
+}
+
 function stuCheckOk(q, ans){
   if(ans===null) return false;
   if(q.type==='mc' || q.type==='acr_mc') return ans===q.correct;
@@ -8493,10 +8525,11 @@ async function stuSubmitFIB(){
   if(submitBtn){ submitBtn.disabled=true; submitBtn.textContent='Checking...'; }
   if(fibIn) fibIn.disabled=true;
 
-  // Grade with AI
+  // Grade with AI (skip API call if instructor already approved this answer)
   const q = activeQuiz.questions[stuCur];
   if(q.type==='fib' || q.type==='acr_fib'){
-    const isCorrect = await aiGradeFIB(q.q || q.question || '', q.answer || q.a || '', val);
+    const isCorrect = checkCustomAnswer(stuCur, val)
+      || await aiGradeFIB(q.q || q.question || '', q.answer || q.a || '', val);
     stuAiGrades[stuCur] = isCorrect;
   }
 
@@ -8517,9 +8550,10 @@ async function aqNav(dir){
   if(curQ && (curQ.type==='fib' || curQ.type==='acr_fib')){
     const val = document.getElementById('fibIn')?.value.trim()||'';
     if(val && val !== (stuAnswers[stuCur]||'')) {
-      // Grade with AI for fib type
+      // Grade with AI for fib type (skip API call if instructor already approved this answer)
       if(curQ.type==='fib'){
-        stuAiGrades[stuCur] = await aiGradeFIB(curQ.q || curQ.question || '', curQ.answer || curQ.a || '', val);
+        stuAiGrades[stuCur] = checkCustomAnswer(stuCur, val)
+          || await aiGradeFIB(curQ.q || curQ.question || '', curQ.answer || curQ.a || '', val);
       }
       stuAnswers[stuCur] = val;
       await stuSaveProgress();
@@ -9708,8 +9742,9 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
     const stored = await dbGet(`quizProgress/${spCurrentClassId}/${quizId}/${stuKey}/overrides`);
     if(stored && typeof stored === 'object') overrides = stored;
   }
+  const _overrideIid = entry.info?.instructorId || (instUser && instUser.uid) || '';
   _spOverrideCtx = spCurrentClassId
-    ? { classId: spCurrentClassId, quizId, stuKey, questions, rawAnswers: attempt.answers || [], overrides, attemptIndex }
+    ? { classId: spCurrentClassId, quizId, stuKey, questions, rawAnswers: attempt.answers || [], overrides, attemptIndex, instructorId: _overrideIid }
     : null;
 
   const rawAnswers = attempt.answers || [];
@@ -9730,6 +9765,7 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   hide('spHistoryList');
   hide('spAssignedList');
   show('spAnswerReview');
+  spFilterReview('all'); // reset filter each time review opens
 
   const total = attempt.totalCount || attempt.answeredCount || questions.length || 1;
   // Compute effective score using AI grades + any instructor overrides
@@ -9779,7 +9815,7 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
     const overrideBtn = _spOverrideCtx && !skipped
       ? `<button onclick="instToggleOverride(${i},${originalIsCorrect})" style="margin-top:6px;font-size:.62rem;padding:3px 9px;border-radius:3px;cursor:pointer;border:1px solid;background:${effectiveIsCorrect?'rgba(204,68,68,.08)':'rgba(58,170,102,.08)'};color:${effectiveIsCorrect?'#e85555':'var(--cl)'};border-color:${effectiveIsCorrect?'rgba(204,68,68,.3)':'rgba(58,170,102,.3)'}">${isOverridden?'↩ Revert':effectiveIsCorrect?'✗ Mark Incorrect':'✓ Mark Correct'}</button>`
       : '';
-    return `<div class="ar-item ${skipped?'ar-wrong':effectiveIsCorrect?'ar-correct':'ar-wrong'}">
+    return `<div class="ar-item ${skipped?'ar-wrong':effectiveIsCorrect?'ar-correct':'ar-wrong'}" data-correct="${effectiveIsCorrect?'1':'0'}" data-skip="${skipped?'1':'0'}">
       <div class="ar-q">${i+1}. ${esc(q.q)}
         <span style="font-family:monospace;font-size:.6rem;color:var(--muted);margin-left:8px">[${q.topic||''}]</span>
         ${overrideTag}
@@ -9869,6 +9905,22 @@ async function spOpenReview(quizId){
   document.getElementById('spReviewItems').innerHTML = items;
 }
 
+function spFilterReview(mode){
+  const btns = { all:'spFilterAll', wrong:'spFilterWrong', correct:'spFilterCorrect' };
+  Object.entries(btns).forEach(([m, id]) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const active = m === mode;
+    el.style.background = active ? (m==='wrong'?'#e85555': m==='correct'?'var(--cl)':'var(--cl)') : 'transparent';
+    el.style.color = active ? '#fff' : (m==='wrong'?'#e85555': m==='correct'?'var(--cl)':'var(--text)');
+  });
+  document.querySelectorAll('#spReviewItems .ar-item').forEach(el => {
+    if(mode === 'all') el.style.display = '';
+    else if(mode === 'wrong') el.style.display = el.dataset.correct === '0' ? '' : 'none';
+    else if(mode === 'correct') el.style.display = el.dataset.correct === '1' ? '' : 'none';
+  });
+}
+
 function spBackToHistory(){
   _spOverrideCtx = null;
   hide('spAnswerReview');
@@ -9879,15 +9931,23 @@ function spBackToHistory(){
 
 async function instToggleOverride(qIdx, originalIsCorrect){
   if(!_spOverrideCtx) return;
-  const { classId, quizId, stuKey, questions, rawAnswers, overrides, attemptIndex } = _spOverrideCtx;
+  const { classId, quizId, stuKey, questions, rawAnswers, overrides, attemptIndex, instructorId } = _spOverrideCtx;
   const currentEffective = overrides[qIdx] !== undefined ? overrides[qIdx] : originalIsCorrect;
   const wantCorrect = !currentEffective;
+  const q = questions[qIdx];
+  const isFIB = q && (q.type === 'fib' || q.type === 'acr_fib');
+  const studentAns = rawAnswers[qIdx] !== undefined && rawAnswers[qIdx] !== -1 ? rawAnswers[qIdx] : null;
   if(wantCorrect === originalIsCorrect){
     delete overrides[qIdx];
     await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/overrides/${qIdx}`, null);
   } else {
     overrides[qIdx] = wantCorrect;
     await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/overrides/${qIdx}`, wantCorrect);
+    // Learn this answer: save to quiz's custom accepted answers so future students auto-pass
+    if(wantCorrect && isFIB && studentAns && instructorId){
+      const normAns = String(studentAns).toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+      if(normAns) await dbSet(`quizzes/${instructorId}/${quizId}/customAnswers/${qIdx}/${normAns.replace(/\./g,'_')}`, true);
+    }
   }
   // Recalculate correctCount using the same aiGrades-aware logic as spOpenAttemptReview
   const entry2 = spCurrentQuizzes.find(q => q.qid === quizId);
