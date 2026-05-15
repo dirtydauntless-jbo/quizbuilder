@@ -8959,7 +8959,8 @@ async function stuSaveProgress(finishing=false){
         answeredCount: answered,
         answers: stuAnswers.map(a => a === null ? -1 : a),
         finishedAt: ts(),
-        score: `${correct}/${TQ}`
+        score: `${correct}/${TQ}`,
+        aiGrades: Object.keys(stuAiGrades).length ? {...stuAiGrades} : null
       });
     }catch(e){ _archivedQuizIds.delete(archiveKey); } // release lock on error
   }
@@ -9689,6 +9690,7 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
         totalCount: progress.totalCount || progress.answeredCount,
         answeredCount: progress.answeredCount,
         answers: progress.answers,
+        aiGrades: progress.aiGrades || null,
         finishedAt: progress.finishedAt
       });
     }
@@ -9712,18 +9714,29 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
 
   const rawAnswers = attempt.answers || [];
   const answers = rawAnswers.length ? rawAnswers : new Array(questions.length).fill(-1);
+  // Use AI grades stored with this attempt (respects leniency applied at quiz time)
+  const aiGrades = attempt.aiGrades || {};
+
+  // Helper: determine whether a question was correct at quiz time (uses aiGrades for FIB)
+  function resolveOriginalCorrect(q, i, studentAns){
+    if(studentAns === null) return false;
+    if(q.type === 'mc' || q.type === 'acr_mc') return studentAns === q.correct;
+    if(aiGrades[i] !== undefined) return !!aiGrades[i];
+    // Fallback when no AI grade stored
+    if(q.type === 'acr_fib') return gradeAcronymFIB(String(studentAns), q.answer||q.a||'');
+    return fibSmartMatch(String(studentAns), String(q.answer||q.a||''));
+  }
 
   hide('spHistoryList');
   hide('spAssignedList');
   show('spAnswerReview');
 
   const total = attempt.totalCount || attempt.answeredCount || questions.length || 1;
-  // Recalculate score applying any overrides
+  // Compute effective score using AI grades + any instructor overrides
   let effectiveCorrect = 0;
   questions.forEach((q, i) => {
-    const ra = answers[i] !== undefined ? answers[i] : -1;
-    const sa = ra === -1 ? null : ra;
-    const origOk = sa !== null && (q.type === 'mc' ? sa === q.correct : String(sa).toLowerCase().replace(/[^a-z0-9]/g,' ').trim() === String(q.answer||'').toLowerCase().replace(/[^a-z0-9]/g,' ').trim());
+    const sa = (answers[i] !== undefined && answers[i] !== -1) ? answers[i] : null;
+    const origOk = resolveOriginalCorrect(q, i, sa);
     if(overrides[i] !== undefined ? overrides[i] : origOk) effectiveCorrect++;
   });
   const pct = Math.round((effectiveCorrect / total) * 100);
@@ -9735,17 +9748,15 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   const items = questions.map((q, i) => {
     const rawAns = answers[i] !== undefined ? answers[i] : -1;
     const studentAns = rawAns === -1 ? null : rawAns;
-    const originalIsCorrect = studentAns !== null && (
-      q.type === 'mc'
-        ? studentAns === q.correct
-        : String(studentAns).toLowerCase().replace(/[^a-z0-9]/g,' ').trim() ===
-          String(q.answer||'').toLowerCase().replace(/[^a-z0-9]/g,' ').trim()
-    );
+    const originalIsCorrect = resolveOriginalCorrect(q, i, studentAns);
     const isOverridden = overrides[i] !== undefined;
     const effectiveIsCorrect = isOverridden ? overrides[i] : originalIsCorrect;
+    const aiLenient = studentAns !== null && !isOverridden && originalIsCorrect &&
+      (q.type === 'acr_fib' || q.type === 'fib') &&
+      aiGrades[i] !== undefined;
     const skipped = studentAns === null;
     let answerHtml = '';
-    if(q.type === 'mc'){
+    if(q.type === 'mc' || q.type === 'acr_mc'){
       answerHtml = (q.options||[]).map((opt,j) => {
         const isCorrectOpt = j === q.correct;
         const isStudentPick = j === studentAns;
@@ -9758,9 +9769,9 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
       }).join('');
     } else {
       answerHtml = (studentAns
-        ? `<div class="ar-ans ${effectiveIsCorrect?'ar-ans-correct':'ar-ans-wrong'}">${effectiveIsCorrect?'v':'x'} Student: ${esc(String(studentAns))}</div>`
+        ? `<div class="ar-ans ${effectiveIsCorrect?'ar-ans-correct':'ar-ans-wrong'}">${effectiveIsCorrect?'v':'x'} Student: ${esc(String(studentAns))}${aiLenient?' <span style="font-size:.6rem;opacity:.7">(AI graded)</span>':''}</div>`
         : '<div class="ar-ans ar-ans-wrong">x Not answered</div>')
-        + (effectiveIsCorrect?'': `<div class="ar-ans ar-ans-correct">v Correct: ${esc(q.answer||'')}</div>`);
+        + (effectiveIsCorrect?'': `<div class="ar-ans ar-ans-correct">v Correct: ${esc(q.answer||q.a||'')}</div>`);
     }
     const overrideTag = isOverridden
       ? `<span style="font-family:monospace;font-size:.58rem;color:var(--accent);margin-left:6px;background:rgba(240,165,0,.12);padding:1px 5px;border-radius:3px;border:1px solid rgba(240,165,0,.3)">OVERRIDDEN</span>`
@@ -9878,15 +9889,31 @@ async function instToggleOverride(qIdx, originalIsCorrect){
     overrides[qIdx] = wantCorrect;
     await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/overrides/${qIdx}`, wantCorrect);
   }
-  // Recalculate correctCount
+  // Recalculate correctCount using the same aiGrades-aware logic as spOpenAttemptReview
+  const entry2 = spCurrentQuizzes.find(q => q.qid === quizId);
+  const attempt2 = entry2 ? (() => {
+    const allAttempts2 = [...(entry2.attempts || [])];
+    if(entry2.progress && entry2.progress.finished){
+      const alreadyArchived = allAttempts2.some(a => a.finishedAt === entry2.progress.finishedAt);
+      if(!alreadyArchived) allAttempts2.push(entry2.progress);
+    }
+    allAttempts2.sort((a,b) => new Date(a.finishedAt) - new Date(b.finishedAt));
+    return allAttempts2[attemptIndex];
+  })() : null;
+  const aiGrades2 = (attempt2 && attempt2.aiGrades) || {};
+  function resolveOrigCorrect2(q, i, studentAns){
+    if(studentAns === null) return false;
+    if(q.type === 'mc' || q.type === 'acr_mc') return studentAns === q.correct;
+    if(aiGrades2[i] !== undefined) return !!aiGrades2[i];
+    if(q.type === 'acr_fib') return gradeAcronymFIB(String(studentAns), q.answer||q.a||'');
+    return fibSmartMatch(String(studentAns), String(q.answer||q.a||''));
+  }
   const answers = rawAnswers.length ? rawAnswers : new Array(questions.length).fill(-1);
   let correctCount = 0;
   questions.forEach((q, i) => {
     const ra = answers[i] !== undefined ? answers[i] : -1;
     const sa = ra === -1 ? null : ra;
-    const origOk = sa !== null && (q.type === 'mc'
-      ? sa === q.correct
-      : String(sa).toLowerCase().replace(/[^a-z0-9]/g,' ').trim() === String(q.answer||'').toLowerCase().replace(/[^a-z0-9]/g,' ').trim());
+    const origOk = resolveOrigCorrect2(q, i, sa);
     if(overrides[i] !== undefined ? overrides[i] : origOk) correctCount++;
   });
   await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/correctCount`, correctCount);
