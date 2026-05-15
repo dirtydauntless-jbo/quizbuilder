@@ -14,6 +14,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <style>
 :root{
   --bg:#0a0c0f;--panel:#111417;--panel2:#161a1f;--border:#1e2328;
@@ -1704,6 +1705,18 @@ setTimeout(function(){
 <div id="stuAvatarPickerModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('stuAvatarPickerModal')">
   <div class="modal" style="max-width:420px">
     <div class="modal-title">Choose Your Avatar</div>
+    <div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div id="avatarUploadPreview" style="width:52px;height:52px;border-radius:50%;background:var(--panel2);flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:1.5rem;transition:border .2s">📷</div>
+        <div style="flex:1">
+          <div style="font-size:.85rem;font-weight:600;color:var(--text);margin-bottom:6px">Upload a Photo</div>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;font-size:.78rem;display:inline-block;padding:4px 12px" for="avatarFileInput">Choose File</label>
+          <input type="file" id="avatarFileInput" accept="image/*" style="display:none" onchange="stuPreviewPhoto(this)">
+          <span id="avatarFileName" style="margin-left:8px;font-size:.72rem;color:var(--muted)"></span>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:.72rem;color:var(--muted);letter-spacing:.5px;margin-bottom:8px">OR PICK A STYLE</div>
     <div id="avatarPickerGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px"></div>
     <div style="display:flex;gap:10px">
       <button class="btn btn-ghost" style="flex:1" onclick="closeModal('stuAvatarPickerModal')">Cancel</button>
@@ -1875,10 +1888,12 @@ firebase.initializeApp({
   apiKey:"AIzaSyBaD9zy6OOP-S_lmkeRPH6iIMyW4SHmkCw",
   authDomain:"quiz-f332f.firebaseapp.com",
   databaseURL:"https://quiz-f332f-default-rtdb.firebaseio.com",
-  projectId:"quiz-f332f"
+  projectId:"quiz-f332f",
+  storageBucket:"quiz-f332f.firebasestorage.app"
 });
 const db = firebase.database();
 const auth = firebase.auth();
+const storage = firebase.storage();
 // Hide loading indicator now that Firebase is ready
 document.addEventListener('DOMContentLoaded', function(){
   var ind = document.getElementById('jsLoadingIndicator');
@@ -2138,11 +2153,14 @@ function stuShowMyProfile(){
   if(!el || !stuSession) return;
   const classrooms = (stuSession.classrooms || []);
   const seed = stuSession.uid || safeKey(stuSession.name || '?');
+  const photoURL = stuSession.photoURL || null;
   const avatarStyle = stuSession.avatarStyle || null;
   const initials = (stuSession.name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
-  const avatarEl = (avatarStyle && avatarStyle !== 'initials')
-    ? `<img src="${dicebearUrl(avatarStyle, seed)}" style="width:52px;height:52px;border-radius:50%;background:var(--panel2);object-fit:cover" alt="${esc(initials)}">`
-    : `<div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;flex-shrink:0">${initials}</div>`;
+  const avatarEl = photoURL
+    ? `<img src="${photoURL}" style="width:52px;height:52px;border-radius:50%;background:var(--panel2);object-fit:cover" alt="${esc(initials)}">`
+    : (avatarStyle && avatarStyle !== 'initials')
+      ? `<img src="${dicebearUrl(avatarStyle, seed)}" style="width:52px;height:52px;border-radius:50%;background:var(--panel2);object-fit:cover" alt="${esc(initials)}">`
+      : `<div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;flex-shrink:0">${initials}</div>`;
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
       <div style="position:relative;flex-shrink:0">
@@ -2496,13 +2514,14 @@ async function showStuJoinScreen(user){
       }
       stuSession = { name: displayName, uid: user.uid, email: user.email,
         avatarStyle: profile.avatarStyle || null,
+        photoURL: profile.photoURL || null,
         classrooms: joined,
         // backward-compat single fields (first classroom)
         classroomId: joined[0]?.classroomId || null,
         classroomCode: joined[0]?.classroomCode || null,
         classroomName: joined[0]?.classroomName || null };
     } else {
-      stuSession = { name: displayName, uid: user.uid, email: user.email, avatarStyle: profile.avatarStyle || null, classrooms: [], classroomId: null, classroomCode: null, classroomName: null };
+      stuSession = { name: displayName, uid: user.uid, email: user.email, avatarStyle: profile.avatarStyle || null, photoURL: profile.photoURL || null, classrooms: [], classroomId: null, classroomCode: null, classroomName: null };
     }
     showStuApp();
   } catch(e){
@@ -9337,11 +9356,18 @@ async function openStudentProfile(student, classId){
   const initials42 = student.name.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
   spAvatarEl.textContent = initials42; // fallback while loading
   if(student.uid){
-    dbGet(`studentProfiles/${student.uid}/avatarStyle`).then(style => {
-      if(style && style !== 'initials'){
+    dbGet(`studentProfiles/${student.uid}`).then(prof => {
+      if(prof?.photoURL){
         spAvatarEl.innerHTML = '';
         const img = document.createElement('img');
-        img.src = dicebearUrl(style, student.uid);
+        img.src = prof.photoURL;
+        img.style.cssText = 'width:42px;height:42px;border-radius:50%;object-fit:cover';
+        img.alt = initials42;
+        spAvatarEl.appendChild(img);
+      } else if(prof?.avatarStyle && prof.avatarStyle !== 'initials'){
+        spAvatarEl.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = dicebearUrl(prof.avatarStyle, student.uid);
         img.style.cssText = 'width:42px;height:42px;border-radius:50%;object-fit:cover';
         img.alt = initials42;
         spAvatarEl.appendChild(img);
@@ -9860,9 +9886,12 @@ const AVATAR_STYLES = [
 function dicebearUrl(style, seed){
   return `https://api.dicebear.com/9.x/${encodeURIComponent(style)}/svg?seed=${encodeURIComponent(seed)}`;
 }
-function avatarHTML(name, uid, avatarStyle, inlineStyle=''){
+function avatarHTML(name, uid, avatarStyle, inlineStyle='', photoURL=null){
   const seed = uid || safeKey(name || '?');
   const initials = (name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
+  if(photoURL){
+    return `<img src="${photoURL}" class="stu-avatar" style="width:32px;height:32px;${inlineStyle}" alt="${esc(initials)}">`;
+  }
   if(avatarStyle && avatarStyle !== 'initials'){
     return `<img src="${dicebearUrl(avatarStyle, seed)}" class="stu-avatar" style="width:32px;height:32px;${inlineStyle}" alt="${esc(initials)}">`;
   }
@@ -9870,35 +9899,93 @@ function avatarHTML(name, uid, avatarStyle, inlineStyle=''){
 }
 
 let _pendingAvatarStyle = null;
+let _pendingPhotoFile = null;
 function stuShowAvatarPicker(){
+  _pendingPhotoFile = null;
   const seed = stuSession?.uid || safeKey(stuSession?.name || '?');
   const current = stuSession?.avatarStyle || null;
-  _pendingAvatarStyle = current;
+  const currentPhoto = stuSession?.photoURL || null;
+  _pendingAvatarStyle = currentPhoto ? '__photo__' : current;
   const grid = document.getElementById('avatarPickerGrid');
   const initials = (stuSession?.name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
   grid.innerHTML = AVATAR_STYLES.map(s => {
     const preview = s.id === 'initials'
       ? `<div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.3rem">${initials}</div>`
       : `<img src="${dicebearUrl(s.id, seed)}" style="width:52px;height:52px;border-radius:50%;background:var(--panel2)" alt="${s.label}">`;
-    const isCurrent = s.id === (current || 'initials');
+    const isCurrent = !currentPhoto && s.id === (current || 'initials');
     return `<div class="avatar-opt${isCurrent?' selected':''}" data-style="${s.id}" onclick="selectAvatarOpt(this,'${s.id}')">${preview}<span>${s.label}</span></div>`;
   }).join('');
+  // Restore upload preview if student already has a photo
+  const prev = document.getElementById('avatarUploadPreview');
+  const nameEl = document.getElementById('avatarFileName');
+  if(currentPhoto){
+    prev.innerHTML = `<img src="${currentPhoto}" style="width:52px;height:52px;object-fit:cover">`;
+    prev.style.outline = '2px solid var(--accent)';
+    if(nameEl) nameEl.textContent = 'Current photo';
+  } else {
+    prev.innerHTML = '📷';
+    prev.style.outline = 'none';
+    if(nameEl) nameEl.textContent = '';
+  }
+  document.getElementById('avatarFileInput').value = '';
   show('stuAvatarPickerModal');
 }
 function selectAvatarOpt(el, styleId){
   document.querySelectorAll('#avatarPickerGrid .avatar-opt').forEach(o=>o.classList.remove('selected'));
   el.classList.add('selected');
   _pendingAvatarStyle = styleId;
+  _pendingPhotoFile = null;
+  const prev = document.getElementById('avatarUploadPreview');
+  if(prev){ prev.innerHTML = '📷'; prev.style.outline = 'none'; }
+  const nameEl = document.getElementById('avatarFileName');
+  if(nameEl) nameEl.textContent = '';
+  document.getElementById('avatarFileInput').value = '';
+}
+function stuPreviewPhoto(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ alert('Please select an image file.'); input.value=''; return; }
+  if(file.size > 5 * 1024 * 1024){ alert('Image must be under 5MB.'); input.value=''; return; }
+  _pendingPhotoFile = file;
+  _pendingAvatarStyle = '__photo__';
+  document.querySelectorAll('#avatarPickerGrid .avatar-opt').forEach(o=>o.classList.remove('selected'));
+  const reader = new FileReader();
+  reader.onload = e => {
+    const prev = document.getElementById('avatarUploadPreview');
+    prev.innerHTML = `<img src="${e.target.result}" style="width:52px;height:52px;object-fit:cover">`;
+    prev.style.outline = '2px solid var(--accent)';
+    const nameEl = document.getElementById('avatarFileName');
+    if(nameEl) nameEl.textContent = file.name.length > 20 ? file.name.slice(0,18)+'…' : file.name;
+  };
+  reader.readAsDataURL(file);
 }
 async function stuSaveAvatar(){
   if(!stuSession?.uid || _pendingAvatarStyle === null) return closeModal('stuAvatarPickerModal');
-  const style = _pendingAvatarStyle === 'initials' ? null : _pendingAvatarStyle;
-  try{
-    await dbSet(`studentProfiles/${stuSession.uid}/avatarStyle`, style);
-    stuSession.avatarStyle = style;
-    closeModal('stuAvatarPickerModal');
-    stuShowMyProfile();
-  }catch(e){ alert('Error saving avatar: ' + e.message); }
+  const uid = stuSession.uid;
+  if(_pendingAvatarStyle === '__photo__' && _pendingPhotoFile){
+    const ext = (_pendingPhotoFile.name.split('.').pop() || 'jpg').toLowerCase();
+    const ref = storage.ref(`profilePictures/${uid}/profile.${ext}`);
+    try{
+      const snap = await ref.put(_pendingPhotoFile);
+      const url = await snap.ref.getDownloadURL();
+      await dbSet(`studentProfiles/${uid}/photoURL`, url);
+      await dbSet(`studentProfiles/${uid}/avatarStyle`, null);
+      stuSession.photoURL = url;
+      stuSession.avatarStyle = null;
+      closeModal('stuAvatarPickerModal');
+      stuShowMyProfile();
+    }catch(e){ alert('Error uploading photo: ' + e.message); }
+  } else {
+    const style = _pendingAvatarStyle === 'initials' ? null : _pendingAvatarStyle;
+    try{
+      await dbSet(`studentProfiles/${uid}/avatarStyle`, style);
+      await dbSet(`studentProfiles/${uid}/photoURL`, null);
+      stuSession.avatarStyle = style;
+      stuSession.photoURL = null;
+      closeModal('stuAvatarPickerModal');
+      stuShowMyProfile();
+    }catch(e){ alert('Error saving avatar: ' + e.message); }
+  }
 }
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
 function fmtTime(iso){
