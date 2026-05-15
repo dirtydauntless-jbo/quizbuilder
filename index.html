@@ -9527,11 +9527,16 @@ async function openStudentProfile(student, classId){
   show('studentProfileModal');
 }
 
+function spScrollTop(){
+  document.querySelector('.stu-modal-body')?.scrollTo({ top: 0, behavior: 'instant' });
+}
+
 function spSwitchTab(tab){
   ['assigned','history'].forEach(t => {
     document.getElementById(`spTab${t.charAt(0).toUpperCase()+t.slice(1)}`)?.classList.toggle('active', t===tab);
     document.getElementById(`spPane${t.charAt(0).toUpperCase()+t.slice(1)}`)?.classList.toggle('active', t===tab);
   });
+  spScrollTop();
   if(tab === 'assigned'){ renderSpAssigned(); loadSpIntegrityFlags(); }
   if(tab === 'history')  renderSpHistory();
 }
@@ -9809,6 +9814,7 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   hide('spHistoryList');
   hide('spAssignedList');
   show('spAnswerReview');
+  spScrollTop();
   spFilterReview(_spReviewFilter); // restore active filter (resets to 'all' only on back)
 
   const total = attempt.totalCount || attempt.answeredCount || questions.length || 1;
@@ -9973,6 +9979,7 @@ function spBackToHistory(){
   _spOverrideCtx = null;
   _spReviewFilter = 'all';
   hide('spAnswerReview');
+  spScrollTop();
   const activeTab = document.getElementById('spTabHistory').classList.contains('active') ? 'history' : 'assigned';
   if(activeTab === 'history'){ showEl('spHistoryList'); }
   else { showEl('spAssignedList'); }
