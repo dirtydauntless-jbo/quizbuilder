@@ -2818,6 +2818,15 @@ async function buildAcronymQuestions(qType, count, choiceCount){
   });
 }
 
+// Strip common suffixes so "systems"≈"system", "checked"≈"check", "listing"≈"list"
+function stemFib(w){
+  if(w.length > 5 && w.endsWith('ing')) return w.slice(0,-3);
+  if(w.length > 4 && w.endsWith('ed'))  return w.slice(0,-2);
+  if(w.length > 4 && w.endsWith('es'))  return w.slice(0,-2);
+  if(w.length > 3 && w.endsWith('s'))   return w.slice(0,-1);
+  return w;
+}
+
 function gradeAcronymFIB(studentAnswer, correctAnswer, altAnswers){
   if(!studentAnswer) return false;
   // Check alternate acceptable answers first (exact word-match, same tolerance as primary)
@@ -2831,6 +2840,10 @@ function gradeAcronymFIB(studentAnswer, correctAnswer, altAnswers){
   const cor = normalize(correctAnswer);
   if(stu === cor) return true;
 
+  // Collapsed-space match: handles omitted spaces and hyphen variants
+  // e.g. "overpressurization" ≈ "over pressurization"
+  if(stu.replace(/\s/g,'') === cor.replace(/\s/g,'')) return true;
+
   const stuWords = stu.split(' ');
   const corWords = cor.split(' ');
   if(Math.abs(stuWords.length - corWords.length) > 1) return false;
@@ -2840,6 +2853,9 @@ function gradeAcronymFIB(studentAnswer, correctAnswer, altAnswers){
   const wordEditsAllowed = len => len <= 5 ? 1 : len <= 10 ? 2 : 3;
 
   const wordsMatch = (w1, w2) => {
+    if(w1 === w2) return true;
+    // Stem both words first — "systems"≈"system", "checking"≈"check"
+    if(stemFib(w1) === stemFib(w2)) return true;
     if(w1[0] !== w2[0]) return false;
     const maxEdits = wordEditsAllowed(Math.max(w1.length, w2.length));
     const dist = levenshtein(w1, w2);
@@ -8457,6 +8473,9 @@ function fibSmartMatch(student, correct){
   // Exact match after normalization
   if(ns === nc) return true;
 
+  // Collapsed-space match: handles omitted spaces and hyphen variants
+  if(ns.replace(/\s/g,'') === nc.replace(/\s/g,'')) return true;
+
   // Extract key content words (ignore stopwords)
   const stops = new Set(['a','an','the','is','are','was','were','be','been','being',
     'have','has','had','do','does','did','will','would','could','should','may',
@@ -8472,7 +8491,10 @@ function fibSmartMatch(student, correct){
   if(!ck.length) return ns.length > 0;
 
   // Count how many correct keywords appear in student answer
-  const hits = ck.filter(k => sk.some(sw => sw === k || sw.startsWith(k) || k.startsWith(sw))).length;
+  // stemFib handles -s / -es / -ed / -ing variants symmetrically
+  const hits = ck.filter(k => sk.some(sw =>
+    sw === k || sw.startsWith(k) || k.startsWith(sw) || stemFib(sw) === stemFib(k)
+  )).length;
   const coverage = hits / ck.length;
 
   // Accept if student covered ≥60% of key terms (lenient for multi-part answers)
