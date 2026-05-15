@@ -9809,7 +9809,7 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   hide('spHistoryList');
   hide('spAssignedList');
   show('spAnswerReview');
-  spFilterReview('all'); // reset filter each time review opens
+  spFilterReview(_spReviewFilter); // restore active filter (resets to 'all' only on back)
 
   const total = attempt.totalCount || attempt.answeredCount || questions.length || 1;
   // Compute effective score using AI grades + any instructor overrides
@@ -9950,7 +9950,10 @@ async function spOpenReview(quizId){
   document.getElementById('spReviewItems').innerHTML = items;
 }
 
+let _spReviewFilter = 'all';
+
 function spFilterReview(mode){
+  _spReviewFilter = mode;
   const btns = { all:'spFilterAll', wrong:'spFilterWrong', correct:'spFilterCorrect' };
   Object.entries(btns).forEach(([m, id]) => {
     const el = document.getElementById(id);
@@ -9968,6 +9971,7 @@ function spFilterReview(mode){
 
 function spBackToHistory(){
   _spOverrideCtx = null;
+  _spReviewFilter = 'all';
   hide('spAnswerReview');
   const activeTab = document.getElementById('spTabHistory').classList.contains('active') ? 'history' : 'assigned';
   if(activeTab === 'history'){ showEl('spHistoryList'); }
