@@ -180,7 +180,12 @@ a{color:var(--accent);text-decoration:none}
 .stat-lbl{font-family:monospace;font-size:.95rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:3px}
 .student-row{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:8px;transition:border-color .2s}
 .student-row:hover{border-color:var(--muted)}
-.stu-avatar{width:32px;height:32px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.12rem;color:var(--accent);flex-shrink:0}
+.stu-avatar{width:32px;height:32px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.12rem;color:var(--accent);flex-shrink:0;overflow:hidden}
+.avatar-opt{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 8px;border-radius:8px;border:2px solid var(--border);transition:border-color .15s,background .15s}
+.avatar-opt:hover{border-color:var(--muted)}
+.avatar-opt.selected{border-color:var(--accent);background:rgba(240,165,0,.08)}
+.avatar-opt img{width:52px;height:52px;border-radius:50%;background:var(--panel2)}
+.avatar-opt span{font-family:monospace;font-size:.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
 .stu-info{flex:1.2;min-width:0}
 .stu-name{font-weight:600;font-size:1.08rem;display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stu-meta{font-family:monospace;font-size:.95rem;color:var(--muted);margin-top:2px}
@@ -1623,7 +1628,7 @@ setTimeout(function(){
     <div class="stu-modal-header">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div style="display:flex;align-items:center;gap:12px">
-          <div id="spAvatar" class="stu-avatar" style="width:42px;height:42px;font-size:1.1rem;background:rgba(74,158,255,.15);color:var(--blue)"></div>
+          <div id="spAvatar" class="stu-avatar" style="width:42px;height:42px;font-size:1.1rem;background:rgba(74,158,255,.15);color:var(--blue);overflow:hidden"></div>
           <div>
             <div id="spName" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--text)"></div>
             <div id="spMeta" style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-top:2px"></div>
@@ -1691,6 +1696,18 @@ setTimeout(function(){
     <div id="stuMyProfileBody" style="font-family:monospace;font-size:.85rem"></div>
     <div style="margin-top:18px">
       <button class="btn btn-ghost" style="width:100%" onclick="closeModal('stuMyProfileModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Avatar Picker Modal (Student) -->
+<div id="stuAvatarPickerModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('stuAvatarPickerModal')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">Choose Your Avatar</div>
+    <div id="avatarPickerGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('stuAvatarPickerModal')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="stuSaveAvatar()">Save Avatar</button>
     </div>
   </div>
 </div>
@@ -2120,17 +2137,24 @@ function stuShowMyProfile(){
   const el = document.getElementById('stuMyProfileBody');
   if(!el || !stuSession) return;
   const classrooms = (stuSession.classrooms || []);
+  const seed = stuSession.uid || safeKey(stuSession.name || '?');
+  const avatarStyle = stuSession.avatarStyle || null;
+  const initials = (stuSession.name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
+  const avatarEl = (avatarStyle && avatarStyle !== 'initials')
+    ? `<img src="${dicebearUrl(avatarStyle, seed)}" style="width:52px;height:52px;border-radius:50%;background:var(--panel2);object-fit:cover" alt="${esc(initials)}">`
+    : `<div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;flex-shrink:0">${initials}</div>`;
   el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-      <div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;flex-shrink:0">
-        ${(stuSession.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+      <div style="position:relative;flex-shrink:0">
+        ${avatarEl}
       </div>
-      <div>
+      <div style="flex:1;min-width:0">
         <div style="font-size:1.05rem;font-weight:700;color:var(--text)">${esc(stuSession.name||'')}</div>
         <div style="font-size:.75rem;color:var(--muted)">${esc(stuSession.email||stuAuthUser?.email||'')}</div>
         <div style="font-size:.68rem;color:var(--muted);margin-top:2px">Student</div>
       </div>
     </div>
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:16px;font-size:.8rem" onclick="stuShowAvatarPicker()">🎨 Change Avatar</button>
     <div style="border-top:1px solid var(--border);padding-top:12px">
       <div style="font-size:.7rem;color:var(--muted);letter-spacing:1px;margin-bottom:8px">MY CLASSROOMS</div>
       ${classrooms.length
@@ -2471,13 +2495,14 @@ async function showStuJoinScreen(user){
         joined.push({ classroomId: cid, classroomCode: room.code || saved.code, classroomName: room.name || saved.name });
       }
       stuSession = { name: displayName, uid: user.uid, email: user.email,
+        avatarStyle: profile.avatarStyle || null,
         classrooms: joined,
         // backward-compat single fields (first classroom)
         classroomId: joined[0]?.classroomId || null,
         classroomCode: joined[0]?.classroomCode || null,
         classroomName: joined[0]?.classroomName || null };
     } else {
-      stuSession = { name: displayName, uid: user.uid, email: user.email, classrooms: [], classroomId: null, classroomCode: null, classroomName: null };
+      stuSession = { name: displayName, uid: user.uid, email: user.email, avatarStyle: profile.avatarStyle || null, classrooms: [], classroomId: null, classroomCode: null, classroomName: null };
     }
     showStuApp();
   } catch(e){
@@ -4116,7 +4141,9 @@ async function instRenameStudent(){
     await Promise.all(updates);
     spCurrentStudent.name = trimmed;
     document.getElementById('spName').textContent = trimmed;
-    document.getElementById('spAvatar').textContent = trimmed.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    // Only update avatar text if it's still showing initials (not an image)
+    const spAv = document.getElementById('spAvatar');
+    if(!spAv.querySelector('img')) spAv.textContent = trimmed.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
     _showInstToast('✓ Renamed to ' + trimmed, 3000);
   } catch(e){ alert('Error renaming: ' + e.message); }
 }
@@ -9305,8 +9332,22 @@ async function openStudentProfile(student, classId){
   const stuKey = student.uid || safeKey(student.name);
   const altKey = safeKey(student.name); // fallback for old records
 
-  // Set header
-  document.getElementById('spAvatar').textContent = student.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  // Set header — load avatar style if student has a UID
+  const spAvatarEl = document.getElementById('spAvatar');
+  const initials42 = student.name.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
+  spAvatarEl.textContent = initials42; // fallback while loading
+  if(student.uid){
+    dbGet(`studentProfiles/${student.uid}/avatarStyle`).then(style => {
+      if(style && style !== 'initials'){
+        spAvatarEl.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = dicebearUrl(style, student.uid);
+        img.style.cssText = 'width:42px;height:42px;border-radius:50%;object-fit:cover';
+        img.alt = initials42;
+        spAvatarEl.appendChild(img);
+      }
+    }).catch(()=>{})
+  }
   document.getElementById('spName').textContent = student.name;
   document.getElementById('spMeta').textContent = 'Joined ' + fmtDate(student.joinedAt);
 
@@ -9806,6 +9847,59 @@ function hideEl(id){document.getElementById(id)?.classList.add('hidden')}
 function ts(){return new Date().toISOString()}
 function safeKey(n){return String(n).replace(/[.#$[\]/\s]/g,'_').slice(0,40)}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+// ── AVATAR HELPERS ───────────────────────────────────────────────────────────
+const AVATAR_STYLES = [
+  { id:'bottts-neutral',    label:'Robot'    },
+  { id:'pixel-art-neutral', label:'Pixel'    },
+  { id:'fun-emoji',         label:'Emoji'    },
+  { id:'shapes',            label:'Shapes'   },
+  { id:'identicon',         label:'Geo'      },
+  { id:'initials',          label:'Monogram' },
+];
+function dicebearUrl(style, seed){
+  return `https://api.dicebear.com/9.x/${encodeURIComponent(style)}/svg?seed=${encodeURIComponent(seed)}`;
+}
+function avatarHTML(name, uid, avatarStyle, inlineStyle=''){
+  const seed = uid || safeKey(name || '?');
+  const initials = (name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
+  if(avatarStyle && avatarStyle !== 'initials'){
+    return `<img src="${dicebearUrl(avatarStyle, seed)}" class="stu-avatar" style="width:32px;height:32px;${inlineStyle}" alt="${esc(initials)}">`;
+  }
+  return `<div class="stu-avatar" style="background:rgba(74,158,255,.15);color:var(--blue);flex-shrink:0;${inlineStyle}">${esc(initials)}</div>`;
+}
+
+let _pendingAvatarStyle = null;
+function stuShowAvatarPicker(){
+  const seed = stuSession?.uid || safeKey(stuSession?.name || '?');
+  const current = stuSession?.avatarStyle || null;
+  _pendingAvatarStyle = current;
+  const grid = document.getElementById('avatarPickerGrid');
+  const initials = (stuSession?.name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
+  grid.innerHTML = AVATAR_STYLES.map(s => {
+    const preview = s.id === 'initials'
+      ? `<div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.3rem">${initials}</div>`
+      : `<img src="${dicebearUrl(s.id, seed)}" style="width:52px;height:52px;border-radius:50%;background:var(--panel2)" alt="${s.label}">`;
+    const isCurrent = s.id === (current || 'initials');
+    return `<div class="avatar-opt${isCurrent?' selected':''}" data-style="${s.id}" onclick="selectAvatarOpt(this,'${s.id}')">${preview}<span>${s.label}</span></div>`;
+  }).join('');
+  show('stuAvatarPickerModal');
+}
+function selectAvatarOpt(el, styleId){
+  document.querySelectorAll('#avatarPickerGrid .avatar-opt').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  _pendingAvatarStyle = styleId;
+}
+async function stuSaveAvatar(){
+  if(!stuSession?.uid || _pendingAvatarStyle === null) return closeModal('stuAvatarPickerModal');
+  const style = _pendingAvatarStyle === 'initials' ? null : _pendingAvatarStyle;
+  try{
+    await dbSet(`studentProfiles/${stuSession.uid}/avatarStyle`, style);
+    stuSession.avatarStyle = style;
+    closeModal('stuAvatarPickerModal');
+    stuShowMyProfile();
+  }catch(e){ alert('Error saving avatar: ' + e.message); }
+}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
 function fmtTime(iso){
   if(!iso)return'--';
