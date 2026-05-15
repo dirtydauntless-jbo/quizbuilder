@@ -13969,6 +13969,13 @@ function acsRenderPracticals(studentCodes){
   }
 
   const top = predictions.slice(0, 25);
+  // Recalculate tiers based on position within the displayed 25 (not the full list)
+  // Top 25% (~7) = HIGH, next 35% (~9) = MED, bottom 40% (~10) = LOW
+  const topTotal = top.length;
+  top.forEach((p, i) => {
+    const pct = i / topTotal;
+    p.tier = pct < 0.25 ? 'high' : pct < 0.60 ? 'medium' : 'low';
+  });
   const maxScore = top[0].score;
   const codeSet = new Set(studentCodes.map(x=>x.toUpperCase()));
 
