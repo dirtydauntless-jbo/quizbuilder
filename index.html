@@ -1649,7 +1649,7 @@ setTimeout(function(){
         <button class="tab-btn" id="spTabHistory" onclick="spSwitchTab('history')">Quiz History</button>
       </div>
     </div>
-    <div class="stu-modal-body" style="padding-top:16px">
+    <div id="spModalBody" class="stu-modal-body" style="padding-top:16px">
       <!-- Assigned tab -->
       <div id="spPaneAssigned" class="tab-pane active">
         <div id="spAssignedList"></div>
@@ -9528,17 +9528,16 @@ async function openStudentProfile(student, classId){
 }
 
 function spScrollTop(){
-  document.querySelector('.stu-modal-body')?.scrollTo({ top: 0, behavior: 'instant' });
+  document.getElementById('spModalBody')?.scrollTo({ top: 0, behavior: 'instant' });
 }
 
-function spSwitchTab(tab){
+async function spSwitchTab(tab){
   ['assigned','history'].forEach(t => {
     document.getElementById(`spTab${t.charAt(0).toUpperCase()+t.slice(1)}`)?.classList.toggle('active', t===tab);
     document.getElementById(`spPane${t.charAt(0).toUpperCase()+t.slice(1)}`)?.classList.toggle('active', t===tab);
   });
-  spScrollTop();
-  if(tab === 'assigned'){ renderSpAssigned(); loadSpIntegrityFlags(); }
-  if(tab === 'history')  renderSpHistory();
+  if(tab === 'assigned'){ renderSpAssigned(); loadSpIntegrityFlags(); spScrollTop(); }
+  if(tab === 'history'){ await renderSpHistory(); spScrollTop(); }
 }
 
 function renderSpAssigned(){
@@ -9814,8 +9813,6 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   hide('spHistoryList');
   hide('spAssignedList');
   show('spAnswerReview');
-  spScrollTop();
-  spFilterReview(_spReviewFilter); // restore active filter (resets to 'all' only on back)
 
   const total = attempt.totalCount || attempt.answeredCount || questions.length || 1;
   // Compute effective score using AI grades + any instructor overrides
@@ -9863,8 +9860,9 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
     const overrideTag = isOverridden
       ? `<span style="font-family:monospace;font-size:.58rem;color:var(--accent);margin-left:6px;background:rgba(240,165,0,.12);padding:1px 5px;border-radius:3px;border:1px solid rgba(240,165,0,.3)">OVERRIDDEN</span>`
       : '';
-    const overrideBtn = _spOverrideCtx && !skipped
-      ? `<button onclick="instToggleOverride(${i},${originalIsCorrect})" style="margin-top:6px;font-size:.62rem;padding:3px 9px;border-radius:3px;cursor:pointer;border:1px solid;background:${effectiveIsCorrect?'rgba(204,68,68,.08)':'rgba(58,170,102,.08)'};color:${effectiveIsCorrect?'#e85555':'var(--cl)'};border-color:${effectiveIsCorrect?'rgba(204,68,68,.3)':'rgba(58,170,102,.3)'}">${isOverridden?'↩ Revert':effectiveIsCorrect?'✗ Mark Incorrect':'✓ Mark Correct'}</button>`
+    // Only show button when answer is wrong (Mark Correct) or has been overridden (Revert)
+    const overrideBtn = _spOverrideCtx && !skipped && (!effectiveIsCorrect || isOverridden)
+      ? `<button onclick="instToggleOverride(${i},${originalIsCorrect})" style="margin-top:6px;font-size:.62rem;padding:3px 9px;border-radius:3px;cursor:pointer;border:1px solid;background:${isOverridden?'rgba(240,165,0,.08)':'rgba(58,170,102,.08)'};color:${isOverridden?'var(--accent)':'var(--cl)'};border-color:${isOverridden?'rgba(240,165,0,.3)':'rgba(58,170,102,.3)'}">${isOverridden?'↩ Revert':'✓ Mark Correct'}</button>`
       : '';
     return `<div class="ar-item ${skipped?'ar-wrong':effectiveIsCorrect?'ar-correct':'ar-wrong'}" data-correct="${effectiveIsCorrect?'1':'0'}" data-skip="${skipped?'1':'0'}">
       <div class="ar-q">${i+1}. ${esc(q.q)}
@@ -9877,6 +9875,15 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   }).join('');
 
   document.getElementById('spReviewItems').innerHTML = items || '<div class="empty-state">No answers recorded.</div>';
+  // Apply filter after items are in the DOM, then restore or reset scroll
+  spFilterReview(_spReviewFilter);
+  const body = document.getElementById('spModalBody');
+  if(_spReviewSavedScroll !== null && body){
+    body.scrollTop = _spReviewSavedScroll;
+    _spReviewSavedScroll = null;
+  } else {
+    spScrollTop();
+  }
 }
 
 async function spOpenReview(quizId){
@@ -9957,6 +9964,7 @@ async function spOpenReview(quizId){
 }
 
 let _spReviewFilter = 'all';
+let _spReviewSavedScroll = null;
 
 function spFilterReview(mode){
   _spReviewFilter = mode;
@@ -9978,6 +9986,7 @@ function spFilterReview(mode){
 function spBackToHistory(){
   _spOverrideCtx = null;
   _spReviewFilter = 'all';
+  _spReviewSavedScroll = null;
   hide('spAnswerReview');
   spScrollTop();
   const activeTab = document.getElementById('spTabHistory').classList.contains('active') ? 'history' : 'assigned';
@@ -10035,6 +10044,8 @@ async function instToggleOverride(qIdx, originalIsCorrect){
   await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/correctCount`, correctCount);
   const entry = spCurrentQuizzes.find(q => q.qid === quizId);
   if(entry?.progress) entry.progress.correctCount = correctCount;
+  // Save scroll position so the re-render lands back in the same spot
+  _spReviewSavedScroll = document.getElementById('spModalBody')?.scrollTop ?? null;
   await spOpenAttemptReview(quizId, attemptIndex, true);
 }
 
