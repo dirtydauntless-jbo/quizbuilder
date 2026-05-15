@@ -2772,7 +2772,11 @@ async function fetchAcronyms(){
     const acronyms = [];
     for(let i=startRow;i<rows.length;i++){
       const acr=(rows[i][0]||'').trim(), meaning=(rows[i][1]||'').trim();
-      if(acr && meaning && acr.length<25) acronyms.push({acronym:acr, meaning});
+      if(acr && meaning && acr.length<25){
+        // Columns C, D, E … are optional alternate acceptable answers
+        const altAnswers = [rows[i][2],rows[i][3],rows[i][4]].map(s=>(s||'').trim()).filter(Boolean);
+        acronyms.push({acronym:acr, meaning, altAnswers});
+      }
     }
     if(!acronyms.length) throw new Error(`No valid rows found. Check that Column A = acronym, Column B = meaning. Got ${rows.length} rows.`);
     _acronymCache = acronyms;
@@ -2799,7 +2803,8 @@ async function buildAcronymQuestions(qType, count, choiceCount){
 
     if(!isMC){
       return {id:idx, q:q_text, answer, type:'acr_fib',
-              acronym:item.acronym, meaning:item.meaning};
+              acronym:item.acronym, meaning:item.meaning,
+              altAnswers: item.altAnswers && item.altAnswers.length ? item.altAnswers : undefined};
     }
 
     const distractors = [...all].filter(a=>a!==item)
@@ -2813,8 +2818,14 @@ async function buildAcronymQuestions(qType, count, choiceCount){
   });
 }
 
-function gradeAcronymFIB(studentAnswer, correctAnswer){
+function gradeAcronymFIB(studentAnswer, correctAnswer, altAnswers){
   if(!studentAnswer) return false;
+  // Check alternate acceptable answers first (exact word-match, same tolerance as primary)
+  if(altAnswers && altAnswers.length){
+    for(const alt of altAnswers){
+      if(alt && gradeAcronymFIB(studentAnswer, alt)) return true;
+    }
+  }
   const normalize = s => s.trim().toLowerCase().replace(/[-\/\.\,\(\)\'\"]/g,' ').replace(/\s+/g,' ').trim();
   const stu = normalize(studentAnswer);
   const cor = normalize(correctAnswer);
@@ -4845,7 +4856,7 @@ async function loadPerfTab(){
       // FIB: compare string
       let ok = false;
       if(q.type === 'mc' || q.type === 'acr_mc') ok = (ans === q.correct);
-      else if(q.type === 'acr_fib') ok = gradeAcronymFIB(String(ans||''), q.answer||q.a||'');
+      else if(q.type === 'acr_fib') ok = gradeAcronymFIB(String(ans||''), q.answer||q.a||'', q.altAnswers);
       else {
         const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
         ok = norm(ans) === norm(q.answer || q.a || '');
@@ -5145,7 +5156,7 @@ async function loadCdPerfTab(){
       qAttempts[i]++;
       let ok = false;
       if(q.type === 'mc' || q.type === 'acr_mc') ok = (ans === q.correct);
-      else if(q.type === 'acr_fib') ok = gradeAcronymFIB(String(ans||''), q.answer||q.a||'');
+      else if(q.type === 'acr_fib') ok = gradeAcronymFIB(String(ans||''), q.answer||q.a||'', q.altAnswers);
       else { const norm = v => String(v||'').toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim(); ok = norm(ans) === norm(q.answer||q.a||''); }
       if(ok) qCorrect[i]++;
     });
@@ -8431,7 +8442,7 @@ function stuCheckOk(q, ans){
   const qIdx = activeQuiz?.questions ? activeQuiz.questions.indexOf(q) : -1;
   if(qIdx >= 0 && typeof stuAiGrades[qIdx] === 'boolean') return stuAiGrades[qIdx];
   // Local smart fallback when AI grade not available
-  if(q.type==='acr_fib') return gradeAcronymFIB(String(ans), q.answer||q.a||'');
+  if(q.type==='acr_fib') return gradeAcronymFIB(String(ans), q.answer||q.a||'', q.altAnswers);
   return fibSmartMatch(String(ans), String(q.answer || q.a || ''));
 }
 
@@ -8471,8 +8482,10 @@ function fibSmartMatch(student, correct){
 }
 
 // Call Claude API to grade a FIB answer
-async function aiGradeFIB(question, correctAnswer, studentAnswer){
+async function aiGradeFIB(question, correctAnswer, studentAnswer, altAnswers){
   try{
+    const altLine = altAnswers && altAnswers.length
+      ? `\nAlso Acceptable: ${altAnswers.join(' | ')}` : '';
     const resp = await callAnthropic({
         model: 'claude-sonnet-4-6',
         max_tokens: 100,
@@ -8481,10 +8494,11 @@ async function aiGradeFIB(question, correctAnswer, studentAnswer){
           content: `You are grading a fill-in-the-blank answer for an FAA Aviation Mechanic exam. Be lenient about spelling and phrasing — focus on whether the student understands the core concept.
 
 Question: ${question}
-Correct Answer: ${correctAnswer}
+Correct Answer: ${correctAnswer}${altLine}
 Student Answer: ${studentAnswer}
 
 Grade as CORRECT if the student's answer:
+- Matches the Correct Answer or any of the Also Acceptable answers (with minor spelling/wording variance)
 - Contains the key technical concepts and facts
 - Uses equivalent terminology, abbreviations, synonyms, or reasonable paraphrasing
 - Would be accepted by an FAA examiner even if worded differently
@@ -8529,7 +8543,7 @@ async function stuSubmitFIB(){
   const q = activeQuiz.questions[stuCur];
   if(q.type==='fib' || q.type==='acr_fib'){
     const isCorrect = checkCustomAnswer(stuCur, val)
-      || await aiGradeFIB(q.q || q.question || '', q.answer || q.a || '', val);
+      || await aiGradeFIB(q.q || q.question || '', q.answer || q.a || '', val, q.altAnswers);
     stuAiGrades[stuCur] = isCorrect;
   }
 
@@ -8553,7 +8567,7 @@ async function aqNav(dir){
       // Grade with AI for fib type (skip API call if instructor already approved this answer)
       if(curQ.type==='fib'){
         stuAiGrades[stuCur] = checkCustomAnswer(stuCur, val)
-          || await aiGradeFIB(curQ.q || curQ.question || '', curQ.answer || curQ.a || '', val);
+          || await aiGradeFIB(curQ.q || curQ.question || '', curQ.answer || curQ.a || '', val, curQ.altAnswers);
       }
       stuAnswers[stuCur] = val;
       await stuSaveProgress();
@@ -9758,7 +9772,7 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
     if(q.type === 'mc' || q.type === 'acr_mc') return studentAns === q.correct;
     if(aiGrades[i] !== undefined) return !!aiGrades[i];
     // Fallback when no AI grade stored
-    if(q.type === 'acr_fib') return gradeAcronymFIB(String(studentAns), q.answer||q.a||'');
+    if(q.type === 'acr_fib') return gradeAcronymFIB(String(studentAns), q.answer||q.a||'', q.altAnswers);
     return fibSmartMatch(String(studentAns), String(q.answer||q.a||''));
   }
 
@@ -9807,7 +9821,8 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
       answerHtml = (studentAns
         ? `<div class="ar-ans ${effectiveIsCorrect?'ar-ans-correct':'ar-ans-wrong'}">${effectiveIsCorrect?'v':'x'} Student: ${esc(String(studentAns))}${aiLenient?' <span style="font-size:.6rem;opacity:.7">(AI graded)</span>':''}</div>`
         : '<div class="ar-ans ar-ans-wrong">x Not answered</div>')
-        + (effectiveIsCorrect?'': `<div class="ar-ans ar-ans-correct">v Correct: ${esc(q.answer||q.a||'')}</div>`);
+        + (effectiveIsCorrect?''
+            : `<div class="ar-ans ar-ans-correct">v Correct: ${esc(q.answer||q.a||'')}${q.altAnswers&&q.altAnswers.length?' <span style="opacity:.6;font-size:.85em">| Also OK: '+q.altAnswers.map(esc).join(' | ')+'</span>':''}</div>`);
     }
     const overrideTag = isOverridden
       ? `<span style="font-family:monospace;font-size:.58rem;color:var(--accent);margin-left:6px;background:rgba(240,165,0,.12);padding:1px 5px;border-radius:3px;border:1px solid rgba(240,165,0,.3)">OVERRIDDEN</span>`
@@ -9965,7 +9980,7 @@ async function instToggleOverride(qIdx, originalIsCorrect){
     if(studentAns === null) return false;
     if(q.type === 'mc' || q.type === 'acr_mc') return studentAns === q.correct;
     if(aiGrades2[i] !== undefined) return !!aiGrades2[i];
-    if(q.type === 'acr_fib') return gradeAcronymFIB(String(studentAns), q.answer||q.a||'');
+    if(q.type === 'acr_fib') return gradeAcronymFIB(String(studentAns), q.answer||q.a||'', q.altAnswers);
     return fibSmartMatch(String(studentAns), String(q.answer||q.a||''));
   }
   const answers = rawAnswers.length ? rawAnswers : new Array(questions.length).fill(-1);
