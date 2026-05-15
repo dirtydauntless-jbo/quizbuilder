@@ -9701,14 +9701,14 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   const attempt = allAttempts[attemptIndex];
   if(!attempt) return;
 
-  // Load grade overrides (instructor-editable, current attempt only)
+  // Load grade overrides (instructor-editable; stored against current progress, visible from any attempt)
   const stuKey = spCurrentStudent?.uid || safeKey(spCurrentStudent?.name || '?');
   let overrides = {};
-  if(isCurrentProgress && spCurrentClassId){
+  if(spCurrentClassId){
     const stored = await dbGet(`quizProgress/${spCurrentClassId}/${quizId}/${stuKey}/overrides`);
     if(stored && typeof stored === 'object') overrides = stored;
   }
-  _spOverrideCtx = isCurrentProgress
+  _spOverrideCtx = spCurrentClassId
     ? { classId: spCurrentClassId, quizId, stuKey, questions, rawAnswers: attempt.answers || [], overrides, attemptIndex }
     : null;
 
@@ -9776,7 +9776,7 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
     const overrideTag = isOverridden
       ? `<span style="font-family:monospace;font-size:.58rem;color:var(--accent);margin-left:6px;background:rgba(240,165,0,.12);padding:1px 5px;border-radius:3px;border:1px solid rgba(240,165,0,.3)">OVERRIDDEN</span>`
       : '';
-    const overrideBtn = isCurrentProgress && !skipped
+    const overrideBtn = _spOverrideCtx && !skipped
       ? `<button onclick="instToggleOverride(${i},${originalIsCorrect})" style="margin-top:6px;font-size:.62rem;padding:3px 9px;border-radius:3px;cursor:pointer;border:1px solid;background:${effectiveIsCorrect?'rgba(204,68,68,.08)':'rgba(58,170,102,.08)'};color:${effectiveIsCorrect?'#e85555':'var(--cl)'};border-color:${effectiveIsCorrect?'rgba(204,68,68,.3)':'rgba(58,170,102,.3)'}">${isOverridden?'↩ Revert':effectiveIsCorrect?'✗ Mark Incorrect':'✓ Mark Correct'}</button>`
       : '';
     return `<div class="ar-item ${skipped?'ar-wrong':effectiveIsCorrect?'ar-correct':'ar-wrong'}">
