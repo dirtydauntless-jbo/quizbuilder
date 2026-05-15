@@ -1571,8 +1571,8 @@ setTimeout(function(){
 <div id="printPreviewModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('printPreviewModal')">
   <div class="modal" style="max-width:860px;width:96%;max-height:90vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent)">🖨 Print Preview</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div id="printPreviewTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent)">🖨 Print Preview</div>
+      <div id="printPreviewActions" style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="printQuizPDF()" title="Print / Save as PDF">📄 Print / PDF</button>
         <button class="btn btn-primary btn-sm" onclick="downloadQuizDocx()" title="Download as Word document (.rtf)">📝 Download Word</button>
         <button class="btn btn-ghost btn-sm" onclick="closeModal('printPreviewModal')">✕ Close</button>
@@ -6143,8 +6143,8 @@ function renderBuilderPanel(quiz, id){
       ${quiz.questions ? `
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div class="label" style="margin:0">Preview -- ${quiz.questions.length} Questions Generated</div>
-          <button onclick="openPrintPreview('${id}', true)" style="background:rgba(74,158,255,.12);color:var(--blue);border:1px solid rgba(74,158,255,.3);border-radius:3px;font-family:monospace;font-size:.68rem;padding:4px 10px;cursor:pointer;font-weight:600">✏️ Edit Questions</button>
+          <div class="label" style="margin:0">Preview — ${quiz.questions.length} Questions Generated</div>
+          <button class="btn btn-primary btn-sm" onclick="openPrintPreview('${id}', true)">✏️ Edit Questions</button>
         </div>
         <div id="qPreviewList_${id}" style="max-height:380px;overflow-y:auto;display:flex;flex-direction:column;gap:9px">
           ${quiz.questions.slice(0,8).map((q,i)=>`
@@ -11686,6 +11686,20 @@ async function openPrintPreview(quizId, editMode = false){
   _printQuizId = quizId;
 
   const preview = document.getElementById('printPreviewBody');
+  // Update modal header to match mode
+  const titleEl = document.getElementById('printPreviewTitle');
+  const actionsEl = document.getElementById('printPreviewActions');
+  if(titleEl) titleEl.textContent = editMode ? '✏️ Edit Quiz Questions' : '🖨 Print Preview';
+  if(actionsEl){
+    if(editMode){
+      actionsEl.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="closeModal('printPreviewModal')">✕ Close without saving</button>`;
+    } else {
+      actionsEl.innerHTML = `
+        <button class="btn btn-ghost btn-sm" onclick="printQuizPDF()" title="Print / Save as PDF">📄 Print / PDF</button>
+        <button class="btn btn-primary btn-sm" onclick="downloadQuizDocx()" title="Download as Word document (.rtf)">📝 Download Word</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('printPreviewModal')">✕ Close</button>`;
+    }
+  }
 
   if(editMode){
     // Inline edit mode: question text, answer choices, correct answer are all directly editable
