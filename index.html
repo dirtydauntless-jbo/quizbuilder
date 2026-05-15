@@ -1930,6 +1930,7 @@ let assignMode = 'all';
 // Student state
 let stuSession = null;        // { name, classroomId, classroomCode }
 let activeQuiz = null;
+let _quizFinished = false;  // true once results screen is shown; blocks post-finish tab-switch logging
 let stuAnswers = [];
 let stuQuizStarred = new Set(); // indices of starred quiz questions
 let stuCur = 0;
@@ -8197,6 +8198,7 @@ async function openStudentQuiz(quizId, instructorId, classroomIdOverride){
   const TQ = quiz.questions.length;
   const stuKey = stuSession.uid || safeKey(stuSession.name);
   activeQuiz = { ...quiz, id:quizId, instructorId, classroomId: _qClassId };
+  _quizFinished = false;
   _retakeUsedThisSession = false;
   _retakeUsedThisSession = false; // reset for new quiz session
   const saved = await dbGet(`quizProgress/${_qClassId}/${quizId}/${stuKey}`);
@@ -8588,6 +8590,7 @@ async function stuShowResults(silent=false){
   stopQuizTimer();
   clearTabWarning();
   unregisterQuizSession();
+  _quizFinished = true;
   document.getElementById('aqResultsPanel').classList.add('show');
   if(!silent) await stuSaveProgress(true);
 
@@ -9666,7 +9669,9 @@ async function spSetGradebook(quizId, attemptNumber, stuUid){
   }
 }
 
-async function spOpenAttemptReview(quizId, attemptIndex){
+let _spOverrideCtx = null;
+
+async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false){
   const entry = spCurrentQuizzes.find(q => q.qid === quizId);
   if(!entry) return;
 
@@ -9694,6 +9699,17 @@ async function spOpenAttemptReview(quizId, attemptIndex){
   const attempt = allAttempts[attemptIndex];
   if(!attempt) return;
 
+  // Load grade overrides (instructor-editable, current attempt only)
+  const stuKey = spCurrentStudent?.uid || safeKey(spCurrentStudent?.name || '?');
+  let overrides = {};
+  if(isCurrentProgress && spCurrentClassId){
+    const stored = await dbGet(`quizProgress/${spCurrentClassId}/${quizId}/${stuKey}/overrides`);
+    if(stored && typeof stored === 'object') overrides = stored;
+  }
+  _spOverrideCtx = isCurrentProgress
+    ? { classId: spCurrentClassId, quizId, stuKey, questions, rawAnswers: attempt.answers || [], overrides, attemptIndex }
+    : null;
+
   const rawAnswers = attempt.answers || [];
   const answers = rawAnswers.length ? rawAnswers : new Array(questions.length).fill(-1);
 
@@ -9702,21 +9718,31 @@ async function spOpenAttemptReview(quizId, attemptIndex){
   show('spAnswerReview');
 
   const total = attempt.totalCount || attempt.answeredCount || questions.length || 1;
-  const pct = Math.round((attempt.correctCount / total) * 100);
+  // Recalculate score applying any overrides
+  let effectiveCorrect = 0;
+  questions.forEach((q, i) => {
+    const ra = answers[i] !== undefined ? answers[i] : -1;
+    const sa = ra === -1 ? null : ra;
+    const origOk = sa !== null && (q.type === 'mc' ? sa === q.correct : String(sa).toLowerCase().replace(/[^a-z0-9]/g,' ').trim() === String(q.answer||'').toLowerCase().replace(/[^a-z0-9]/g,' ').trim());
+    if(overrides[i] !== undefined ? overrides[i] : origOk) effectiveCorrect++;
+  });
+  const pct = Math.round((effectiveCorrect / total) * 100);
   document.getElementById('spReviewTitle').textContent = `${quiz.title} - Attempt ${attempt.attemptNumber}`;
-  document.getElementById('spReviewScore').textContent =
-    `Score: ${attempt.correctCount}/${total} (${pct}%) - Completed ${fmtDate(attempt.finishedAt)}`;
+  document.getElementById('spReviewScore').innerHTML =
+    `Score: <strong style="color:${pct>=70?'var(--cl)':'var(--wl)'}">${effectiveCorrect}/${total} (${pct}%)</strong> — Completed ${fmtDate(attempt.finishedAt)}`;
 
-  // Build answer items (reuse existing logic)
+  // Build answer items
   const items = questions.map((q, i) => {
     const rawAns = answers[i] !== undefined ? answers[i] : -1;
     const studentAns = rawAns === -1 ? null : rawAns;
-    const isCorrect = studentAns !== null && (
+    const originalIsCorrect = studentAns !== null && (
       q.type === 'mc'
         ? studentAns === q.correct
         : String(studentAns).toLowerCase().replace(/[^a-z0-9]/g,' ').trim() ===
           String(q.answer||'').toLowerCase().replace(/[^a-z0-9]/g,' ').trim()
     );
+    const isOverridden = overrides[i] !== undefined;
+    const effectiveIsCorrect = isOverridden ? overrides[i] : originalIsCorrect;
     const skipped = studentAns === null;
     let answerHtml = '';
     if(q.type === 'mc'){
@@ -9732,15 +9758,23 @@ async function spOpenAttemptReview(quizId, attemptIndex){
       }).join('');
     } else {
       answerHtml = (studentAns
-        ? `<div class="ar-ans ${isCorrect?'ar-ans-correct':'ar-ans-wrong'}">${isCorrect?'v':'x'} Student: ${esc(String(studentAns))}</div>`
+        ? `<div class="ar-ans ${effectiveIsCorrect?'ar-ans-correct':'ar-ans-wrong'}">${effectiveIsCorrect?'v':'x'} Student: ${esc(String(studentAns))}</div>`
         : '<div class="ar-ans ar-ans-wrong">x Not answered</div>')
-        + (isCorrect?'': `<div class="ar-ans ar-ans-correct">v Correct: ${esc(q.answer||'')}</div>`);
+        + (effectiveIsCorrect?'': `<div class="ar-ans ar-ans-correct">v Correct: ${esc(q.answer||'')}</div>`);
     }
-    return `<div class="ar-item ${skipped?'ar-wrong':isCorrect?'ar-correct':'ar-wrong'}">
+    const overrideTag = isOverridden
+      ? `<span style="font-family:monospace;font-size:.58rem;color:var(--accent);margin-left:6px;background:rgba(240,165,0,.12);padding:1px 5px;border-radius:3px;border:1px solid rgba(240,165,0,.3)">OVERRIDDEN</span>`
+      : '';
+    const overrideBtn = isCurrentProgress && !skipped
+      ? `<button onclick="instToggleOverride(${i},${originalIsCorrect})" style="margin-top:6px;font-size:.62rem;padding:3px 9px;border-radius:3px;cursor:pointer;border:1px solid;background:${effectiveIsCorrect?'rgba(204,68,68,.08)':'rgba(58,170,102,.08)'};color:${effectiveIsCorrect?'#e85555':'var(--cl)'};border-color:${effectiveIsCorrect?'rgba(204,68,68,.3)':'rgba(58,170,102,.3)'}">${isOverridden?'↩ Revert':effectiveIsCorrect?'✗ Mark Incorrect':'✓ Mark Correct'}</button>`
+      : '';
+    return `<div class="ar-item ${skipped?'ar-wrong':effectiveIsCorrect?'ar-correct':'ar-wrong'}">
       <div class="ar-q">${i+1}. ${esc(q.q)}
         <span style="font-family:monospace;font-size:.6rem;color:var(--muted);margin-left:8px">[${q.topic||''}]</span>
+        ${overrideTag}
       </div>
       <div class="ar-answers">${answerHtml}</div>
+      ${overrideBtn}
     </div>`;
   }).join('');
 
@@ -9758,7 +9792,7 @@ async function spOpenReview(quizId){
   }
   if(allAttempts.length > 0){
     allAttempts.sort((a,b) => new Date(a.finishedAt)-new Date(b.finishedAt));
-    await spOpenAttemptReview(quizId, allAttempts.length - 1);
+    await spOpenAttemptReview(quizId, allAttempts.length - 1, true);
     return;
   }
   if(!entry.progress) return;
@@ -9825,10 +9859,40 @@ async function spOpenReview(quizId){
 }
 
 function spBackToHistory(){
+  _spOverrideCtx = null;
   hide('spAnswerReview');
   const activeTab = document.getElementById('spTabHistory').classList.contains('active') ? 'history' : 'assigned';
   if(activeTab === 'history'){ showEl('spHistoryList'); }
   else { showEl('spAssignedList'); }
+}
+
+async function instToggleOverride(qIdx, originalIsCorrect){
+  if(!_spOverrideCtx) return;
+  const { classId, quizId, stuKey, questions, rawAnswers, overrides, attemptIndex } = _spOverrideCtx;
+  const currentEffective = overrides[qIdx] !== undefined ? overrides[qIdx] : originalIsCorrect;
+  const wantCorrect = !currentEffective;
+  if(wantCorrect === originalIsCorrect){
+    delete overrides[qIdx];
+    await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/overrides/${qIdx}`, null);
+  } else {
+    overrides[qIdx] = wantCorrect;
+    await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/overrides/${qIdx}`, wantCorrect);
+  }
+  // Recalculate correctCount
+  const answers = rawAnswers.length ? rawAnswers : new Array(questions.length).fill(-1);
+  let correctCount = 0;
+  questions.forEach((q, i) => {
+    const ra = answers[i] !== undefined ? answers[i] : -1;
+    const sa = ra === -1 ? null : ra;
+    const origOk = sa !== null && (q.type === 'mc'
+      ? sa === q.correct
+      : String(sa).toLowerCase().replace(/[^a-z0-9]/g,' ').trim() === String(q.answer||'').toLowerCase().replace(/[^a-z0-9]/g,' ').trim());
+    if(overrides[i] !== undefined ? overrides[i] : origOk) correctCount++;
+  });
+  await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/correctCount`, correctCount);
+  const entry = spCurrentQuizzes.find(q => q.qid === quizId);
+  if(entry?.progress) entry.progress.correctCount = correctCount;
+  await spOpenAttemptReview(quizId, attemptIndex, true);
 }
 
 function showEl(id){ document.getElementById(id)?.classList.remove('hidden'); }
@@ -12211,8 +12275,8 @@ function clearTabWarning(){
 // Hovering over taskbar/dock does NOT set document.hidden — only full focus loss does
 let _hiddenSince = null;
 document.addEventListener('visibilitychange', function(){
-  // Quiz integrity
-  if(activeQuiz){
+  // Quiz integrity — do not log after quiz is finished (results screen)
+  if(activeQuiz && !_quizFinished){
     if(document.hidden){
       _hiddenSince = Date.now();
     } else {
@@ -12245,7 +12309,7 @@ window.addEventListener('blur', function(){
   if(_stuSimLiveMode && stuSession) _simWindowBlurSince = Date.now();
   _windowBlurTimer = setTimeout(()=>{
     if(!document.hidden){
-      if(activeQuiz && _windowBlurSince && (Date.now() - _windowBlurSince) >= 3000){
+      if(activeQuiz && !_quizFinished && _windowBlurSince && (Date.now() - _windowBlurSince) >= 3000){
         logIntegrityEvent('window_blur');
       }
       if(_stuSimLiveMode && stuSession && _simWindowBlurSince && (Date.now() - _simWindowBlurSince) >= 3000){
