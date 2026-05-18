@@ -52,6 +52,16 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "quizOverrides": {
+      ".read": "auth != null",
+      "$classId": {
+        "$quizId": {
+          "$stuKey": {
+            ".write": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+          }
+        }
+      }
+    },
     "quizSessions": {
       ".read": "auth != null",
       ".write": "auth != null"

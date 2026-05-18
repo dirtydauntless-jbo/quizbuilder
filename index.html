@@ -9832,7 +9832,7 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   const stuKey = spCurrentStudent?.uid || safeKey(spCurrentStudent?.name || '?');
   let overrides = {};
   if(spCurrentClassId){
-    const stored = await dbGet(`quizProgress/${spCurrentClassId}/${quizId}/${stuKey}/overrides`);
+    const stored = await dbGet(`quizOverrides/${spCurrentClassId}/${quizId}/${stuKey}`);
     if(stored && typeof stored === 'object') overrides = stored;
   }
   const _overrideIid = entry.info?.instructorId || (instUser && instUser.uid) || '';
@@ -10049,10 +10049,10 @@ async function instToggleOverride(qIdx, originalIsCorrect){
   const studentAns = rawAnswers[qIdx] !== undefined && rawAnswers[qIdx] !== -1 ? rawAnswers[qIdx] : null;
   if(wantCorrect === originalIsCorrect){
     delete overrides[qIdx];
-    await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/overrides/${qIdx}`, null);
+    await dbSet(`quizOverrides/${classId}/${quizId}/${stuKey}/${qIdx}`, null);
   } else {
     overrides[qIdx] = wantCorrect;
-    await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/overrides/${qIdx}`, wantCorrect);
+    await dbSet(`quizOverrides/${classId}/${quizId}/${stuKey}/${qIdx}`, wantCorrect);
     // Learn this answer: save to quiz's custom accepted answers so future students auto-pass
     if(wantCorrect && isFIB && studentAns && instructorId){
       const normAns = String(studentAns).toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
