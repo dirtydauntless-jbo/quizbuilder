@@ -2780,8 +2780,8 @@ async function fetchAcronyms(){
     for(let i=startRow;i<rows.length;i++){
       const acr=(rows[i][0]||'').trim(), meaning=(rows[i][1]||'').trim();
       if(acr && meaning && acr.length<25){
-        // Columns C, D, E … are optional alternate acceptable answers
-        const altAnswers = [rows[i][2],rows[i][3],rows[i][4]].map(s=>(s||'').trim()).filter(Boolean);
+        // Columns C–G are optional alternate acceptable answers (up to 5)
+        const altAnswers = [rows[i][2],rows[i][3],rows[i][4],rows[i][5],rows[i][6]].map(s=>(s||'').trim()).filter(Boolean);
         acronyms.push({acronym:acr, meaning, altAnswers});
       }
     }
