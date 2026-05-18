@@ -2928,18 +2928,17 @@ async function masterDashLoad(){
   const stuLogins12mo = stuUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cut12mo)).length;
   const instLogins12mo= instUsers.flatMap(u=>Object.keys(u?.sessions||{}).filter(k=>Number(k)>cut12mo)).length;
 
-  // ── Infer student activity from quiz submissions (historical fallback) ───────
-  // accessLog only exists since deployment — quiz submissions go back further
+  // ── Unique quiz-takers from quizProgress (source of truth for completions) ──
+  // quizSessions is a live-session tracker that clears on disconnect — not usable here
   const stuActiveFromQuiz = new Set();
   const stuActiveFromQuiz30d = new Set();
-  for(const [classId, classData] of Object.entries(allQuizSessions||{})){
-    for(const [stuKey, stuData] of Object.entries(classData||{})){
-      for(const [, quizData] of Object.entries(stuData||{})){
-        for(const [, attempt] of Object.entries(quizData||{})){
-          const t = attempt.submittedAt ? new Date(attempt.submittedAt).getTime() : 0;
-          if(t > 0){ stuActiveFromQuiz.add(stuKey); }
-          if(t > cut30d){ stuActiveFromQuiz30d.add(stuKey); }
-        }
+  for(const [, classData] of Object.entries(allProgress||{})){
+    for(const [, quizData] of Object.entries(classData||{})){
+      for(const [stuKey, prog] of Object.entries(quizData||{})){
+        if(!prog || typeof prog !== 'object' || !prog.finished) continue;
+        stuActiveFromQuiz.add(stuKey);
+        const ft = prog.finishedAt ? new Date(prog.finishedAt).getTime() : 0;
+        if(ft > cut30d) stuActiveFromQuiz30d.add(stuKey);
       }
     }
   }
@@ -2980,13 +2979,12 @@ async function masterDashLoad(){
     }
   }
   let qTaken30d=0,qTaken12mo=0;
-  for(const [,cd] of Object.entries(allQuizSessions||{})){
-    for(const [,sd] of Object.entries(cd||{})){
-      for(const [,qd] of Object.entries(sd||{})){
-        for(const [,a] of Object.entries(qd||{})){
-          const t=a.submittedAt?new Date(a.submittedAt).getTime():0;
-          if(t>cut30d) qTaken30d++; if(t>cut12mo) qTaken12mo++;
-        }
+  for(const [,cd] of Object.entries(allProgress||{})){
+    for(const [,quizData] of Object.entries(cd||{})){
+      for(const [,prog] of Object.entries(quizData||{})){
+        if(!prog || typeof prog !== 'object' || !prog.finished) continue;
+        const t = prog.finishedAt ? new Date(prog.finishedAt).getTime() : 0;
+        if(t>cut30d) qTaken30d++; if(t>cut12mo) qTaken12mo++;
       }
     }
   }
