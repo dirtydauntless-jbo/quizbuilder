@@ -10343,12 +10343,15 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
       answerHtml = (q.options||[]).map((opt,j) => {
         const isCorrectOpt = j === q.correct;
         const isStudentPick = j === studentAns;
+        const overriddenCorrect = isOverridden && overrides[i] === true;
         let cls = 'ar-ans-neutral';
         let prefix = 'ABC'[j]+'.';
-        if(isCorrectOpt && isStudentPick){cls='ar-ans-correct';prefix='v '+prefix;}
-        else if(isCorrectOpt){cls='ar-ans-correct';prefix='v '+prefix;}
-        else if(isStudentPick){cls='ar-ans-wrong';prefix='x '+prefix;}
-        return `<div class="ar-ans ${cls}">${prefix} ${esc(opt)}</div>`;
+        let suffix = '';
+        if(isCorrectOpt && isStudentPick){ cls='ar-ans-correct'; prefix='v '+prefix; }
+        else if(isCorrectOpt){ cls='ar-ans-correct'; prefix='v '+prefix; }
+        else if(isStudentPick && overriddenCorrect){ cls='ar-ans-correct'; prefix='v '+prefix; suffix=' <span style="font-size:.6rem;opacity:.7">(marked correct)</span>'; }
+        else if(isStudentPick){ cls='ar-ans-wrong'; prefix='x '+prefix; }
+        return `<div class="ar-ans ${cls}">${prefix} ${esc(opt)}${suffix}</div>`;
       }).join('');
     } else {
       answerHtml = (studentAns
