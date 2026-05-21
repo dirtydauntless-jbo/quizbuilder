@@ -1,8 +1,13 @@
 {
   "rules": {
     "config": {
-      ".read": true,
-      ".write": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+      ".write": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      "opSim": {
+        ".read": true
+      },
+      "instructorAccessCode": {
+        ".read": "auth != null"
+      }
     },
     "instructors": {
       ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",

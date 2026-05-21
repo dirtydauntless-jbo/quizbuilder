@@ -2081,17 +2081,19 @@ async function doEmailAuth(){
       if(!name){ showErr(errEl,'Please enter your name.'); return; }
       const accessCode = document.getElementById('authAccessCode')?.value?.trim();
       if(!accessCode){ showErr(errEl, 'Please enter the instructor access code.'); return; }
+      // Create Firebase auth account first so we are authenticated before reading the protected access code
+      let cred;
+      try{ cred = await auth.createUserWithEmailAndPassword(email, password); }
+      catch(e){ showErr(errEl, friendlyAuthError(e.code)); return; }
+      // Now authenticated — read and validate the access code
       let validCode = null;
       try{ validCode = await dbGet('config/instructorAccessCode'); }catch(e){}
-      if(!validCode){
-        showErr(errEl, 'Access code not configured. Ask your admin to set it in Firebase.');
+      if(!validCode || accessCode !== validCode){
+        try{ await cred.user.delete(); }catch(e){} // remove the orphaned auth account
+        await auth.signOut();
+        showErr(errEl, !validCode ? 'Access code not configured. Ask your admin.' : 'Invalid access code. Contact your administrator.');
         return;
       }
-      if(accessCode !== validCode){
-        showErr(errEl, 'Invalid access code. Contact your administrator.');
-        return;
-      }
-      const cred = await auth.createUserWithEmailAndPassword(email, password);
       await cred.user.updateProfile({ displayName: name });
       await dbSet(`instructors/${cred.user.uid}`, { name, email, createdAt: ts() });
       u = cred.user;
