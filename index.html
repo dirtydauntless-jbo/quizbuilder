@@ -86,19 +86,20 @@ a{color:var(--accent);text-decoration:none}
 .code-badge{font-family:'Bebas Neue',sans-serif;font-size:1.95rem;letter-spacing:6px;color:var(--accent);background:var(--bg);border:2px solid var(--border);border-radius:var(--r);padding:8px 20px;display:inline-block}
 
 /* -- ANNOUNCEMENT BANNER -- */
-.announce-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#92400e,#b45309,#d97706,#b45309,#92400e);border-top:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);user-select:none;flex-shrink:0}
-.announce-banner-track{display:flex;white-space:nowrap;animation:announceScroll 36s linear infinite}
-.announce-banner-track:hover{animation-play-state:paused}
-.announce-banner-item{display:inline-flex;align-items:center;gap:18px;padding:10px 48px;font-family:'Bebas Neue',monospace;font-size:1.05rem;letter-spacing:2.5px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
+.announce-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#92400e,#b45309,#d97706,#b45309,#92400e);border-top:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);user-select:none;width:100%}
+.announce-banner-track{display:flex;white-space:nowrap;-webkit-animation:announceScroll 36s linear infinite;animation:announceScroll 36s linear infinite}
+.announce-banner-item{display:inline-flex;align-items:center;gap:14px;padding:10px 32px;font-family:'Bebas Neue',monospace;font-size:1rem;letter-spacing:2px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
 .announce-banner-dot{color:rgba(255,255,255,.5);font-size:.75rem}
+@-webkit-keyframes announceScroll{0%{-webkit-transform:translateX(0)}100%{-webkit-transform:translateX(-50%)}}
 @keyframes announceScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 /* -- O&P SIMULATOR BANNER -- */
-.opsim-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#5b21b6,#1d4ed8,#7c3aed,#1d4ed8,#5b21b6);border-top:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);cursor:pointer;user-select:none;flex-shrink:0}
+.opsim-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#5b21b6,#1d4ed8,#7c3aed,#1d4ed8,#5b21b6);border-top:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);cursor:pointer;user-select:none;width:100%}
 .opsim-banner-wrap:hover{filter:brightness(1.15)}
-.opsim-banner-track{display:flex;white-space:nowrap;animation:opSimScroll 32s linear infinite}
+.opsim-banner-track{display:flex;white-space:nowrap;-webkit-animation:opSimScroll 32s linear infinite;animation:opSimScroll 32s linear infinite}
 .opsim-banner-track:hover{animation-play-state:paused}
-.opsim-banner-item{display:inline-flex;align-items:center;gap:18px;padding:11px 48px;font-family:'Bebas Neue',monospace;font-size:1.05rem;letter-spacing:2.5px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
+.opsim-banner-item{display:inline-flex;align-items:center;gap:14px;padding:10px 32px;font-family:'Bebas Neue',monospace;font-size:1rem;letter-spacing:2px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
 .opsim-banner-dot{color:rgba(255,255,255,.5);font-size:.75rem}
+@-webkit-keyframes opSimScroll{0%{-webkit-transform:translateX(0)}100%{-webkit-transform:translateX(-50%)}}
 @keyframes opSimScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 /* -- LANDING / AUTH -- */
 .landing{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;flex-direction:column;gap:20px}
@@ -688,15 +689,12 @@ setTimeout(function(){
 
 <!-- ============== INSTRUCTOR APP ============== -->
 <div id="instApp" class="hidden">
-  <div class="app-header" style="padding:0;gap:0;align-items:stretch">
-    <div style="flex-shrink:0;padding:12px 20px;display:flex;align-items:baseline;gap:4px;cursor:pointer" onclick="instSwitchTab('classrooms')" title="Go to home">
+  <div class="app-header">
+    <div style="display:flex;align-items:baseline;gap:4px;cursor:pointer" onclick="instSwitchTab('classrooms')" title="Go to home">
       <div class="app-title">Classroom AMT</div>
       <div class="app-subtitle">Instructor</div>
     </div>
-    <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden">
-      <div id="announceInstBanner" class="announce-banner-wrap hidden" style="border-top:none;border-bottom:none"></div>
-    </div>
-    <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;margin:auto 14px">
+    <div style="display:flex;align-items:center;gap:10px">
       <span class="conn-badge conn-ok" id="instConn">● Live</span>
       <div class="user-pill">
         <span id="instUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="instShowMyProfile()" title="View my profile">--</span>
@@ -704,6 +702,7 @@ setTimeout(function(){
       </div>
     </div>
   </div>
+  <div id="announceInstBanner" class="announce-banner-wrap hidden"></div>
 
   <div class="tab-bar">
     <button class="tab-btn active" onclick="instSwitchTab('classrooms')">Classrooms</button>
@@ -1159,20 +1158,18 @@ setTimeout(function(){
 </div>
 <!-- ============== STUDENT APP ============== -->
 <div id="stuApp" class="hidden">
-  <div class="app-header" style="padding:0;gap:0;align-items:stretch">
-    <div style="flex-shrink:0;padding:12px 20px;display:flex;align-items:baseline;cursor:pointer;gap:4px" onclick="stuSwitchTab('study')" title="Go to home">
+  <div class="app-header">
+    <div style="display:flex;align-items:baseline;cursor:pointer;gap:4px" onclick="stuSwitchTab('study')" title="Go to home">
       <div class="app-title">Classroom AMT</div>
       <div class="app-subtitle">Student</div>
     </div>
-    <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;overflow:hidden">
-      <div id="opSimStuBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator" style="border-top:none;border-bottom:none"></div>
-      <div id="announceStuBanner" class="announce-banner-wrap hidden" style="border-top:none;border-bottom:none"></div>
-    </div>
-    <div class="user-pill" style="flex-shrink:0;margin:auto 14px">
+    <div class="user-pill">
       <span id="stuUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="stuShowMyProfile()" title="View my profile">--</span>
       <button class="btn btn-ghost btn-sm i18n-signout" onclick="confirmSignOut('student')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:2px;border-radius:3px">Sign Out</button>
     </div>
   </div>
+  <div id="opSimStuBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator"></div>
+  <div id="announceStuBanner" class="announce-banner-wrap hidden"></div>
 
   <!-- Student nav tabs -->
   <div style="background:var(--panel2);border-bottom:2px solid var(--border);display:flex;gap:0;overflow-x:auto">
