@@ -85,6 +85,13 @@ a{color:var(--accent);text-decoration:none}
 .conn-ok{background:rgba(58,170,102,.14);color:var(--cl)}.conn-err{background:rgba(204,68,68,.14);color:var(--wl)}
 .code-badge{font-family:'Bebas Neue',sans-serif;font-size:1.95rem;letter-spacing:6px;color:var(--accent);background:var(--bg);border:2px solid var(--border);border-radius:var(--r);padding:8px 20px;display:inline-block}
 
+/* -- ANNOUNCEMENT BANNER -- */
+.announce-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#92400e,#b45309,#d97706,#b45309,#92400e);border-top:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);user-select:none;flex-shrink:0}
+.announce-banner-track{display:flex;white-space:nowrap;animation:announceScroll 36s linear infinite}
+.announce-banner-track:hover{animation-play-state:paused}
+.announce-banner-item{display:inline-flex;align-items:center;gap:18px;padding:10px 48px;font-family:'Bebas Neue',monospace;font-size:1.05rem;letter-spacing:2.5px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
+.announce-banner-dot{color:rgba(255,255,255,.5);font-size:.75rem}
+@keyframes announceScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 /* -- O&P SIMULATOR BANNER -- */
 .opsim-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#5b21b6,#1d4ed8,#7c3aed,#1d4ed8,#5b21b6);border-top:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);cursor:pointer;user-select:none;flex-shrink:0}
 .opsim-banner-wrap:hover{filter:brightness(1.15)}
@@ -554,6 +561,7 @@ setTimeout(function(){
   </div>
   <!-- O&P Simulator sign-up banner (landing) -->
   <div id="opSimLandingBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator" style="width:100%;max-width:640px;border-radius:8px;margin-bottom:4px"></div>
+  <div id="announceLandingBanner" class="announce-banner-wrap hidden" style="width:100%;max-width:640px;border-radius:8px;margin-bottom:4px"></div>
 
   <div class="landing-cards">
     <div class="landing-card" onclick="if(typeof showInstructorAuth==='function')showInstructorAuth()">
@@ -1152,6 +1160,8 @@ setTimeout(function(){
     </div>
     <!-- O&P Simulator sign-up banner (student app) -->
     <div id="opSimStuBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator" style="width:100%"></div>
+    <!-- General announcement banner (student app) -->
+    <div id="announceStuBanner" class="announce-banner-wrap hidden" style="width:100%"></div>
   </div>
 
   <!-- Student nav tabs -->
@@ -1999,6 +2009,7 @@ function showLanding(){
   show('landingScreen');
   applyLanguage(_currentLang);
   opSimInit().catch(()=>{});
+  announceBannerInit().catch(()=>{});
 }
 function showInstructorAuth(){ pendingAuthRole='instructor'; hideAll(); show('instAuthScreen'); }
 function showStudentJoin(){ pendingAuthRole='student'; hideAll(); show('stuAuthScreen'); }
@@ -3087,6 +3098,24 @@ async function masterDashLoad(){
       <div id="opSimSignupList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, true)}
 
+    ${panel('md-announce','Announcement Banner','📣',`
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:monospace;font-size:.82rem">
+          <input type="checkbox" id="announceEnabled" style="width:16px;height:16px;cursor:pointer" onchange="announceAdminToggle()"/>
+          Banner Active (visible to everyone on the site)
+        </label>
+      </div>
+      <div style="margin-bottom:12px">
+        <label class="label" style="font-size:.7rem">Message (anything you want — shoutouts, events, reminders)</label>
+        <textarea class="input" id="announceMessage" rows="3" placeholder="e.g. 🎉 Congrats to Block 106 on finishing their written exams!" style="font-size:.85rem;resize:vertical;min-height:70px"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" style="background:#b45309;border-color:#b45309" onclick="announceAdminSave()">💾 Save &amp; Publish</button>
+        <button class="btn btn-ghost btn-sm" onclick="announceAdminClear()">✕ Clear Message</button>
+      </div>
+      <div id="announceAdminMsg" style="font-family:monospace;font-size:.75rem;margin-top:8px;color:#16a34a"></div>
+    `, true)}
+
     ${panel('md-overview','Platform Overview','🏫',`
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;margin-bottom:16px">
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px">
@@ -3194,8 +3223,9 @@ async function masterDashLoad(){
 
   if(el) el.innerHTML = html;
 
-  // Load O&P admin panel immediately (it starts open)
+  // Load O&P and announcement admin panels immediately (both start open)
   _opSimLoadAdminPanel();
+  _announceAdminLoad();
 
   // ── Populate sub-panels ───────────────────────────────────────────────────
   function render24hr(logObj, elId){
@@ -3278,6 +3308,7 @@ function masterDashToggle(id){
   body.style.padding=isOpen?'0 18px':'16px 18px';
   if(arrow) arrow.textContent=isOpen?'▼':'▲';
   if(!isOpen && id==='md-opsim') _opSimLoadAdminPanel();
+  if(!isOpen && id==='md-announce') _announceAdminLoad();
 }
 
 // ── END MASTER DASHBOARD ─────────────────────────────────────────────────────
@@ -3471,6 +3502,82 @@ async function _opSimLoadAdminPanel(){
 // Called when master dash O&P panel is opened
 function opSimAdminOpen(){
   _opSimLoadAdminPanel();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ANNOUNCEMENT BANNER
+// ══════════════════════════════════════════════════════════════════════════
+
+function _announceBannerHTML(message){
+  const item = `<span class="announce-banner-item">${esc(message)}<span class="announce-banner-dot">  ★  </span></span>`;
+  return `<div class="announce-banner-track">${item.repeat(6)}</div>`;
+}
+
+async function announceBannerInit(){
+  try{
+    const cfg = await dbGet('config/announcementBanner').catch(()=>null) || {};
+    const enabled = !!cfg.enabled && !!(cfg.message||'').trim();
+    const html = enabled ? _announceBannerHTML(cfg.message) : '';
+    ['announceLandingBanner','announceStuBanner'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(enabled){ el.innerHTML = html; el.classList.remove('hidden'); }
+      else { el.classList.add('hidden'); el.innerHTML = ''; }
+    });
+  }catch(e){}
+}
+
+async function announceAdminToggle(){
+  const enabled = document.getElementById('announceEnabled')?.checked;
+  const msgEl = document.getElementById('announceAdminMsg');
+  if(msgEl){ msgEl.style.color='#16a34a'; msgEl.textContent=''; }
+  try{
+    await dbSet('config/announcementBanner/enabled', !!enabled);
+    await announceBannerInit();
+    if(msgEl) msgEl.textContent = enabled ? '✓ Announcement banner is now live.' : '✓ Banner hidden.';
+  }catch(e){
+    if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='Error saving.'; }
+  }
+}
+
+async function announceAdminSave(){
+  const message = (document.getElementById('announceMessage')?.value||'').trim();
+  const enabled  = document.getElementById('announceEnabled')?.checked;
+  const msgEl    = document.getElementById('announceAdminMsg');
+  if(msgEl){ msgEl.style.color='#16a34a'; msgEl.textContent=''; }
+  if(!message){ if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='Please enter a message first.'; } return; }
+  try{
+    await dbSet('config/announcementBanner', { enabled: !!enabled, message });
+    await announceBannerInit();
+    if(msgEl) msgEl.textContent = enabled ? '✓ Banner saved and live.' : '✓ Message saved (banner is off — check the Active box to show it).';
+  }catch(e){
+    if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='Error saving.'; }
+  }
+}
+
+async function announceAdminClear(){
+  if(!confirm('Clear the announcement message and hide the banner?')) return;
+  const msgEl = document.getElementById('announceAdminMsg');
+  try{
+    await dbSet('config/announcementBanner', { enabled: false, message: '' });
+    const enEl = document.getElementById('announceEnabled');
+    if(enEl) enEl.checked = false;
+    const textEl = document.getElementById('announceMessage');
+    if(textEl) textEl.value = '';
+    await announceBannerInit();
+    if(msgEl){ msgEl.style.color='#16a34a'; msgEl.textContent='✓ Announcement cleared.'; }
+  }catch(e){
+    if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='Error clearing.'; }
+  }
+}
+
+// Load saved message/state into the admin form
+async function _announceAdminLoad(){
+  const cfg = await dbGet('config/announcementBanner').catch(()=>null) || {};
+  const enEl = document.getElementById('announceEnabled');
+  if(enEl) enEl.checked = !!cfg.enabled;
+  const textEl = document.getElementById('announceMessage');
+  if(textEl) textEl.value = cfg.message || '';
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -10390,6 +10497,7 @@ function showStuApp(){
   showScreen('stuApp');
   initStudentApp();
   opSimInit().catch(()=>{});
+  announceBannerInit().catch(()=>{});
 }
 
 function show(id){

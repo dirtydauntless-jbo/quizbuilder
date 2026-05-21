@@ -5,6 +5,9 @@
       "opSim": {
         ".read": true
       },
+      "announcementBanner": {
+        ".read": true
+      },
       "instructorAccessCode": {
         ".read": "auth != null"
       },
