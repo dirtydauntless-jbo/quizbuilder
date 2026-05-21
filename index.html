@@ -3530,7 +3530,9 @@ function opSimAdminOpen(){
 // ══════════════════════════════════════════════════════════════════════════
 
 function _announceBannerHTML(message){
-  const item = `<span class="announce-banner-item">${esc(message)}<span class="announce-banner-dot">  ★  </span></span>`;
+  const lines = message.split(/\n/).map(l=>l.trim()).filter(Boolean);
+  const combined = lines.join('&nbsp;&nbsp;&nbsp;★&nbsp;&nbsp;&nbsp;');
+  const item = `<span class="announce-banner-item">${combined}<span class="announce-banner-dot">&nbsp;&nbsp;&nbsp;★&nbsp;&nbsp;&nbsp;</span></span>`;
   return `<div class="announce-banner-track">${item.repeat(6)}</div>`;
 }
 
