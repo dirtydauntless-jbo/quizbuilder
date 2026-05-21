@@ -51,6 +51,13 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "opSimSignups": {
+      ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === $uid || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+      }
+    },
     "quizOverrides": {
       ".read": "auth != null",
       "$classId": {

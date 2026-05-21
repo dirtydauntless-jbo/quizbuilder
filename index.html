@@ -85,6 +85,14 @@ a{color:var(--accent);text-decoration:none}
 .conn-ok{background:rgba(58,170,102,.14);color:var(--cl)}.conn-err{background:rgba(204,68,68,.14);color:var(--wl)}
 .code-badge{font-family:'Bebas Neue',sans-serif;font-size:1.95rem;letter-spacing:6px;color:var(--accent);background:var(--bg);border:2px solid var(--border);border-radius:var(--r);padding:8px 20px;display:inline-block}
 
+/* -- O&P SIMULATOR BANNER -- */
+.opsim-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#7c3aed,#2563eb,#7c3aed);border-bottom:2px solid rgba(255,255,255,.15);cursor:pointer;user-select:none;flex-shrink:0}
+.opsim-banner-wrap:hover{filter:brightness(1.12)}
+.opsim-banner-track{display:flex;white-space:nowrap;animation:opSimScroll 28s linear infinite}
+.opsim-banner-track:hover{animation-play-state:paused}
+.opsim-banner-item{display:inline-flex;align-items:center;gap:14px;padding:9px 40px;font-family:monospace;font-size:.82rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff}
+.opsim-banner-dot{color:rgba(255,255,255,.45);font-size:.6rem}
+@keyframes opSimScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 /* -- LANDING / AUTH -- */
 .landing{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;flex-direction:column;gap:20px}
 .landing-logo{font-family:'Bebas Neue',sans-serif;font-size:3.78rem;letter-spacing:6px;color:var(--accent);text-align:center}
@@ -544,6 +552,9 @@ setTimeout(function(){
       </select>
     </div>
   </div>
+  <!-- O&P Simulator sign-up banner (landing) -->
+  <div id="opSimLandingBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator" style="width:100%;max-width:640px;border-radius:8px;margin-bottom:4px"></div>
+
   <div class="landing-cards">
     <div class="landing-card" onclick="if(typeof showInstructorAuth==='function')showInstructorAuth()">
       <div class="landing-card-icon">📋</div>
@@ -1128,15 +1139,19 @@ setTimeout(function(){
 </div>
 <!-- ============== STUDENT APP ============== -->
 <div id="stuApp" class="hidden">
-  <div class="app-header">
-    <div style="display:flex;align-items:baseline;cursor:pointer" onclick="stuSwitchTab('study')" title="Go to home">
-      <div class="app-title">Classroom AMT</div>
-      <div class="app-subtitle">Student</div>
+  <div class="app-header" style="flex-wrap:wrap;gap:0">
+    <div style="display:flex;width:100%;align-items:center;justify-content:space-between;padding:10px 18px">
+      <div style="display:flex;align-items:baseline;cursor:pointer" onclick="stuSwitchTab('study')" title="Go to home">
+        <div class="app-title">Classroom AMT</div>
+        <div class="app-subtitle">Student</div>
+      </div>
+      <div class="user-pill">
+        <span id="stuUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="stuShowMyProfile()" title="View my profile">--</span>
+        <button class="btn btn-ghost btn-sm i18n-signout" onclick="confirmSignOut('student')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:2px;border-radius:3px">Sign Out</button>
+      </div>
     </div>
-    <div class="user-pill">
-      <span id="stuUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="stuShowMyProfile()" title="View my profile">--</span>
-      <button class="btn btn-ghost btn-sm i18n-signout" onclick="confirmSignOut('student')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:2px;border-radius:3px">Sign Out</button>
-    </div>
+    <!-- O&P Simulator sign-up banner (student app) -->
+    <div id="opSimStuBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator" style="width:100%"></div>
   </div>
 
   <!-- Student nav tabs -->
@@ -1592,6 +1607,31 @@ setTimeout(function(){
 </div>
 
 <!-- ============== MODALS ============== -->
+<!-- O&P Simulator Sign-Up -->
+<div id="opSimModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('opSimModal')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title" style="color:#7c3aed">✈ Airframe O&amp;P Simulator</div>
+    <div id="opSimModalInfo" style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-bottom:16px;line-height:1.7"></div>
+    <div id="opSimModalBody">
+      <label class="label">Your Full Name</label>
+      <input class="input" id="opSimName" type="text" placeholder="First Last" style="margin-bottom:14px" oninput="opSimClearErr()"/>
+      <label class="label">Your Current Block</label>
+      <select class="select" id="opSimBlock" style="margin-bottom:6px">
+        <option value="">— Select Block —</option>
+        <option value="105">Block 105</option>
+        <option value="106">Block 106</option>
+        <option value="107">Block 107</option>
+        <option value="108">Block 108</option>
+      </select>
+      <div id="opSimErr" class="err-msg hidden" style="margin-top:6px"></div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn btn-primary" style="flex:1;background:#7c3aed;border-color:#7c3aed" onclick="opSimSubmitSignup()">Sign Me Up</button>
+        <button class="btn btn-ghost" onclick="closeModal('opSimModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Create Classroom -->
 <div id="createClassroomModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('createClassroomModal')">
   <div class="modal">
@@ -1957,8 +1997,8 @@ let _handlingRedirect = false;
 function showLanding(){
   hideAll();
   show('landingScreen');
-  // Apply saved language preference
   applyLanguage(_currentLang);
+  opSimInit().catch(()=>{});
 }
 function showInstructorAuth(){ pendingAuthRole='instructor'; hideAll(); show('instAuthScreen'); }
 function showStudentJoin(){ pendingAuthRole='student'; hideAll(); show('stuAuthScreen'); }
@@ -3114,9 +3154,46 @@ async function masterDashLoad(){
     ${panel('md-top','Most Active Students (30d)','🏆',`<div id="masterDashTopStudents"></div>`, true)}
 
     ${panel('md-signupslist','Recent Signups','📝',`<div id="masterDashNewSignups"></div>`, true)}
+
+    ${panel('md-opsim','Airframe O&P Simulator Sign-Up','✈',`
+      <div style="margin-bottom:16px">
+        <div style="font-family:monospace;font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Banner Control</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:monospace;font-size:.82rem">
+            <input type="checkbox" id="opSimEnabled" style="width:16px;height:16px;cursor:pointer" onchange="opSimAdminToggle()"/>
+            Banner Active (students can see &amp; sign up)
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label class="label" style="font-size:.7rem">Date</label>
+            <input class="input" id="opSimDate" type="text" placeholder="e.g. Friday, May 30, 2026" style="font-size:.82rem"/>
+          </div>
+          <div>
+            <label class="label" style="font-size:.7rem">Time</label>
+            <input class="input" id="opSimTime" type="text" placeholder="e.g. 8:00 AM" style="font-size:.82rem"/>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label class="label" style="font-size:.7rem">Location</label>
+          <input class="input" id="opSimLocation" type="text" placeholder="e.g. Building A, Room 101" style="font-size:.82rem"/>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" style="background:#7c3aed;border-color:#7c3aed" onclick="opSimAdminSave()">💾 Save Settings</button>
+          <button class="btn btn-ghost btn-sm" onclick="opSimAdminClearSignups()">🗑 Clear All Sign-Ups</button>
+          <button class="btn btn-ghost btn-sm" onclick="opSimAdminRefresh()">↻ Refresh List</button>
+        </div>
+        <div id="opSimAdminMsg" style="font-family:monospace;font-size:.75rem;margin-top:8px;color:#16a34a"></div>
+      </div>
+      <div style="font-family:monospace;font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Signed-Up Students</div>
+      <div id="opSimSignupList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
+    `, true)}
   `;
 
   if(el) el.innerHTML = html;
+
+  // Load O&P admin panel immediately (it starts open)
+  _opSimLoadAdminPanel();
 
   // ── Populate sub-panels ───────────────────────────────────────────────────
   function render24hr(logObj, elId){
@@ -3198,9 +3275,198 @@ function masterDashToggle(id){
   body.style.maxHeight=isOpen?'0':'500px';
   body.style.padding=isOpen?'0 18px':'16px 18px';
   if(arrow) arrow.textContent=isOpen?'▼':'▲';
+  if(!isOpen && id==='md-opsim') _opSimLoadAdminPanel();
 }
 
 // ── END MASTER DASHBOARD ─────────────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════════════════
+// O&P SIMULATOR SIGN-UP
+// ══════════════════════════════════════════════════════════════════════════
+
+let _opSimConfig = null; // cached config from Firebase
+
+// Build the scrolling banner inner HTML from config
+function _opSimBannerHTML(cfg){
+  const sessionInfo = [cfg.date, cfg.time, cfg.location].filter(Boolean).join(' · ');
+  const msg = sessionInfo
+    ? `✈ Sign Up for the Airframe O&P Simulator  ·  ${sessionInfo}`
+    : '✈ Click Here to Sign Up for the Airframe O&P Simulator';
+  // Duplicate text so seamless loop works
+  const item = `<span class="opsim-banner-item">${esc(msg)}<span class="opsim-banner-dot">★</span></span>`;
+  return `<div class="opsim-banner-track">${item.repeat(6)}</div>`;
+}
+
+// Load config and show/hide banners on both landing and student pages
+async function opSimInit(){
+  try{
+    const cfg = await dbGet('config/opSim').catch(()=>null);
+    _opSimConfig = cfg || {};
+    const enabled = !!_opSimConfig.enabled;
+    const html = enabled ? _opSimBannerHTML(_opSimConfig) : '';
+    ['opSimLandingBanner','opSimStuBanner'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(enabled){ el.innerHTML = html; el.classList.remove('hidden'); }
+      else { el.classList.add('hidden'); el.innerHTML = ''; }
+    });
+  }catch(e){ /* non-critical */ }
+}
+
+// Open sign-up modal — requires a login
+function opSimOpenSignup(){
+  if(!stuSession && !instUser){
+    showToast('Please sign in to sign up for the O&P Simulator.','warn');
+    return;
+  }
+  if(!_opSimConfig || !_opSimConfig.enabled){
+    showToast('Sign-ups are not currently open.','warn');
+    return;
+  }
+  // Pre-fill name if we have it
+  const nameEl = document.getElementById('opSimName');
+  if(nameEl && !nameEl.value){
+    const known = stuSession?.name || instUser?.displayName || '';
+    nameEl.value = known;
+  }
+  // Show session info in modal
+  const infoEl = document.getElementById('opSimModalInfo');
+  if(infoEl){
+    const parts = [];
+    if(_opSimConfig.date)     parts.push(`📅 ${esc(_opSimConfig.date)}`);
+    if(_opSimConfig.time)     parts.push(`🕐 ${esc(_opSimConfig.time)}`);
+    if(_opSimConfig.location) parts.push(`📍 ${esc(_opSimConfig.location)}`);
+    infoEl.innerHTML = parts.length ? parts.join('&nbsp;&nbsp;|&nbsp;&nbsp;') : '';
+  }
+  document.getElementById('opSimErr').classList.add('hidden');
+  openModal('opSimModal');
+}
+
+function opSimClearErr(){
+  document.getElementById('opSimErr').classList.add('hidden');
+}
+
+async function opSimSubmitSignup(){
+  const name  = (document.getElementById('opSimName')?.value||'').trim();
+  const block = document.getElementById('opSimBlock')?.value||'';
+  const errEl = document.getElementById('opSimErr');
+  if(!name){ errEl.textContent='Please enter your name.'; errEl.classList.remove('hidden'); return; }
+  if(!block){ errEl.textContent='Please select your block.'; errEl.classList.remove('hidden'); return; }
+
+  const uid = stuSession?.uid || instUser?.uid || null;
+  if(!uid){ errEl.textContent='You must be signed in to sign up.'; errEl.classList.remove('hidden'); return; }
+
+  const key = safeKey(uid);
+  const entry = { name, block, uid, signedUpAt: new Date().toISOString() };
+  try{
+    await dbSet(`opSimSignups/${key}`, entry);
+    closeModal('opSimModal');
+    showToast(`You're signed up, ${name}! See you there.`,'success');
+  }catch(e){
+    errEl.textContent = 'Sign-up failed. Please try again.';
+    errEl.classList.remove('hidden');
+  }
+}
+
+// ── Master admin controls ─────────────────────────────────────────────────
+
+async function opSimAdminToggle(){
+  const enabled = document.getElementById('opSimEnabled')?.checked;
+  const msgEl = document.getElementById('opSimAdminMsg');
+  if(msgEl) msgEl.textContent = '';
+  try{
+    await dbSet('config/opSim/enabled', !!enabled);
+    if(_opSimConfig) _opSimConfig.enabled = !!enabled;
+    await opSimInit();
+    if(msgEl) msgEl.textContent = enabled ? '✓ Banner is now active.' : '✓ Banner hidden.';
+  }catch(e){
+    if(msgEl){ msgEl.textContent='Error saving.'; msgEl.style.color='#dc2626'; }
+  }
+}
+
+async function opSimAdminSave(){
+  const date     = (document.getElementById('opSimDate')?.value||'').trim();
+  const time     = (document.getElementById('opSimTime')?.value||'').trim();
+  const location = (document.getElementById('opSimLocation')?.value||'').trim();
+  const enabled  = document.getElementById('opSimEnabled')?.checked;
+  const msgEl    = document.getElementById('opSimAdminMsg');
+  if(msgEl){ msgEl.textContent=''; msgEl.style.color='#16a34a'; }
+  try{
+    const cfg = { enabled: !!enabled, date, time, location };
+    await dbSet('config/opSim', cfg);
+    _opSimConfig = cfg;
+    await opSimInit();
+    if(msgEl) msgEl.textContent = '✓ Settings saved.';
+  }catch(e){
+    if(msgEl){ msgEl.textContent='Error saving settings.'; msgEl.style.color='#dc2626'; }
+  }
+}
+
+async function opSimAdminRefresh(){
+  await _opSimLoadAdminPanel();
+}
+
+async function opSimAdminClearSignups(){
+  if(!confirm('Clear ALL O&P Simulator sign-ups? This cannot be undone.')) return;
+  const msgEl = document.getElementById('opSimAdminMsg');
+  try{
+    await dbSet('opSimSignups', null);
+    await _opSimLoadAdminPanel();
+    if(msgEl){ msgEl.style.color='#16a34a'; msgEl.textContent='✓ Sign-ups cleared.'; }
+  }catch(e){
+    if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='Error clearing.'; }
+  }
+}
+
+async function _opSimLoadAdminPanel(){
+  const listEl = document.getElementById('opSimSignupList');
+  if(!listEl) return;
+  listEl.innerHTML = '<div style="font-size:.78rem;color:var(--muted)">Loading…</div>';
+
+  // Load config into form
+  const cfg = await dbGet('config/opSim').catch(()=>null) || {};
+  _opSimConfig = cfg;
+  const enEl = document.getElementById('opSimEnabled');
+  if(enEl) enEl.checked = !!cfg.enabled;
+  const dEl = document.getElementById('opSimDate');     if(dEl) dEl.value = cfg.date||'';
+  const tEl = document.getElementById('opSimTime');     if(tEl) tEl.value = cfg.time||'';
+  const lEl = document.getElementById('opSimLocation'); if(lEl) lEl.value = cfg.location||'';
+
+  // Load sign-ups
+  const signups = await dbGet('opSimSignups').catch(()=>null) || {};
+  const rows = Object.values(signups).sort((a,b)=>(a.signedUpAt||'').localeCompare(b.signedUpAt||''));
+  if(!rows.length){
+    listEl.innerHTML = '<div class="empty-state" style="font-size:.8rem">No sign-ups yet.</div>';
+    return;
+  }
+  listEl.innerHTML = `
+    <div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-bottom:6px">${rows.length} student${rows.length!==1?'s':''} signed up</div>
+    <table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:.78rem">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border)">
+          <th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted);font-size:.68rem;text-transform:uppercase">#</th>
+          <th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted);font-size:.68rem;text-transform:uppercase">Name</th>
+          <th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted);font-size:.68rem;text-transform:uppercase">Block</th>
+          <th style="text-align:left;padding:6px 0;color:var(--muted);font-size:.68rem;text-transform:uppercase">Signed Up</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r,i)=>`
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:7px 10px 7px 0;color:var(--muted)">${i+1}</td>
+            <td style="padding:7px 10px 7px 0;font-weight:600">${esc(r.name||'—')}</td>
+            <td style="padding:7px 10px 7px 0"><span style="background:rgba(124,58,237,.15);color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:700">Block ${esc(r.block||'?')}</span></td>
+            <td style="padding:7px 0;color:var(--muted);font-size:.7rem">${r.signedUpAt ? new Date(r.signedUpAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// Called when master dash O&P panel is opened
+function opSimAdminOpen(){
+  _opSimLoadAdminPanel();
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 // INTERNATIONALIZATION (i18n)
 // ══════════════════════════════════════════════════════════════════════════
@@ -10115,10 +10381,9 @@ function showStuApp(){
   if(stuSession?.uid) localStorage.setItem('amtLastRole_' + stuSession.uid, 'student');
   _navStack.length = 0;
   _navStack.push({ screen: 'landing' });
-  // Push two entries: one as sentinel, one as current
-  // so the first back press hits our handler, not the browser's
   showScreen('stuApp');
   initStudentApp();
+  opSimInit().catch(()=>{});
 }
 
 function show(id){
