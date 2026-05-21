@@ -7,6 +7,16 @@
       },
       "instructorAccessCode": {
         ".read": "auth != null"
+      },
+      "superAdmins": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid"
+        }
+      },
+      "masterAdmins": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid"
+        }
       }
     },
     "instructors": {
