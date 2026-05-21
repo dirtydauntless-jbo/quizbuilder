@@ -1021,6 +1021,15 @@ setTimeout(function(){
 
       <!-- INSTRUCTORS sub-panel -->
       <div id="adminPanel-instructors">
+        <!-- Pending approvals -->
+        <div id="adminPendingSection" style="margin-bottom:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:#f59e0b">⏳ Pending Instructor Approvals</div>
+            <button class="btn btn-ghost btn-sm" onclick="adminLoadPending()">↺ Refresh</button>
+          </div>
+          <div id="adminPendingList"><div class="empty-state" style="font-size:.8rem">No pending applications.</div></div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin-bottom:16px"></div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px">Registered Instructors</div>
           <button class="btn btn-ghost btn-sm" onclick="adminLoadInstructors()">↺ Refresh</button>
@@ -2106,8 +2115,10 @@ async function doEmailAuth(){
         return;
       }
       await cred.user.updateProfile({ displayName: name });
-      await dbSet(`instructors/${cred.user.uid}`, { name, email, createdAt: ts() });
-      u = cred.user;
+      await dbSet(`pendingInstructors/${cred.user.uid}`, { name, email, requestedAt: ts() });
+      await auth.signOut();
+      showErr(errEl, '✓ Registration submitted! Your instructor account is pending admin approval. You will be notified once approved.');
+      return;
     }
     if(document.getElementById('rememberMe')?.checked){
       try{ localStorage.setItem('instSavedEmail', email); }catch(e){}
@@ -2148,12 +2159,12 @@ async function doOAuthSignIn(provider){
             return false; // keep modal open
           }
           await u.updateProfile({ displayName: chosenName });
-          await dbSet(`instructors/${u.uid}`, { name: chosenName, email: u.email, createdAt: ts() });
-          instUser = u;
-          instProfile = { name: chosenName, email: u.email };
-          hideAll();
-          show('instApp');
-          initInstApp();
+          await dbSet(`pendingInstructors/${u.uid}`, { name: chosenName, email: u.email, requestedAt: ts() });
+          await auth.signOut();
+          closeModal('accessCodeModal');
+          closeModal('namePromptModal');
+          showLanding();
+          setTimeout(()=>alert('✓ Registration submitted! Your instructor account is pending admin approval.'), 200);
           return true; // close modal
         }, async () => {
           // User cancelled access code — sign out and return to landing
@@ -2375,17 +2386,25 @@ auth.onAuthStateChanged(async user => {
   // Fire if pendingAuthRole is 'instructor' OR if instAuthScreen is visible
   const instAuthVisible = !document.getElementById('instAuthScreen').classList.contains('hidden');
   if(pendingAuthRole === 'instructor' || instAuthVisible){
-    instUser = user;
-    const profile = await dbGet(`instructors/${user.uid}`);
-    instProfile = profile || { name: user.displayName || user.email, email: user.email };
-    if(!profile){
-      await dbSet(`instructors/${user.uid}`, { name: user.displayName||user.email, email: user.email, createdAt: ts() });
-    }
     pendingAuthRole = null;
-    localStorage.setItem('amtLastRole_' + user.uid, 'instructor');
-    hideAll();
-    show('instApp');
-    initInstApp();
+    const profile = await dbGet(`instructors/${user.uid}`);
+    if(profile){
+      instUser = user;
+      instProfile = profile;
+      localStorage.setItem('amtLastRole_' + user.uid, 'instructor');
+      hideAll(); show('instApp'); initInstApp();
+      return;
+    }
+    // No approved instructor record — check if they have a pending application
+    const pending = await dbGet(`pendingInstructors/${user.uid}`).catch(()=>null);
+    await auth.signOut();
+    const errEl = document.getElementById('authErr');
+    if(pending){
+      if(errEl) showErr(errEl, 'Your instructor account is pending admin approval. You will be notified when approved.');
+    } else {
+      if(errEl) showErr(errEl, 'No instructor account found. Please register with a valid access code.');
+    }
+    show('instAuthScreen');
     return;
   }
 
@@ -4065,11 +4084,66 @@ function adminSubTab(tab){
     if(panel) panel.style.display = t === tab ? 'block' : 'none';
     if(btn){ btn.className = t === tab ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'; }
   });
-  if(tab === 'instructors') adminLoadInstructors();
+  if(tab === 'instructors'){ adminLoadInstructors(); adminLoadPending(); }
   if(tab === 'classrooms') adminLoadClassrooms();
   if(tab === 'students') adminInitStudents();
   if(tab === 'assign') adminInitAssign();
   if(tab === 'search'){ setTimeout(()=>{ const el=document.getElementById('adminSearchInput'); if(el) el.focus(); },100); }
+}
+
+// ── PENDING INSTRUCTOR APPROVALS ─────────────────────────────────────────
+async function adminLoadPending(){
+  if(!_isSuperAdmin) return;
+  const el = document.getElementById('adminPendingList');
+  if(!el) return;
+  try{
+    const data = await dbGet('pendingInstructors').catch(()=>null) || {};
+    const entries = Object.entries(data);
+    if(!entries.length){
+      el.innerHTML = '<div class="empty-state" style="font-size:.8rem">No pending applications.</div>';
+      return;
+    }
+    el.innerHTML = entries.map(([uid, p]) => {
+      const name  = esc(p.name  || '(no name)');
+      const email = esc(p.email || '(no email)');
+      const when  = p.requestedAt ? new Date(p.requestedAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+      return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:2px solid #f59e0b;border-radius:6px;margin-bottom:8px;background:rgba(245,158,11,.06);flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:.95rem">${name}</div>
+          <div style="font-family:monospace;font-size:.72rem;color:var(--muted)">${email}</div>
+          <div style="font-family:monospace;font-size:.65rem;color:var(--muted);margin-top:2px">Applied: ${when}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-primary btn-sm" style="background:#16a34a;border-color:#16a34a" onclick="adminApproveInstructor('${esc(uid)}','${name}','${email}')">✓ Approve</button>
+          <button class="btn btn-danger btn-sm" onclick="adminRejectInstructor('${esc(uid)}','${name}')">✕ Reject</button>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    el.innerHTML = `<div class="empty-state" style="color:var(--wl);font-size:.8rem">Error loading: ${esc(e.message)}</div>`;
+  }
+}
+
+async function adminApproveInstructor(uid, name, email){
+  if(!_isSuperAdmin) return;
+  if(!confirm(`Approve "${name}" as an instructor?\n\nThey will be able to sign in and access instructor features immediately.`)) return;
+  try{
+    await dbSet(`instructors/${uid}`, { name, email, createdAt: ts(), approvedBy: instUser.uid });
+    await dbSet(`pendingInstructors/${uid}`, null);
+    _showInstToast(`✓ ${name} approved as instructor.`, 4000);
+    adminLoadPending();
+    adminLoadInstructors();
+  }catch(e){ alert('Error approving: ' + e.message); }
+}
+
+async function adminRejectInstructor(uid, name){
+  if(!_isSuperAdmin) return;
+  if(!confirm(`Reject and delete the application from "${name}"?\n\nThey will need to reapply to request access again.`)) return;
+  try{
+    await dbSet(`pendingInstructors/${uid}`, null);
+    _showInstToast(`Rejected application from ${name}.`, 3000);
+    adminLoadPending();
+  }catch(e){ alert('Error rejecting: ' + e.message); }
 }
 
 // ── INSTRUCTORS ──────────────────────────────────────────────────────────
@@ -12997,8 +13071,14 @@ auth.getRedirectResult().then(async result => {
     showScreen('instAuthScreen');
     try{
       const existing = await dbGet('instructors/' + u.uid);
-      if(!existing){
-        const code = prompt('Enter instructor access code to complete registration:');
+      if(existing){
+        instUser = u;
+        instProfile = existing;
+        localStorage.setItem('amtLastRole_' + u.uid, 'instructor');
+        hideAll(); show('instApp'); initInstApp();
+      } else {
+        // New instructor via redirect OAuth — validate code then submit for approval
+        const code = prompt('Enter instructor access code to submit your registration:');
         let gValidCode = null;
         try{ gValidCode = await dbGet('config/instructorAccessCode'); }catch(e){}
         if(!gValidCode || code?.trim() !== gValidCode){
@@ -13007,15 +13087,13 @@ auth.getRedirectResult().then(async result => {
           showLanding();
           return;
         }
-        await dbSet('instructors/' + u.uid, {
-          name: u.displayName || u.email, email: u.email, createdAt: ts()
+        await dbSet('pendingInstructors/' + u.uid, {
+          name: u.displayName || u.email, email: u.email, requestedAt: ts()
         });
+        await auth.signOut();
+        showLanding();
+        setTimeout(()=>alert('✓ Registration submitted! Your instructor account is pending admin approval.'), 200);
       }
-      instUser = u;
-      instProfile = (await dbGet('instructors/' + u.uid)) || { name: u.displayName||u.email, email: u.email };
-      hideAll();
-      show('instApp');
-      initInstApp();
     } catch(e){
       const errEl = document.getElementById('authErr');
       if(errEl) showErr(errEl, 'Sign-in error: ' + (e.message || e.code));
