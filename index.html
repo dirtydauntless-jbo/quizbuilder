@@ -86,12 +86,12 @@ a{color:var(--accent);text-decoration:none}
 .code-badge{font-family:'Bebas Neue',sans-serif;font-size:1.95rem;letter-spacing:6px;color:var(--accent);background:var(--bg);border:2px solid var(--border);border-radius:var(--r);padding:8px 20px;display:inline-block}
 
 /* -- O&P SIMULATOR BANNER -- */
-.opsim-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#7c3aed,#2563eb,#7c3aed);border-bottom:2px solid rgba(255,255,255,.15);cursor:pointer;user-select:none;flex-shrink:0}
-.opsim-banner-wrap:hover{filter:brightness(1.12)}
-.opsim-banner-track{display:flex;white-space:nowrap;animation:opSimScroll 28s linear infinite}
+.opsim-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#5b21b6,#1d4ed8,#7c3aed,#1d4ed8,#5b21b6);border-top:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);cursor:pointer;user-select:none;flex-shrink:0}
+.opsim-banner-wrap:hover{filter:brightness(1.15)}
+.opsim-banner-track{display:flex;white-space:nowrap;animation:opSimScroll 32s linear infinite}
 .opsim-banner-track:hover{animation-play-state:paused}
-.opsim-banner-item{display:inline-flex;align-items:center;gap:14px;padding:9px 40px;font-family:monospace;font-size:.82rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff}
-.opsim-banner-dot{color:rgba(255,255,255,.45);font-size:.6rem}
+.opsim-banner-item{display:inline-flex;align-items:center;gap:18px;padding:11px 48px;font-family:'Bebas Neue',monospace;font-size:1.05rem;letter-spacing:2.5px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
+.opsim-banner-dot{color:rgba(255,255,255,.5);font-size:.75rem}
 @keyframes opSimScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 /* -- LANDING / AUTH -- */
 .landing{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;flex-direction:column;gap:20px}
@@ -3053,6 +3053,40 @@ async function masterDashLoad(){
     </div>`;
 
   const html = `
+    ${panel('md-opsim','Airframe O&P Simulator Sign-Up','✈',`
+      <div style="margin-bottom:16px">
+        <div style="font-family:monospace;font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Banner Control</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:monospace;font-size:.82rem">
+            <input type="checkbox" id="opSimEnabled" style="width:16px;height:16px;cursor:pointer" onchange="opSimAdminToggle()"/>
+            Banner Active (students can see &amp; sign up)
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label class="label" style="font-size:.7rem">Date</label>
+            <input class="input" id="opSimDate" type="text" placeholder="e.g. Friday, May 30, 2026" style="font-size:.82rem"/>
+          </div>
+          <div>
+            <label class="label" style="font-size:.7rem">Time</label>
+            <input class="input" id="opSimTime" type="text" placeholder="e.g. 8:00 AM" style="font-size:.82rem"/>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label class="label" style="font-size:.7rem">Location</label>
+          <input class="input" id="opSimLocation" type="text" placeholder="e.g. Building A, Room 101" style="font-size:.82rem"/>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" style="background:#7c3aed;border-color:#7c3aed" onclick="opSimAdminSave()">💾 Save Settings</button>
+          <button class="btn btn-ghost btn-sm" onclick="opSimAdminClearSignups()">🗑 Clear All Sign-Ups</button>
+          <button class="btn btn-ghost btn-sm" onclick="opSimAdminRefresh()">↻ Refresh List</button>
+        </div>
+        <div id="opSimAdminMsg" style="font-family:monospace;font-size:.75rem;margin-top:8px;color:#16a34a"></div>
+      </div>
+      <div style="font-family:monospace;font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Signed-Up Students</div>
+      <div id="opSimSignupList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
+    `, true)}
+
     ${panel('md-overview','Platform Overview','🏫',`
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;margin-bottom:16px">
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px">
@@ -3156,40 +3190,6 @@ async function masterDashLoad(){
     ${panel('md-top','Most Active Students (30d)','🏆',`<div id="masterDashTopStudents"></div>`, true)}
 
     ${panel('md-signupslist','Recent Signups','📝',`<div id="masterDashNewSignups"></div>`, true)}
-
-    ${panel('md-opsim','Airframe O&P Simulator Sign-Up','✈',`
-      <div style="margin-bottom:16px">
-        <div style="font-family:monospace;font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Banner Control</div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:monospace;font-size:.82rem">
-            <input type="checkbox" id="opSimEnabled" style="width:16px;height:16px;cursor:pointer" onchange="opSimAdminToggle()"/>
-            Banner Active (students can see &amp; sign up)
-          </label>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <div>
-            <label class="label" style="font-size:.7rem">Date</label>
-            <input class="input" id="opSimDate" type="text" placeholder="e.g. Friday, May 30, 2026" style="font-size:.82rem"/>
-          </div>
-          <div>
-            <label class="label" style="font-size:.7rem">Time</label>
-            <input class="input" id="opSimTime" type="text" placeholder="e.g. 8:00 AM" style="font-size:.82rem"/>
-          </div>
-        </div>
-        <div style="margin-bottom:12px">
-          <label class="label" style="font-size:.7rem">Location</label>
-          <input class="input" id="opSimLocation" type="text" placeholder="e.g. Building A, Room 101" style="font-size:.82rem"/>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" style="background:#7c3aed;border-color:#7c3aed" onclick="opSimAdminSave()">💾 Save Settings</button>
-          <button class="btn btn-ghost btn-sm" onclick="opSimAdminClearSignups()">🗑 Clear All Sign-Ups</button>
-          <button class="btn btn-ghost btn-sm" onclick="opSimAdminRefresh()">↻ Refresh List</button>
-        </div>
-        <div id="opSimAdminMsg" style="font-family:monospace;font-size:.75rem;margin-top:8px;color:#16a34a"></div>
-      </div>
-      <div style="font-family:monospace;font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Signed-Up Students</div>
-      <div id="opSimSignupList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
-    `, true)}
   `;
 
   if(el) el.innerHTML = html;
@@ -3290,12 +3290,16 @@ let _opSimConfig = null; // cached config from Firebase
 
 // Build the scrolling banner inner HTML from config
 function _opSimBannerHTML(cfg){
-  const sessionInfo = [cfg.date, cfg.time, cfg.location].filter(Boolean).join(' · ');
-  const msg = sessionInfo
-    ? `✈ Sign Up for the Airframe O&P Simulator  ·  ${sessionInfo}`
-    : '✈ Click Here to Sign Up for the Airframe O&P Simulator';
-  // Duplicate text so seamless loop works
-  const item = `<span class="opsim-banner-item">${esc(msg)}<span class="opsim-banner-dot">★</span></span>`;
+  const parts = [];
+  if(cfg.date)     parts.push(`📅 ${cfg.date}`);
+  if(cfg.time)     parts.push(`🕐 ${cfg.time}`);
+  if(cfg.location) parts.push(`📍 ${cfg.location}`);
+  const sessionLine = parts.join('  ·  ');
+  const msg = sessionLine
+    ? `🔥 Airframe O&P Simulator Sign-Up Now Open!  ·  ${sessionLine}  ·  Click Here to Register`
+    : '🔥 Airframe O&P Simulator  ·  ✈ Sign Up Now  ·  Click Here to Register  ·  📚 Limited Spots Available';
+  // Duplicate so seamless loop works at any screen width
+  const item = `<span class="opsim-banner-item">${esc(msg)}<span class="opsim-banner-dot">  ★  </span></span>`;
   return `<div class="opsim-banner-track">${item.repeat(6)}</div>`;
 }
 
