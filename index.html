@@ -8222,8 +8222,19 @@ async function openStuClassroomPanel(classroomId, classroomName, instName){
     // No student-facing request retake — instructor grants directly
     const pct = progress ? Math.round((progress.answeredCount/(progress.totalCount||1))*100) : 0;
 
+    // Re-compute score for MC quizzes so it reflects any answer edits the instructor made
+    let _dispCorrect = progress?.correctCount || 0;
+    let _dispTotal = progress?.totalCount || (quiz?.questions?.length || 0);
+    if(progress?.finished && progress?.answers && quiz?.questions &&
+       (quiz.questionType === 'mc' || quiz.questionType === 'acr_mc')){
+      _dispCorrect = progress.answers.filter((a,i) =>
+        a !== -1 && a !== null && i < quiz.questions.length && a === quiz.questions[i].correct
+      ).length;
+      _dispTotal = quiz.questions.length;
+    }
+
     let statusBadge = '';
-    if(progress?.finished) statusBadge = `<span style="background:rgba(58,170,102,.15);color:var(--cl);border:1px solid rgba(58,170,102,.3);border-radius:3px;padding:1px 7px;font-size:.78rem">✓ ${progress.correctCount}/${progress.totalCount}</span>`;
+    if(progress?.finished) statusBadge = `<span style="background:rgba(58,170,102,.15);color:var(--cl);border:1px solid rgba(58,170,102,.3);border-radius:3px;padding:1px 7px;font-size:.78rem">✓ ${_dispCorrect}/${_dispTotal}</span>`;
     else if(progress?.answeredCount > 0) statusBadge = `<span style="background:rgba(240,165,0,.12);color:var(--accent);border:1px solid rgba(240,165,0,.3);border-radius:3px;padding:1px 7px;font-size:.78rem">${pct}%</span>`;
     else statusBadge = `<span style="background:var(--panel2);color:var(--muted);border:1px solid var(--border);border-radius:3px;padding:1px 7px;font-size:.78rem">Not started</span>`;
 
@@ -9169,7 +9180,16 @@ async function stuShowResults(silent=false){
   unregisterQuizSession();
   _quizFinished = true;
   document.getElementById('aqResultsPanel').classList.add('show');
-  if(!silent) await stuSaveProgress(true);
+  if(!silent){
+    await stuSaveProgress(true);
+  } else {
+    // Re-sync correctCount in case the instructor edited quiz answers after this student finished
+    try{
+      const _rcClassId = activeQuiz.classroomId || stuSession.classroomId;
+      const _rcKey = stuSession.uid || safeKey(stuSession.name);
+      await dbUpdate(`quizProgress/${_rcClassId}/${activeQuiz.id}/${_rcKey}`, { correctCount: correct, totalCount: TQ });
+    }catch(e){}
+  }
 
   // Build inline answer review
   stuBuildInlineReview();
