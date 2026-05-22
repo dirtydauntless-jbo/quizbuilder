@@ -816,7 +816,8 @@ setTimeout(function(){
               <div id="gbExportMenu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);min-width:140px;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.4)">
                 <button onclick="exportGrades('csv');document.getElementById('gbExportMenu').style.display='none'" style="display:block;width:100%;text-align:left;padding:8px 14px;font-family:monospace;font-size:.75rem;background:none;border:none;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--panel2)'" onmouseout="this.style.background='none'">📊 Export CSV</button>
                 <button onclick="exportGrades('pdf');document.getElementById('gbExportMenu').style.display='none'" style="display:block;width:100%;text-align:left;padding:8px 14px;font-family:monospace;font-size:.75rem;background:none;border:none;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--panel2)'" onmouseout="this.style.background='none'">📄 Print / PDF</button>
-                <button onclick="exportGrades('rtf');document.getElementById('gbExportMenu').style.display='none'" style="display:block;width:100%;text-align:left;padding:8px 14px;font-family:monospace;font-size:.75rem;background:none;border:none;color:var(--text);cursor:pointer" onmouseover="this.style.background='var(--panel2)'" onmouseout="this.style.background='none'">📝 Download Word</button>
+                <button onclick="exportGrades('rtf');document.getElementById('gbExportMenu').style.display='none'" style="display:block;width:100%;text-align:left;padding:8px 14px;font-family:monospace;font-size:.75rem;background:none;border:none;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--panel2)'" onmouseout="this.style.background='none'">📝 Download Word</button>
+                <button onclick="printClassroomGradeSheets()" style="display:block;width:100%;text-align:left;padding:8px 14px;font-family:monospace;font-size:.75rem;background:none;border:none;color:var(--text);cursor:pointer" onmouseover="this.style.background='var(--panel2)'" onmouseout="this.style.background='none'">🖨 Print Grade Sheets</button>
               </div>
             </div>
           </div>
@@ -4540,6 +4541,69 @@ async function printGradeSheets(filterQuizId){
     alert('Error generating grade sheets: ' + (e.message || String(e)));
   } finally {
     if(btn){ btn.disabled = false; btn.textContent = origLabel; }
+  }
+}
+
+async function printClassroomGradeSheets(){
+  const classId = selectedClassId;
+  const quizId = window._currentProgressQuizId;
+  if(!classId || !quizId){ alert('Please select a quiz from the gradebook first.'); return; }
+
+  const menu = document.getElementById('gbExportMenu');
+  if(menu) menu.style.display = 'none';
+
+  try {
+    const [classroom, allProgress, intLog] = await Promise.all([
+      dbGet(`classrooms/${classId}`).catch(()=>({})),
+      dbGet(`quizProgress/${classId}/${quizId}`).catch(()=>({})),
+      dbGet(`integrityLog/${classId}/${quizId}`).catch(()=>({}))
+    ]);
+
+    const className2 = classroom?.name || classId;
+    const instIds = [classroom?.instructorId, ...Object.keys(classroom?.coInstructors||{})].filter(Boolean);
+    const instNames = await Promise.all(instIds.map(async id => {
+      try{ return (await dbGet(`instructors/${id}`))?.name || id; }catch(e){ return id; }
+    }));
+    const instructorStr = instNames.filter(Boolean).join(', ') || 'Instructor';
+
+    const iid = classroom?.instructorId;
+    if(!iid){ alert('Could not determine instructor for this classroom.'); return; }
+
+    const quiz = await dbGet(`quizzes/${iid}/${quizId}`).catch(()=>null);
+    if(!quiz?.questions){ alert('Quiz definition not found.'); return; }
+
+    const students = window._currentGrades?._rawStudents || [];
+    const sheets = [];
+
+    for(const stu of students){
+      if(!stu.finished) continue;
+      const stuKey = stu.uid || safeKey(stu.name||'');
+      const prog = allProgress?.[stuKey];
+      if(!prog?.finished) continue;
+
+      const evts = Object.values(intLog?.[stuKey] || {});
+      const tabSwitches = evts.filter(e => e.type === 'tab_switch').length;
+      const blurs = evts.filter(e => e.type === 'window_blur').length;
+      const overrides = await dbGet(`quizOverrides/${classId}/${quizId}/${stuKey}`).catch(()=>({})) || {};
+
+      sheets.push(_buildGradeSheetHTML({
+        studentName: stu.name,
+        className: className2,
+        instructorStr,
+        quiz,
+        qid: quizId,
+        prog,
+        tabSwitches,
+        blurs,
+        overrides
+      }));
+    }
+
+    if(!sheets.length){ alert('No completed quiz submissions found for this quiz.'); return; }
+    _openGradeSheetPrintWindow(sheets);
+
+  } catch(e){
+    alert('Error generating grade sheets: ' + (e.message || String(e)));
   }
 }
 
