@@ -4870,6 +4870,20 @@ function closeAdminStuModal(){
   document.getElementById('adminStuModal').classList.add('hidden');
 }
 
+async function _syncAccessLogStudentName(stuUid, newName){
+  if(!stuUid) return;
+  try {
+    // The accessLog key is based on email (or uid if no email)
+    const profile = await dbGet(`studentProfiles/${stuUid}`).catch(()=>null);
+    const email = profile?.email || null;
+    const logKey = (email || stuUid).replace(/[.#$\[\]]/g,'_');
+    await dbSet(`accessLog/students/${logKey}/meta/name`, newName);
+    // Reload master dashboard if it's currently visible so the change shows immediately
+    const mdTab = document.getElementById('inst-tab-masterdash');
+    if(mdTab && mdTab.style.display !== 'none') masterDashLoad();
+  } catch(e){ /* non-fatal */ }
+}
+
 async function adminRenameStudent(){
   if(!_adminStuUid && !_adminStuName) return;
   const newName = prompt('Rename student — enter new name:', _adminStuName);
@@ -4897,6 +4911,8 @@ async function adminRenameStudent(){
         }
       }
     }
+    // Update accessLog so master dashboard Who's Online / Top Students shows new name
+    await _syncAccessLogStudentName(_adminStuUid, trimmed);
     _showInstToast('✓ Renamed to ' + trimmed, 3000);
   } catch(e){ alert('Error renaming: ' + e.message); }
 }
@@ -4926,6 +4942,8 @@ async function instRenameStudent(){
         adminRenderGradebook();
       }
     }
+    // Update accessLog so master dashboard Who's Online / Top Students shows new name
+    await _syncAccessLogStudentName(stuUid, trimmed);
     _showInstToast('✓ Renamed to ' + trimmed, 3000);
   } catch(e){ alert('Error renaming: ' + e.message); }
 }
@@ -6615,10 +6633,16 @@ async function renameClassroom(){
     }
     await Promise.all(updates);
 
-    // 3. Update the UI immediately
+    // 3. Update the UI immediately everywhere the name appears
     document.getElementById('cdTitle').textContent = trimmed;
+    // Update the admin class modal header if it's open for this classroom
+    const acmTitle = document.getElementById('acmTitle');
+    if(acmTitle && _adminClassModalId === selectedClassId) acmTitle.textContent = trimmed;
+    // Reload master dashboard if visible (classroom count panel shows names)
+    const mdTab = document.getElementById('inst-tab-masterdash');
+    if(mdTab && mdTab.style.display !== 'none') masterDashLoad();
 
-    // 4. Refresh classroom grid in background so card shows new name
+    // 4. Refresh classroom grid so card shows new name
     loadClassrooms();
   } catch(e) {
     alert('Error renaming classroom: ' + (e.message || e.code));
