@@ -8577,6 +8577,18 @@ async function loadStudentQuizzes(){
     const progress = await dbGet(`quizProgress/${entryClassId}/${qid}/${stuKey}`);
     const pct = progress ? Math.round((progress.answeredCount/(progress.totalCount||1))*100) : 0;
 
+    // Show the most up-to-date score: re-derive from answers for MC, use stored for FIB/overrides
+    let _cardCorrect = progress?.correctCount || 0;
+    let _cardTotal = progress?.totalCount || (quiz?.questions?.length || 0);
+    if(progress?.finished && progress?.answers && quiz?.questions &&
+       (quiz.questionType === 'mc' || quiz.questionType === 'acr_mc')){
+      const recomp = progress.answers.filter((a,i) =>
+        a !== -1 && a !== null && i < quiz.questions.length && a === quiz.questions[i].correct
+      ).length;
+      _cardCorrect = Math.max(recomp, _cardCorrect); // never reduce override-boosted scores
+      _cardTotal = quiz.questions.length;
+    }
+
     // Check if a retake has been granted for this student on this quiz
     const retakeAllowed = progress?.finished && (
       info.retakeAll === true ||
@@ -8595,7 +8607,7 @@ async function loadStudentQuizzes(){
       </div>
       ${progress ? `<div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${progress.finished?'var(--cl)':'var(--accent)'}"></div></div>
         <div class="prog-label" style="display:flex;align-items:center;gap:8px">
-          <span>${progress.finished?`Completed — ${progress.correctCount}/${progress.totalCount}`:`${pct}% complete`}</span>
+          <span>${progress.finished?`Completed — ${_cardCorrect}/${_cardTotal}`:`${pct}% complete`}</span>
           ${_rtBadge}
         </div>` : ''}
     </div>`;
@@ -9164,7 +9176,26 @@ function stuFilterReviewOverlay(mode){
 async function stuShowResults(silent=false){
   const questions = activeQuiz.questions;
   const TQ = questions.length;
-  const correct = stuAnswers.filter((a,i)=>a!==null&&stuCheckOk(questions[i],a)).length;
+  let correct = stuAnswers.filter((a,i)=>a!==null&&stuCheckOk(questions[i],a)).length;
+
+  if(!silent){
+    await stuSaveProgress(true);
+  } else {
+    // When reviewing a finished quiz: use max(recomputed, stored) so that
+    // - quiz-answer edits by instructor increase the score
+    // - instructor overrides (quizOverrides) are never overwritten with a lower value
+    try{
+      const _rcClassId = activeQuiz.classroomId || stuSession.classroomId;
+      const _rcKey = stuSession.uid || safeKey(stuSession.name);
+      const stored = (await dbGet(`quizProgress/${_rcClassId}/${activeQuiz.id}/${_rcKey}/correctCount`)) || 0;
+      if(correct > stored){
+        await dbUpdate(`quizProgress/${_rcClassId}/${activeQuiz.id}/${_rcKey}`, { correctCount: correct, totalCount: TQ });
+      } else {
+        correct = stored; // instructor gave extra credit via override — show that number
+      }
+    }catch(e){}
+  }
+
   document.getElementById('aqQArea').style.display='none';
   document.getElementById('aqFinalScore').textContent=`${correct}/${TQ}`;
   const groups=getStuSecGroups();
@@ -9180,16 +9211,6 @@ async function stuShowResults(silent=false){
   unregisterQuizSession();
   _quizFinished = true;
   document.getElementById('aqResultsPanel').classList.add('show');
-  if(!silent){
-    await stuSaveProgress(true);
-  } else {
-    // Re-sync correctCount in case the instructor edited quiz answers after this student finished
-    try{
-      const _rcClassId = activeQuiz.classroomId || stuSession.classroomId;
-      const _rcKey = stuSession.uid || safeKey(stuSession.name);
-      await dbUpdate(`quizProgress/${_rcClassId}/${activeQuiz.id}/${_rcKey}`, { correctCount: correct, totalCount: TQ });
-    }catch(e){}
-  }
 
   // Build inline answer review
   stuBuildInlineReview();
