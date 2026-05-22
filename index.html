@@ -2005,6 +2005,7 @@ let stuQuizStarred = new Set(); // indices of starred quiz questions
 let stuCur = 0;
 let stuQuizNavList = []; // ordered list of {qid, iid, classroomId} for prev/next navigation
 let _retakeUsedThisSession = false; // blocks re-retake on same results screen
+let _stuScoreListener = null; // Firebase listener for live score updates on results screen
 // OAuth redirect flag — prevents onAuthStateChanged racing getRedirectResult
 let _handlingRedirect = false;
 
@@ -8787,6 +8788,7 @@ function exitActiveQuiz(){
   stopQuizTimer();
   clearTabWarning();
   unregisterQuizSession();
+  if(_stuScoreListener){ _stuScoreListener.off(); _stuScoreListener = null; }
   activeQuiz=null; stuAnswers=[]; stuCur=0; stuQuizStarred=new Set();
   hide('stuActiveQuizView');
   show('stuQuizListView');
@@ -9211,6 +9213,24 @@ async function stuShowResults(silent=false){
   unregisterQuizSession();
   _quizFinished = true;
   document.getElementById('aqResultsPanel').classList.add('show');
+
+  // Live-update score display if instructor applies an override while student is on this screen
+  if(_stuScoreListener){ _stuScoreListener.off(); _stuScoreListener = null; }
+  try{
+    const _lClassId = activeQuiz.classroomId || stuSession?.classroomId;
+    const _lKey = stuSession?.uid || safeKey(stuSession?.name || '');
+    const _scoreRef = db.ref(`quizProgress/${_lClassId}/${activeQuiz.id}/${_lKey}/correctCount`);
+    _stuScoreListener = _scoreRef;
+    _scoreRef.on('value', snap => {
+      const newScore = snap.val();
+      const scoreEl = document.getElementById('aqFinalScore');
+      if(newScore != null && scoreEl){
+        const parts = scoreEl.textContent.split('/');
+        const cur = parseInt(parts[0], 10);
+        if(isNaN(cur) || newScore !== cur) scoreEl.textContent = `${newScore}/${TQ}`;
+      }
+    });
+  }catch(e){}
 
   // Build inline answer review
   stuBuildInlineReview();
@@ -10587,6 +10607,22 @@ async function instToggleOverride(qIdx, originalIsCorrect){
   await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/correctCount`, correctCount);
   const entry = spCurrentQuizzes.find(q => q.qid === quizId);
   if(entry?.progress) entry.progress.correctCount = correctCount;
+
+  // Immediately refresh the gradebook table if it's showing this classroom
+  if(typeof _gbData !== 'undefined' && _gbData && _gbData.classId === classId){
+    const qIdxGb = _gbData.quizzes.findIndex(([qid2]) => qid2 === quizId);
+    if(qIdxGb >= 0){
+      const rowGb = _gbData.rows.find(r => r.stuKey === stuKey || r.uid === stuKey);
+      if(rowGb){
+        const newPct = Math.round(correctCount / questions.length * 100);
+        rowGb.scores[qIdxGb] = newPct;
+        const valid = rowGb.scores.filter(s => s != null);
+        rowGb.avg = valid.length ? valid.reduce((a,b)=>a+b,0)/valid.length : 0;
+        if(typeof adminRenderGradebook === 'function') adminRenderGradebook();
+      }
+    }
+  }
+
   // Save scroll position so the re-render lands back in the same spot
   _spReviewSavedScroll = document.getElementById('spModalBody')?.scrollTop ?? null;
   await spOpenAttemptReview(quizId, attemptIndex, true);
