@@ -4636,6 +4636,19 @@ async function adminRenameStudent(){
     await Promise.all(updates);
     _adminStuName = trimmed;
     document.getElementById('adminStuModalTitle').textContent = trimmed;
+    // Refresh gradebook in memory if it's showing one of this student's classrooms
+    if(_gbData){
+      const affectedClassIds = new Set(_adminStuAllRecords.map(r => r.classId));
+      if(affectedClassIds.has(_gbData.classId)){
+        const matchKeys = new Set(_adminStuAllRecords.filter(r => r.classId === _gbData.classId).map(r => r.key));
+        const rowGb = _gbData.rows.find(r => matchKeys.has(r.stuKey) || (_adminStuUid && r.uid === _adminStuUid));
+        if(rowGb){
+          rowGb.name = trimmed;
+          rowGb.lastName = trimmed.trim().split(/\s+/).pop();
+          adminRenderGradebook();
+        }
+      }
+    }
     _showInstToast('✓ Renamed to ' + trimmed, 3000);
   } catch(e){ alert('Error renaming: ' + e.message); }
 }
@@ -4656,6 +4669,15 @@ async function instRenameStudent(){
     // Only update avatar text if it's still showing initials (not an image)
     const spAv = document.getElementById('spAvatar');
     if(!spAv.querySelector('img')) spAv.textContent = trimmed.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    // Refresh gradebook in memory so the name change shows immediately
+    if(_gbData && _gbData.classId === spCurrentClassId){
+      const rowGb = _gbData.rows.find(r => r.stuKey === stuKey || r.uid === stuUid);
+      if(rowGb){
+        rowGb.name = trimmed;
+        rowGb.lastName = trimmed.trim().split(/\s+/).pop();
+        adminRenderGradebook();
+      }
+    }
     _showInstToast('✓ Renamed to ' + trimmed, 3000);
   } catch(e){ alert('Error renaming: ' + e.message); }
 }
