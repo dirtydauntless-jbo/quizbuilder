@@ -10368,14 +10368,21 @@ async function openStudentProfile(student, classId){
       const _ov = { ...(_ovB||{}), ...(_ovA||{}) };
       if(Object.keys(_ov).length > 0) {
         const _qs = quiz.questions || [];
-        let _adj = progress.correctCount || 0;
+        // Full recompute from raw answers + overrides — idempotent, never accumulates
+        const _aiGr = progress.aiGrades || {};
+        let _adj = 0;
         _qs.forEach((q, i) => {
-          if(_ov[i] === undefined) return;
-          const _ans = progress.answers[i];
+          const _ans = (progress.answers || [])[i];
           const _sa = (_ans !== undefined && _ans !== -1) ? _ans : null;
-          const _origOk = _sa !== null && (q.type === 'mc' || q.type === 'acr_mc') ? _sa === q.correct : false;
-          if(_ov[i] === true && !_origOk) _adj++;
-          else if(_ov[i] === false && _origOk) _adj--;
+          let _origOk;
+          if(q.type === 'mc' || q.type === 'acr_mc' || !q.type){
+            _origOk = _sa !== null && _sa === q.correct;
+          } else if(_aiGr[i] !== undefined){
+            _origOk = !!_aiGr[i];
+          } else {
+            _origOk = _sa !== null && typeof fibSmartMatch === 'function' && fibSmartMatch(String(_sa), String(q.answer||q.a||''));
+          }
+          if(_ov[i] !== undefined ? _ov[i] : _origOk) _adj++;
         });
         const _newCC = Math.max(0, Math.min(_adj, _qs.length));
         if(_newCC !== (progress.correctCount || 0)) {
@@ -10426,7 +10433,7 @@ async function openStudentProfile(student, classId){
     </div>
     <div class="stat-box" id="spScoreBox" style="padding:12px${_canToggle?';cursor:pointer':''};" ${_canToggle?'onclick="spToggleScoreMode()" title="Click to see average of all quizzes"':''}>
       <div id="spScoreVal" class="stat-val" style="font-size:1.8rem;color:${_sfPct!==null?(_sfPct>=70?'var(--cl)':'var(--wl)'):'var(--muted)'}">${_sfPct !== null ? `${_sfPct}%` : '--'}</div>
-      <div id="spScoreLbl" class="stat-lbl" style="font-size:.58rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(_sfTitle)}">${esc(_sfTitle) || 'SCORE'}</div>
+      <div id="spScoreLbl" class="stat-lbl" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(_sfTitle)}">${esc(_sfTitle) || 'SCORE'}</div>
     </div>`;
 
   // Open directly on quiz history
