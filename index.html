@@ -10351,8 +10351,15 @@ async function openStudentProfile(student, classId){
       progress = await dbGet(`quizProgress/${classId}/${qid}/${altKey}`);
       if(progress) progressKey = altKey;
     }
+    // Load attempt history first so we can also patch archived attempts if overrides are applied
+    let attempts = null;
+    let attSnapRaw = null;
+    if(progress){
+      attSnapRaw = await dbGet(`quizProgress/${classId}/${qid}/${progressKey}/attempts`);
+      if(attSnapRaw) attempts = Object.values(attSnapRaw).sort((a,b) => a.attemptNumber - b.attemptNumber);
+    }
     // Apply any instructor overrides so the stat card shows the effective score, and backfill
-    // to Firebase so the student side also sees the corrected value
+    // to Firebase (both main progress and archived attempts) so everything is consistent
     if(progress && progress.finished && progress.answers) {
       const [_ovA, _ovB] = await Promise.all([
         dbGet(`quizOverrides/${classId}/${qid}/${stuKey}`).catch(()=>null),
@@ -10370,19 +10377,25 @@ async function openStudentProfile(student, classId){
           if(_ov[i] === true && !_origOk) _adj++;
           else if(_ov[i] === false && _origOk) _adj--;
         });
-        const _newCC = Math.max(0, Math.min(_adj, (quiz.questions||[]).length));
+        const _newCC = Math.max(0, Math.min(_adj, _qs.length));
         if(_newCC !== (progress.correctCount || 0)) {
           progress = { ...progress, correctCount: _newCC };
-          // Backfill so student sees the corrected score
+          // Backfill main progress so student sees the corrected score
           dbSet(`quizProgress/${classId}/${qid}/${progressKey}/correctCount`, _newCC).catch(()=>{});
+          // Also patch archived attempts that still have the old (lower) score
+          if(attSnapRaw) {
+            for(const [attKey, att] of Object.entries(attSnapRaw)){
+              if((att.correctCount || 0) < _newCC){
+                if(attempts){
+                  const m = attempts.find(a => a === att || (a.finishedAt && a.finishedAt === att.finishedAt));
+                  if(m) m.correctCount = _newCC;
+                }
+                dbSet(`quizProgress/${classId}/${qid}/${progressKey}/attempts/${attKey}/correctCount`, _newCC).catch(()=>{});
+              }
+            }
+          }
         }
       }
-    }
-    // Also load attempt history using the same key progress was found under
-    let attempts = null;
-    if(progress){
-      const attSnap = await dbGet(`quizProgress/${classId}/${qid}/${progressKey}/attempts`);
-      if(attSnap) attempts = Object.values(attSnap).sort((a,b) => a.attemptNumber - b.attemptNumber);
     }
     return { qid, quiz, info, progress: progress || null, attempts: attempts || [], progressKey };
   }));
@@ -10412,7 +10425,7 @@ async function openStudentProfile(student, classId){
       <div class="stat-lbl">Completed</div>
     </div>
     <div class="stat-box" id="spScoreBox" style="padding:12px${_canToggle?';cursor:pointer':''};" ${_canToggle?'onclick="spToggleScoreMode()" title="Click to see average of all quizzes"':''}>
-      <div id="spScoreVal" class="stat-val" style="font-size:1.6rem;color:${_sfPct!==null?(_sfPct>=70?'var(--cl)':'var(--wl)'):'var(--muted)'}">${_sfCC !== null ? `${_sfCC}/${_sfTC}` : '--'}</div>
+      <div id="spScoreVal" class="stat-val" style="font-size:1.8rem;color:${_sfPct!==null?(_sfPct>=70?'var(--cl)':'var(--wl)'):'var(--muted)'}">${_sfPct !== null ? `${_sfPct}%` : '--'}</div>
       <div id="spScoreLbl" class="stat-lbl" style="font-size:.58rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(_sfTitle)}">${esc(_sfTitle) || 'SCORE'}</div>
     </div>`;
 
@@ -10442,7 +10455,7 @@ function spToggleScoreMode(){
       const cc = lq.progress.correctCount || 0;
       const tc = lq.progress.totalCount || lq.quiz?.questions?.length || 1;
       const pct = Math.round(cc / tc * 100);
-      scoreEl.textContent = `${cc}/${tc}`;
+      scoreEl.textContent = `${pct}%`;
       scoreEl.style.color = pct >= 70 ? 'var(--cl)' : 'var(--wl)';
       lblEl.textContent = lq.quiz?.title || 'SCORE';
       if(box) box.title = 'Click to see average of all quizzes';
@@ -10760,7 +10773,7 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   if(_spScoreMode === 'quiz'){
     const _svEl = document.getElementById('spScoreVal');
     const _slEl = document.getElementById('spScoreLbl');
-    if(_svEl){ _svEl.textContent = `${effectiveCorrect}/${total}`; _svEl.style.color = pct>=70?'var(--cl)':'var(--wl)'; }
+    if(_svEl){ _svEl.textContent = `${pct}%`; _svEl.style.color = pct>=70?'var(--cl)':'var(--wl)'; }
     if(_slEl){ _slEl.textContent = quiz.title || 'SCORE'; }
   }
 
@@ -10989,7 +11002,7 @@ async function instToggleOverride(qIdx, originalIsCorrect){
   if(_spScoreMode === 'quiz'){
     const _svEl = document.getElementById('spScoreVal');
     const _slEl = document.getElementById('spScoreLbl');
-    if(_svEl){ const _tc = questions.length || 1; const _pct2 = Math.round(correctCount/_tc*100); _svEl.textContent = `${correctCount}/${_tc}`; _svEl.style.color = _pct2>=70?'var(--cl)':'var(--wl)'; }
+    if(_svEl){ const _tc = questions.length || 1; const _pct2 = Math.round(correctCount/_tc*100); _svEl.textContent = `${_pct2}%`; _svEl.style.color = _pct2>=70?'var(--cl)':'var(--wl)'; }
     if(_slEl){ _slEl.textContent = entry?.quiz?.title || 'SCORE'; }
   } else {
     const _finishedNow = spCurrentQuizzes.filter(q => q.progress?.finished);
