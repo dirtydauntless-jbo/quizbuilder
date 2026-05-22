@@ -2006,6 +2006,7 @@ let stuCur = 0;
 let stuQuizNavList = []; // ordered list of {qid, iid, classroomId} for prev/next navigation
 let _retakeUsedThisSession = false; // blocks re-retake on same results screen
 let _stuScoreListener = null; // Firebase listener for live score updates on results screen
+let _spScoreMode = 'quiz'; // 'quiz' = latest/current quiz score, 'avg' = average all
 // OAuth redirect flag — prevents onAuthStateChanged racing getRedirectResult
 let _handlingRedirect = false;
 
@@ -10342,25 +10343,64 @@ async function openStudentProfile(student, classId){
       ));
     if(!isAssigned) return null;
     // Try UID key first, then name-based key for legacy records
+    // Skip partial records (no finished flag) that may have been created by stale writes
+    let progressKey = stuKey;
     let progress = await dbGet(`quizProgress/${classId}/${qid}/${stuKey}`);
-    if(!progress && altKey !== stuKey) progress = await dbGet(`quizProgress/${classId}/${qid}/${altKey}`);
-    // Also load attempt history
+    if(progress && !progress.finished && !progress.answers) progress = null; // partial/stale record
+    if(!progress && altKey !== stuKey){
+      progress = await dbGet(`quizProgress/${classId}/${qid}/${altKey}`);
+      if(progress) progressKey = altKey;
+    }
+    // Apply any instructor overrides so the stat card shows the effective score, and backfill
+    // to Firebase so the student side also sees the corrected value
+    if(progress && progress.finished && progress.answers) {
+      const [_ovA, _ovB] = await Promise.all([
+        dbGet(`quizOverrides/${classId}/${qid}/${stuKey}`).catch(()=>null),
+        altKey !== stuKey ? dbGet(`quizOverrides/${classId}/${qid}/${altKey}`).catch(()=>null) : Promise.resolve(null)
+      ]);
+      const _ov = { ...(_ovB||{}), ...(_ovA||{}) };
+      if(Object.keys(_ov).length > 0) {
+        const _qs = quiz.questions || [];
+        let _adj = progress.correctCount || 0;
+        _qs.forEach((q, i) => {
+          if(_ov[i] === undefined) return;
+          const _ans = progress.answers[i];
+          const _sa = (_ans !== undefined && _ans !== -1) ? _ans : null;
+          const _origOk = _sa !== null && (q.type === 'mc' || q.type === 'acr_mc') ? _sa === q.correct : false;
+          if(_ov[i] === true && !_origOk) _adj++;
+          else if(_ov[i] === false && _origOk) _adj--;
+        });
+        const _newCC = Math.max(0, Math.min(_adj, (quiz.questions||[]).length));
+        if(_newCC !== (progress.correctCount || 0)) {
+          progress = { ...progress, correctCount: _newCC };
+          // Backfill so student sees the corrected score
+          dbSet(`quizProgress/${classId}/${qid}/${progressKey}/correctCount`, _newCC).catch(()=>{});
+        }
+      }
+    }
+    // Also load attempt history using the same key progress was found under
     let attempts = null;
     if(progress){
-      const attSnap = await dbGet(`quizProgress/${classId}/${qid}/${stuKey}/attempts`) ||
-                      (altKey !== stuKey ? await dbGet(`quizProgress/${classId}/${qid}/${altKey}/attempts`) : null);
+      const attSnap = await dbGet(`quizProgress/${classId}/${qid}/${progressKey}/attempts`);
       if(attSnap) attempts = Object.values(attSnap).sort((a,b) => a.attemptNumber - b.attemptNumber);
     }
-    return { qid, quiz, info, progress: progress || null, attempts: attempts || [] };
+    return { qid, quiz, info, progress: progress || null, attempts: attempts || [], progressKey };
   }));
   spCurrentQuizzes = spCurrentQuizzes.filter(Boolean);
 
   // Summary stats
+  _spScoreMode = 'quiz'; // reset to quiz mode each time profile opens
   const finished = spCurrentQuizzes.filter(q => q.progress?.finished);
   const inProg   = spCurrentQuizzes.filter(q => q.progress && q.progress.answeredCount > 0 && !q.progress.finished);
-  const avgScore = finished.length
-    ? Math.round(finished.reduce((s,q) => s + (q.progress.correctCount / (q.progress.totalCount || q.progress.answeredCount || 1) * 100), 0) / finished.length)
-    : null;
+
+  // Score box: show the most recently completed quiz's score by default
+  const _sfSorted = [...finished].sort((a,b) => new Date(b.progress?.finishedAt||0) - new Date(a.progress?.finishedAt||0));
+  const _sfLatest = _sfSorted[0];
+  const _sfCC = _sfLatest ? (_sfLatest.progress.correctCount || 0) : null;
+  const _sfTC = _sfLatest ? (_sfLatest.progress.totalCount || _sfLatest.quiz?.questions?.length || 1) : 1;
+  const _sfPct = _sfCC !== null ? Math.round(_sfCC / _sfTC * 100) : null;
+  const _sfTitle = _sfLatest?.quiz?.title || '';
+  const _canToggle = finished.length > 1;
 
   document.getElementById('spStats').innerHTML = `
     <div class="stat-box" style="padding:12px">
@@ -10371,14 +10411,43 @@ async function openStudentProfile(student, classId){
       <div class="stat-val" style="font-size:1.8rem;color:var(--cl)">${finished.length}</div>
       <div class="stat-lbl">Completed</div>
     </div>
-    <div class="stat-box" style="padding:12px">
-      <div class="stat-val" style="font-size:1.8rem;color:${avgScore!==null?(avgScore>=70?'var(--cl)':'var(--wl)'):'var(--muted)'}">${avgScore !== null ? avgScore + '%' : '--'}</div>
-      <div class="stat-lbl">Avg Score</div>
+    <div class="stat-box" id="spScoreBox" style="padding:12px${_canToggle?';cursor:pointer':''};" ${_canToggle?'onclick="spToggleScoreMode()" title="Click to see average of all quizzes"':''}>
+      <div id="spScoreVal" class="stat-val" style="font-size:1.6rem;color:${_sfPct!==null?(_sfPct>=70?'var(--cl)':'var(--wl)'):'var(--muted)'}">${_sfCC !== null ? `${_sfCC}/${_sfTC}` : '--'}</div>
+      <div id="spScoreLbl" class="stat-lbl" style="font-size:.58rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(_sfTitle)}">${esc(_sfTitle) || 'SCORE'}</div>
     </div>`;
 
   // Open directly on quiz history
   spSwitchTab('history');
   show('studentProfileModal');
+}
+
+function spToggleScoreMode(){
+  const finished = spCurrentQuizzes.filter(q => q.progress?.finished);
+  if(finished.length <= 1) return;
+  _spScoreMode = _spScoreMode === 'quiz' ? 'avg' : 'quiz';
+  const scoreEl = document.getElementById('spScoreVal');
+  const lblEl = document.getElementById('spScoreLbl');
+  const box = document.getElementById('spScoreBox');
+  if(!scoreEl || !lblEl) return;
+  if(_spScoreMode === 'avg'){
+    const avg = Math.round(finished.reduce((s,q) => s + (q.progress.correctCount / (q.progress.totalCount || 1) * 100), 0) / finished.length);
+    scoreEl.textContent = avg + '%';
+    scoreEl.style.color = avg >= 70 ? 'var(--cl)' : 'var(--wl)';
+    lblEl.textContent = 'Avg All Quizzes';
+    if(box) box.title = 'Click to see individual quiz score';
+  } else {
+    const sf = [...finished].sort((a,b) => new Date(b.progress?.finishedAt||0) - new Date(a.progress?.finishedAt||0));
+    const lq = sf[0];
+    if(lq){
+      const cc = lq.progress.correctCount || 0;
+      const tc = lq.progress.totalCount || lq.quiz?.questions?.length || 1;
+      const pct = Math.round(cc / tc * 100);
+      scoreEl.textContent = `${cc}/${tc}`;
+      scoreEl.style.color = pct >= 70 ? 'var(--cl)' : 'var(--wl)';
+      lblEl.textContent = lq.quiz?.title || 'SCORE';
+      if(box) box.title = 'Click to see average of all quizzes';
+    }
+  }
 }
 
 function spScrollTop(){
@@ -10638,11 +10707,18 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   if(!attempt) return;
 
   // Load grade overrides (instructor-editable; stored against current progress, visible from any attempt)
-  const stuKey = spCurrentStudent?.uid || safeKey(spCurrentStudent?.name || '?');
+  // Use progressKey so writes land on the same path the progress record actually lives under
+  const stuKey = entry.progressKey || spCurrentStudent?.uid || safeKey(spCurrentStudent?.name || '?');
+  const stuKeyAlt = spCurrentStudent?.uid || safeKey(spCurrentStudent?.name || '?');
   let overrides = {};
   if(spCurrentClassId){
-    const stored = await dbGet(`quizOverrides/${spCurrentClassId}/${quizId}/${stuKey}`);
-    if(stored && typeof stored === 'object') overrides = stored;
+    // Check both uid and safeKey paths — old writes may have gone to uid even when progress is at safeKey
+    const [_ovMain, _ovAlt] = await Promise.all([
+      dbGet(`quizOverrides/${spCurrentClassId}/${quizId}/${stuKey}`).catch(()=>null),
+      stuKeyAlt !== stuKey ? dbGet(`quizOverrides/${spCurrentClassId}/${quizId}/${stuKeyAlt}`).catch(()=>null) : Promise.resolve(null)
+    ]);
+    if(_ovAlt && typeof _ovAlt === 'object') Object.assign(overrides, _ovAlt);
+    if(_ovMain && typeof _ovMain === 'object') Object.assign(overrides, _ovMain);
   }
   const _overrideIid = entry.info?.instructorId || (instUser && instUser.uid) || '';
   _spOverrideCtx = spCurrentClassId
@@ -10680,6 +10756,13 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
   document.getElementById('spReviewTitle').textContent = `${quiz.title} - Attempt ${attempt.attemptNumber}`;
   document.getElementById('spReviewScore').innerHTML =
     `Score: <strong style="color:${pct>=70?'var(--cl)':'var(--wl)'}">${effectiveCorrect}/${total} (${pct}%)</strong> — Completed ${fmtDate(attempt.finishedAt)}`;
+  // Update score stat card to show this quiz's effective score
+  if(_spScoreMode === 'quiz'){
+    const _svEl = document.getElementById('spScoreVal');
+    const _slEl = document.getElementById('spScoreLbl');
+    if(_svEl){ _svEl.textContent = `${effectiveCorrect}/${total}`; _svEl.style.color = pct>=70?'var(--cl)':'var(--wl)'; }
+    if(_slEl){ _slEl.textContent = quiz.title || 'SCORE'; }
+  }
 
   // Build answer items
   const items = questions.map((q, i) => {
@@ -10901,6 +10984,21 @@ async function instToggleOverride(qIdx, originalIsCorrect){
   await dbSet(`quizProgress/${classId}/${quizId}/${stuKey}/correctCount`, correctCount);
   const entry = spCurrentQuizzes.find(q => q.qid === quizId);
   if(entry?.progress) entry.progress.correctCount = correctCount;
+
+  // Re-render score stat card at the top of the student profile
+  if(_spScoreMode === 'quiz'){
+    const _svEl = document.getElementById('spScoreVal');
+    const _slEl = document.getElementById('spScoreLbl');
+    if(_svEl){ const _tc = questions.length || 1; const _pct2 = Math.round(correctCount/_tc*100); _svEl.textContent = `${correctCount}/${_tc}`; _svEl.style.color = _pct2>=70?'var(--cl)':'var(--wl)'; }
+    if(_slEl){ _slEl.textContent = entry?.quiz?.title || 'SCORE'; }
+  } else {
+    const _finishedNow = spCurrentQuizzes.filter(q => q.progress?.finished);
+    if(_finishedNow.length){
+      const _avgNow = Math.round(_finishedNow.reduce((s,q) => s + (q.progress.correctCount / (q.progress.totalCount || 1) * 100), 0) / _finishedNow.length);
+      const _avgEl = document.getElementById('spScoreVal');
+      if(_avgEl){ _avgEl.textContent = _avgNow + '%'; _avgEl.style.color = _avgNow >= 70 ? 'var(--cl)' : 'var(--wl)'; }
+    }
+  }
 
   // Immediately refresh the gradebook table if it's showing this classroom
   if(typeof _gbData !== 'undefined' && _gbData && _gbData.classId === classId){
