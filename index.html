@@ -4354,7 +4354,20 @@ function adminRenderGradebook(){
   const hasSimData = simStats && Object.keys(simStats).length > 0;
   const simHeader = hasSimData ? `<th style="${thStyle};background:rgba(99,102,241,.1)" onclick="adminGbSort('sim')">📐 Sim ${arrowFor('sim')}<br><span style="font-weight:400;font-size:.6rem">${totalRounds} rounds</span></th>` : '';
 
-  let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem">
+  // Print toolbar
+  const quizFilterOpts = quizzes.map(([qid,q]) =>
+    `<option value="${qid}">${esc((q.quizTitle||qid).substring(0,40))}</option>`
+  ).join('');
+  let html = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:var(--r)">
+    <span style="font-family:monospace;font-size:.78rem;font-weight:700;color:var(--text)">🖨 Print Grade Sheets:</span>
+    <select id="gbPrintQuizFilter" style="font-family:monospace;font-size:.78rem;padding:5px 8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;cursor:pointer">
+      <option value="">All Quizzes</option>
+      ${quizFilterOpts}
+    </select>
+    <button onclick="printGradeSheets(document.getElementById('gbPrintQuizFilter').value||null)" style="background:var(--accent);color:#000;border:none;border-radius:3px;font-family:monospace;font-size:.78rem;font-weight:700;padding:5px 14px;cursor:pointer;letter-spacing:.5px">🖨 Print</button>
+    <span style="font-family:monospace;font-size:.68rem;color:var(--muted)">One page per student · opens print dialog</span>
+  </div>
+  <div style="overflow-x:auto"><table style="border-collapse:collapse;min-width:100%;font-size:.78rem">
     <thead><tr style="background:var(--panel2)">
       <th style="${stickyTh}" onclick="adminGbSort('name')">Student ${arrowFor('name')}</th>
       ${quizzes.map(([qid,q],i)=>`<th style="${thStyle}" onclick="adminGbSort('${i}')">${esc((q.quizTitle||qid).substring(0,18))} ${arrowFor(String(i))}</th>`).join('')}
@@ -4439,6 +4452,241 @@ function adminGbSort(col){
   if(_gbSortCol === col) _gbSortDir *= -1;
   else { _gbSortCol = col; _gbSortDir = col==='name' ? 1 : -1; } // grades default high-to-low
   adminRenderGradebook();
+}
+
+// ── GRADE SHEET PRINTING ───────────────────────────────────────────────────
+
+async function printGradeSheets(filterQuizId){
+  if(!_gbData){ alert('Please open a classroom gradebook first.'); return; }
+  const { classId, quizzes, rows } = _gbData;
+
+  const btn = document.querySelector('#acmPane-gradebook button');
+  const origLabel = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Loading…'; }
+
+  try {
+    const [classroom, allProgress, integrityLog] = await Promise.all([
+      dbGet(`classrooms/${classId}`).catch(()=>({})),
+      dbGet(`quizProgress/${classId}`).catch(()=>({})),
+      dbGet(`integrityLog/${classId}`).catch(()=>({}))
+    ]);
+
+    const className = classroom?.name || classId;
+    const instIds = [classroom?.instructorId, ...Object.keys(classroom?.coInstructors||{})].filter(Boolean);
+    const instNames = await Promise.all(instIds.map(async id => {
+      try{ return (await dbGet(`instructors/${id}`))?.name || id; }catch(e){ return id; }
+    }));
+    const instructorStr = instNames.filter(Boolean).join(', ') || 'Instructor';
+
+    const targetQuizzes = filterQuizId ? quizzes.filter(([qid]) => qid === filterQuizId) : quizzes;
+
+    const quizDefs = {};
+    const overrideCache = {};
+    await Promise.all(targetQuizzes.map(async ([qid, info]) => {
+      const iid = info.instructorId || classroom?.instructorId;
+      if(iid) try{ quizDefs[qid] = await dbGet(`quizzes/${iid}/${qid}`); }catch(e){}
+    }));
+
+    // Load all overrides for each student-quiz pair that has a finished attempt
+    for(const [qid] of targetQuizzes){
+      overrideCache[qid] = overrideCache[qid] || {};
+      for(const row of rows){
+        const prog = allProgress?.[qid]?.[row.stuKey];
+        if(prog?.finished){
+          try{
+            const ov = await dbGet(`quizOverrides/${classId}/${qid}/${row.stuKey}`);
+            if(ov) overrideCache[qid][row.stuKey] = ov;
+          }catch(e){}
+        }
+      }
+    }
+
+    const sheets = [];
+    for(const row of rows){
+      for(const [qid] of targetQuizzes){
+        const quiz = quizDefs[qid];
+        if(!quiz?.questions) continue;
+        const prog = allProgress?.[qid]?.[row.stuKey];
+        if(!prog?.finished) continue;
+
+        const stuInteg = integrityLog?.[qid]?.[row.stuKey] || {};
+        const evts = Object.values(stuInteg);
+        const tabSwitches = evts.filter(e => e.type === 'tab_switch').length;
+        const blurs = evts.filter(e => e.type === 'window_blur').length;
+        const overrides = overrideCache[qid]?.[row.stuKey] || {};
+
+        sheets.push(_buildGradeSheetHTML({
+          studentName: row.name,
+          className,
+          instructorStr,
+          quiz,
+          qid,
+          prog,
+          tabSwitches,
+          blurs,
+          overrides
+        }));
+      }
+    }
+
+    if(!sheets.length){
+      alert('No completed quiz submissions found for the selected filter.');
+      return;
+    }
+    _openGradeSheetPrintWindow(sheets);
+
+  } catch(e){
+    alert('Error generating grade sheets: ' + (e.message || String(e)));
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = origLabel; }
+  }
+}
+
+function _buildGradeSheetHTML({ studentName, className, instructorStr, quiz, qid, prog, tabSwitches, blurs, overrides }){
+  const htmlEsc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const letters = ['A','B','C','D','E'];
+  const questions = quiz.questions || [];
+  const answers = prog.answers || [];
+  const finishedAt = prog.finishedAt
+    ? new Date(prog.finishedAt).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})
+    : '—';
+  const correctCount = prog.correctCount ?? 0;
+  const totalCount = prog.totalCount ?? questions.length;
+  const pct = totalCount ? Math.round(correctCount / totalCount * 100) : 0;
+  const scoreColor = pct >= 80 ? '#166534' : pct >= 60 ? '#92400e' : '#991b1b';
+  const integrityOk = tabSwitches + blurs === 0;
+  const integrityText = integrityOk
+    ? '✓ No integrity events'
+    : `⚠ ${tabSwitches} tab switch${tabSwitches!==1?'es':''}, ${blurs} focus loss${blurs!==1?'es':''}`;
+
+  const qRows = questions.map((q, i) => {
+    const rawAns = answers[i] !== undefined ? answers[i] : -1;
+    const stuAns = rawAns === -1 ? null : rawAns;
+    const isOverridden = overrides[i] !== undefined;
+    const isMC = q.type === 'mc' || q.type === 'acr_mc';
+
+    let correctDisplay, stuDisplay, resultMark, resultColor, rowBg;
+
+    if(isMC){
+      correctDisplay = letters[q.correct] || '?';
+      stuDisplay = stuAns !== null ? (letters[stuAns] || '?') : '—';
+      const rawCorrect = stuAns === q.correct;
+      const effective = isOverridden ? overrides[i] : rawCorrect;
+      resultMark = stuAns === null ? '—' : (effective ? '✓' : '✗');
+      if(isOverridden && overrides[i] && !rawCorrect){ stuDisplay += '*'; resultMark = '✓*'; }
+    } else {
+      const correctText = String(q.answer || q.a || '');
+      correctDisplay = correctText.length > 28 ? correctText.substring(0,26)+'…' : correctText;
+      const ansStr = stuAns !== null ? String(stuAns) : '';
+      stuDisplay = ansStr.length > 28 ? ansStr.substring(0,26)+'…' : (ansStr || '—');
+      const aiGrade = prog.aiGrades?.[i];
+      const effective = isOverridden ? overrides[i] : (aiGrade !== undefined ? aiGrade : null);
+      resultMark = effective === true ? '✓' : effective === false ? '✗' : '?';
+      if(isOverridden && overrides[i]){ resultMark = '✓*'; }
+    }
+
+    resultColor = resultMark.startsWith('✓') ? '#166534' : resultMark === '✗' ? '#991b1b' : '#555';
+    rowBg = resultMark.startsWith('✓') ? '#f0fdf4' : resultMark === '✗' ? '#fef2f2' : '#fff';
+
+    const qText = String(q.question || q.q || '');
+    const qDisplay = qText.length > 72 ? qText.substring(0,70)+'…' : qText;
+
+    return `<tr style="background:${rowBg}">
+      <td style="text-align:center;border:1px solid #ccc;padding:3px 6px;font-size:.78rem;color:#555">${i+1}</td>
+      <td style="border:1px solid #ccc;padding:3px 8px;font-size:.76rem">${htmlEsc(qDisplay)}</td>
+      <td style="text-align:center;border:1px solid #ccc;padding:3px 6px;font-weight:700;font-size:.82rem;color:#166534">${htmlEsc(correctDisplay)}</td>
+      <td style="text-align:center;border:1px solid #ccc;padding:3px 6px;font-weight:700;font-size:.82rem;color:${resultColor}">${htmlEsc(stuDisplay)}</td>
+      <td style="text-align:center;border:1px solid #ccc;padding:3px 6px;font-weight:700;color:${resultColor}">${resultMark}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="grade-sheet-page">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1d3461;padding-bottom:8px;margin-bottom:12px">
+      <div>
+        <div style="font-size:1.3rem;font-weight:900;color:#1d3461;letter-spacing:2px;font-family:Arial Black,sans-serif">CLASSROOM AMT</div>
+        <div style="font-size:.7rem;color:#666;letter-spacing:2px;text-transform:uppercase">Student Grade Sheet</div>
+      </div>
+      <div style="font-size:.72rem;color:#888;text-align:right;line-height:1.5">${htmlEsc(className)}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:.85rem">
+      <tr>
+        <td style="padding:3px 6px;width:50%"><strong>Student:</strong> ${htmlEsc(studentName)}</td>
+        <td style="padding:3px 6px"><strong>Quiz:</strong> ${htmlEsc(quiz.title||qid)}</td>
+      </tr><tr>
+        <td style="padding:3px 6px"><strong>Date:</strong> ${finishedAt}</td>
+        <td style="padding:3px 6px"><strong>Instructor(s):</strong> ${htmlEsc(instructorStr)}</td>
+      </tr><tr>
+        <td style="padding:3px 6px"><strong>Score:</strong> <span style="font-weight:700;font-size:1.05rem;color:${scoreColor}">${correctCount}/${totalCount} &nbsp;(${pct}%)</span></td>
+        <td style="padding:3px 6px"><strong>Integrity:</strong> <span style="color:${integrityOk?'#166534':'#991b1b'};font-weight:600">${integrityText}</span></td>
+      </tr>
+    </table>
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+      <thead><tr style="background:#1d3461;color:#fff">
+        <th style="padding:5px 6px;text-align:center;border:1px solid #1d3461;width:32px">#</th>
+        <th style="padding:5px 8px;text-align:left;border:1px solid #1d3461">Question</th>
+        <th style="padding:5px 6px;text-align:center;border:1px solid #1d3461;width:58px">Correct</th>
+        <th style="padding:5px 6px;text-align:center;border:1px solid #1d3461;width:58px">Student</th>
+        <th style="padding:5px 6px;text-align:center;border:1px solid #1d3461;width:38px">✓/✗</th>
+      </tr></thead>
+      <tbody>${qRows}</tbody>
+    </table>
+    <div style="margin-top:12px;font-size:.62rem;color:#aaa">* = instructor override &nbsp;|&nbsp; ? = AI grade pending</div>
+    <div style="margin-top:8px;border-top:1px solid #ddd;padding-top:6px;display:flex;justify-content:space-between;font-size:.65rem;color:#aaa">
+      <span>Printed ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})}</span>
+      <span>Classroom AMT — classroomamt.com</span>
+    </div>
+  </div>`;
+}
+
+function _openGradeSheetPrintWindow(sheets){
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if(!win){ alert('Pop-up blocked — please allow pop-ups for this site and try again.'); return; }
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="utf-8">
+    <title>Grade Sheets — Classroom AMT</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}
+      .grade-sheet-page{
+        width:8.5in;max-width:100%;
+        min-height:10.5in;
+        padding:.65in .8in;
+        margin:0 auto 20px;
+        background:#fff;
+        box-shadow:0 2px 8px rgba(0,0,0,.12);
+        page-break-after:always;
+        position:relative;
+      }
+      .grade-sheet-page:last-child{page-break-after:avoid}
+      .print-bar{
+        position:fixed;top:0;left:0;right:0;z-index:100;
+        background:#1d3461;color:#fff;
+        padding:9px 20px;
+        display:flex;align-items:center;justify-content:space-between;
+        font-family:Arial,sans-serif;font-size:.88rem;
+        box-shadow:0 2px 6px rgba(0,0,0,.3);
+      }
+      .pbtn{background:#f59e0b;color:#000;border:none;padding:7px 22px;font-weight:700;font-size:.88rem;border-radius:4px;cursor:pointer;letter-spacing:.5px}
+      .pbtn:hover{background:#d97706}
+      @media screen{body{padding-top:52px}}
+      @media print{
+        body{background:#fff;padding-top:0}
+        .print-bar{display:none}
+        .grade-sheet-page{
+          margin:0;box-shadow:none;
+          width:100%;min-height:auto;
+          padding:.5in .6in;
+        }
+      }
+    </style>
+  </head><body>
+    <div class="print-bar">
+      <span><strong>${sheets.length}</strong> grade sheet${sheets.length!==1?'s':''} ready &nbsp;·&nbsp; <span style="opacity:.7;font-size:.78rem">each student on a separate page</span></span>
+      <button class="pbtn" onclick="window.print()">🖨&nbsp; Print / Save as PDF</button>
+    </div>
+    ${sheets.join('\n')}
+  </body></html>`);
+  win.document.close();
 }
 
 async function adminLoadClassGradebook(){
