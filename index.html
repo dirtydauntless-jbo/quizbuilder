@@ -2264,6 +2264,7 @@ function stuShowMyProfile(){
 function instShowMyProfile(){
   const el = document.getElementById('instMyProfileBody');
   if(!el || !instProfile) return;
+  const schoolVal = esc(instProfile.schoolName || '');
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
       <div style="width:52px;height:52px;border-radius:50%;background:rgba(240,165,0,.15);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;flex-shrink:0">
@@ -2275,10 +2276,29 @@ function instShowMyProfile(){
         <div style="font-size:.68rem;color:var(--muted);margin-top:2px">Instructor</div>
       </div>
     </div>
-    <div style="border-top:1px solid var(--border);padding-top:12px;font-size:.8rem;color:var(--muted)">
-      Manage your classrooms, quizzes, and students from the tabs above.
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <label style="font-size:.72rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:6px">School Name</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="instSchoolNameInput" class="input" value="${schoolVal}" placeholder="e.g. US Aviation Academy" style="flex:1;font-size:.82rem">
+        <button class="btn btn-primary btn-sm" onclick="instSaveSchoolName()">Save</button>
+      </div>
+      <div style="font-size:.65rem;color:var(--muted);margin-top:6px">Shown on printed grade sheets.</div>
     </div>`;
   show('instMyProfileModal');
+}
+
+async function instSaveSchoolName(){
+  const input = document.getElementById('instSchoolNameInput');
+  if(!input || !instUser) return;
+  const val = input.value.trim();
+  try {
+    await dbSet(`instructors/${instUser.uid}/schoolName`, val || null);
+    instProfile = { ...instProfile, schoolName: val || undefined };
+    input.style.outline = '2px solid var(--cl)';
+    setTimeout(() => { input.style.outline = ''; }, 1200);
+  } catch(e) {
+    alert('Error saving school name: ' + (e.message || e.code));
+  }
 }
 
 function confirmSignOut(role){
@@ -4474,18 +4494,21 @@ async function printGradeSheets(filterQuizId){
     ]);
 
     const className = classroom?.name || classId;
-    const instIds = [classroom?.instructorId, ...Object.keys(classroom?.coInstructors||{})].filter(Boolean);
-    const instNames = await Promise.all(instIds.map(async id => {
-      try{ return (await dbGet(`instructors/${id}`))?.name || id; }catch(e){ return id; }
-    }));
+    const iidPrimary = classroom?.instructorId;
+    const instIds = [iidPrimary, ...Object.keys(classroom?.coInstructors||{})].filter(Boolean);
+    const [instProfiles, ...rest_] = await Promise.all([
+      Promise.all(instIds.map(id => dbGet(`instructors/${id}`).catch(()=>null))),
+    ]);
+    const instNames = instProfiles.map((p,i) => p?.name || instIds[i]);
     const instructorStr = instNames.filter(Boolean).join(', ') || 'Instructor';
+    const schoolName = (instProfiles[0])?.schoolName || '';
 
     const targetQuizzes = filterQuizId ? quizzes.filter(([qid]) => qid === filterQuizId) : quizzes;
 
     const quizDefs = {};
     const overrideCache = {};
     await Promise.all(targetQuizzes.map(async ([qid, info]) => {
-      const iid = info.instructorId || classroom?.instructorId;
+      const iid = info.instructorId || iidPrimary;
       if(iid) try{ quizDefs[qid] = await dbGet(`quizzes/${iid}/${qid}`); }catch(e){}
     }));
 
@@ -4521,6 +4544,7 @@ async function printGradeSheets(filterQuizId){
           studentName: row.name,
           className,
           instructorStr,
+          schoolName,
           quiz,
           qid,
           prog,
@@ -4569,8 +4593,12 @@ async function printClassroomGradeSheets(){
     const iid = classroom?.instructorId;
     if(!iid){ alert('Could not determine instructor for this classroom.'); return; }
 
-    const quiz = await dbGet(`quizzes/${iid}/${quizId}`).catch(()=>null);
+    const [quiz, instProf] = await Promise.all([
+      dbGet(`quizzes/${iid}/${quizId}`).catch(()=>null),
+      dbGet(`instructors/${iid}`).catch(()=>null)
+    ]);
     if(!quiz?.questions){ alert('Quiz definition not found.'); return; }
+    const schoolName = instProf?.schoolName || '';
 
     const students = window._currentGrades?._rawStudents || [];
     const sheets = [];
@@ -4590,6 +4618,7 @@ async function printClassroomGradeSheets(){
         studentName: stu.name,
         className: className2,
         instructorStr,
+        schoolName,
         quiz,
         qid: quizId,
         prog,
@@ -4607,7 +4636,7 @@ async function printClassroomGradeSheets(){
   }
 }
 
-function _buildGradeSheetHTML({ studentName, className, instructorStr, quiz, qid, prog, tabSwitches, blurs, overrides }){
+function _buildGradeSheetHTML({ studentName, className, instructorStr, schoolName, quiz, qid, prog, tabSwitches, blurs, overrides }){
   const htmlEsc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const letters = ['A','B','C','D','E'];
   const questions = quiz.questions || [];
@@ -4668,7 +4697,7 @@ function _buildGradeSheetHTML({ studentName, className, instructorStr, quiz, qid
   return `<div class="grade-sheet-page">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1d3461;padding-bottom:8px;margin-bottom:12px">
       <div>
-        <div style="font-size:1.3rem;font-weight:900;color:#1d3461;letter-spacing:2px;font-family:Arial Black,sans-serif">CLASSROOM AMT</div>
+        <div style="font-size:1.3rem;font-weight:900;color:#1d3461;letter-spacing:2px;font-family:Arial Black,sans-serif">${htmlEsc(schoolName||'Classroom AMT').toUpperCase()}</div>
         <div style="font-size:.7rem;color:#666;letter-spacing:2px;text-transform:uppercase">Student Grade Sheet</div>
       </div>
       <div style="font-size:.72rem;color:#888;text-align:right;line-height:1.5">${htmlEsc(className)}</div>
