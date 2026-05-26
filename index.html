@@ -4729,7 +4729,7 @@ function _buildGradeSheetHTML({ studentName, className, instructorStr, schoolNam
     <div style="margin-top:12px;font-size:.62rem;color:#aaa">* = instructor override &nbsp;|&nbsp; ? = AI grade pending</div>
     <div style="margin-top:8px;border-top:1px solid #ddd;padding-top:6px;display:flex;justify-content:space-between;font-size:.65rem;color:#aaa">
       <span>Printed ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})}</span>
-      <span>Classroom AMT — classroomamt.com</span>
+      <span>${htmlEsc(schoolName ? schoolName + ' — via Classroom AMT' : 'Classroom AMT — classroomamt.com')}</span>
     </div>
   </div>`;
 }
