@@ -4501,7 +4501,7 @@ async function printGradeSheets(filterQuizId){
     ]);
     const instNames = instProfiles.map((p,i) => p?.name || instIds[i]);
     const instructorStr = instNames.filter(Boolean).join(', ') || 'Instructor';
-    const schoolName = (instProfiles[0])?.schoolName || '';
+    const schoolName = instProfiles.find(p => p?.schoolName)?.schoolName || '';
 
     const targetQuizzes = filterQuizId ? quizzes.filter(([qid]) => qid === filterQuizId) : quizzes;
 
@@ -4593,12 +4593,14 @@ async function printClassroomGradeSheets(){
     const iid = classroom?.instructorId;
     if(!iid){ alert('Could not determine instructor for this classroom.'); return; }
 
-    const [quiz, instProf] = await Promise.all([
+    const coInstIds = Object.keys(classroom?.coInstructors||{});
+    const [quiz, instProf, ...coInstProfs] = await Promise.all([
       dbGet(`quizzes/${iid}/${quizId}`).catch(()=>null),
-      dbGet(`instructors/${iid}`).catch(()=>null)
+      dbGet(`instructors/${iid}`).catch(()=>null),
+      ...coInstIds.map(id => dbGet(`instructors/${id}`).catch(()=>null))
     ]);
     if(!quiz?.questions){ alert('Quiz definition not found.'); return; }
-    const schoolName = instProf?.schoolName || '';
+    const schoolName = instProf?.schoolName || coInstProfs.find(p => p?.schoolName)?.schoolName || '';
 
     const students = window._currentGrades?._rawStudents || [];
     const sheets = [];
