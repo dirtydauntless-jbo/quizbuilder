@@ -2516,6 +2516,7 @@ async function doStuEmailAuth(){
     } else {
       const name = document.getElementById('stuAuthDisplayName').value.trim();
       if(!name){ showErr(errEl,'Please enter your full name.'); return; }
+      if(name.split(' ').filter(Boolean).length < 2){ showErr(errEl,'Please enter your first and last name.'); return; }
       const cred = await auth.createUserWithEmailAndPassword(email, password);
       await cred.user.updateProfile({ displayName: name });
       user = cred.user;
