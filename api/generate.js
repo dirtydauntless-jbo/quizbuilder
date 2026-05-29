@@ -1,82 +1,73 @@
+module.exports.config = { maxDuration: 60 };
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { topics, count = 5 } = req.body || {};
+  const { topics, count } = req.body || {};
+  if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
 
-  if (!topics || !Array.isArray(topics) || topics.length === 0) {
-    return res.status(400).json({ error: 'topics array is required' });
-  }
+  const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
 
-  const safeCount = Math.min(Math.max(parseInt(count) || 5, 1), 20);
-  const topicList = topics.slice(0, 20).join(', ');
+  // Distribute question count evenly across topics
+  const n = Math.min(topics.length, total);
+  const selectedTopics = n < topics.length
+    ? topics.slice().sort(() => Math.random() - 0.5).slice(0, n)
+    : topics;
+  const base = Math.floor(total / n);
+  const rem = total % n;
+  const counts = selectedTopics.map((_, i) => i < rem ? base + 1 : base);
 
-  const prompt = `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
+  async function askTopic(topic, qCount) {
+    if (qCount < 1) return [];
+    const prompt = `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
 
-Generate ${safeCount} multiple choice practice questions spanning these FAA A&P topics: ${topicList}
+Generate ${qCount} multiple choice practice question${qCount > 1 ? 's' : ''} specifically about: ${topic}
 
 Rules:
-- Distribute questions across the listed topics (do not focus on only one)
 - Each question must have exactly 4 answer choices labeled A, B, C, D
-- Wrong answers must be plausible — same units, same category, subtly wrong (not obviously wrong)
-- Wrong answers should reflect common misconceptions or close-but-incorrect values
-- Questions must be at the level of the FAA A&P written exam
-- Do not repeat questions
-- Return ONLY a valid JSON array with no explanation, no markdown, no code blocks
+- Wrong answers must be plausible — same units, same category, subtly wrong, not obviously wrong
+- Wrong answers should reflect real common misconceptions
+- Questions must match the difficulty of the FAA A&P written exam
+- Return ONLY a valid JSON array — no markdown, no explanation, no code blocks
 
 Format:
-[
-  {
-    "question": "...",
-    "choices": { "A": "...", "B": "...", "C": "...", "D": "..." },
-    "correct": "A"
+[{"question":"...","choices":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A"}]`;
+
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] })
+    });
+    if (!r.ok) { console.error(`Topic "${topic}" API error`, r.status); return []; }
+    const d = await r.json();
+    const text = d.content?.[0]?.text || '';
+    try {
+      const arr = JSON.parse(text);
+      return Array.isArray(arr) ? arr.map(q => ({ ...q, topic })) : [];
+    } catch {
+      const m = text.match(/\[[\s\S]*?\]/);
+      if (!m) return [];
+      try { return JSON.parse(m[0]).map(q => ({ ...q, topic })); } catch { return []; }
+    }
   }
-]`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('Anthropic API error:', err);
-      return res.status(502).json({ error: 'Failed to reach AI service' });
+    const batches = await Promise.all(selectedTopics.map((t, i) => askTopic(t, counts[i])));
+    let questions = batches.flat();
+    // Shuffle
+    for (let i = questions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [questions[i], questions[j]] = [questions[j], questions[i]];
     }
-
-    const data = await response.json();
-    const text = data.content?.[0]?.text || '';
-
-    let questions;
-    try {
-      questions = JSON.parse(text);
-    } catch {
-      const match = text.match(/\[[\s\S]*\]/);
-      if (!match) return res.status(502).json({ error: 'Invalid response from AI service' });
-      questions = JSON.parse(match[0]);
-    }
-
-    if (!Array.isArray(questions)) {
-      return res.status(502).json({ error: 'Unexpected response format' });
-    }
-
+    questions = questions.slice(0, total);
+    if (!questions.length) return res.status(502).json({ error: 'No questions generated. Please try again.' });
     return res.status(200).json({ questions });
   } catch (err) {
-    console.error('Handler error:', err);
+    console.error('generate error', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
