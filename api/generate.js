@@ -6,35 +6,26 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { subject, topic, count = 5 } = req.body || {};
+  const { topics, count = 5 } = req.body || {};
 
-  if (!subject || !topic) {
-    return res.status(400).json({ error: 'subject and topic are required' });
-  }
-
-  const validSubjects = ['general', 'airframe', 'powerplant'];
-  if (!validSubjects.includes(subject)) {
-    return res.status(400).json({ error: 'Invalid subject' });
+  if (!topics || !Array.isArray(topics) || topics.length === 0) {
+    return res.status(400).json({ error: 'topics array is required' });
   }
 
   const safeCount = Math.min(Math.max(parseInt(count) || 5, 1), 20);
+  const topicList = topics.slice(0, 20).join(', ');
 
-  const subjectLabel = {
-    general: 'FAA 8083-30 Aviation Maintenance Technician Handbook — General',
-    airframe: 'FAA 8083-31 Aviation Maintenance Technician Handbook — Airframe',
-    powerplant: 'FAA 8083-32 Aviation Maintenance Technician Handbook — Powerplant'
-  }[subject];
+  const prompt = `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
 
-  const prompt = `You are an FAA Aviation Maintenance Technician (AMT) exam question writer using the ${subjectLabel}.
-
-Generate ${safeCount} multiple choice practice questions specifically about: ${topic}
+Generate ${safeCount} multiple choice practice questions spanning these FAA A&P topics: ${topicList}
 
 Rules:
+- Distribute questions across the listed topics (do not focus on only one)
 - Each question must have exactly 4 answer choices labeled A, B, C, D
-- Wrong answers must be plausible and use the same units, terminology, and category as the correct answer — not obviously wrong
+- Wrong answers must be plausible — same units, same category, subtly wrong (not obviously wrong)
 - Wrong answers should reflect common misconceptions or close-but-incorrect values
 - Questions must be at the level of the FAA A&P written exam
-- Do not repeat questions or reuse answer choices across questions
+- Do not repeat questions
 - Return ONLY a valid JSON array with no explanation, no markdown, no code blocks
 
 Format:

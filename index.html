@@ -1221,18 +1221,8 @@ setTimeout(function(){
           <div style="font-family:monospace;font-size:.75rem;color:var(--muted)">Generate randomized FAA A&amp;P practice questions. New questions every time.</div>
         </div>
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
-          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Subject</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button id="pxBtnGeneral" onclick="practiceSelectSubject('general')" class="btn" style="flex:1;min-width:100px">General</button>
-            <button id="pxBtnAirframe" onclick="practiceSelectSubject('airframe')" class="btn" style="flex:1;min-width:100px">Airframe</button>
-            <button id="pxBtnPowerplant" onclick="practiceSelectSubject('powerplant')" class="btn" style="flex:1;min-width:100px">Powerplant</button>
-          </div>
-        </div>
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
-          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Topic</div>
-          <select id="pxTopicSelect" class="input" style="width:100%">
-            <option value="">— Select a subject first —</option>
-          </select>
+          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Topics — select any combination</div>
+          <div id="pxTopicPicker"></div>
         </div>
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
           <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Number of Questions</div>
@@ -11473,33 +11463,59 @@ async function stuSwitchTab(tab){
 }
 
 // ── Practice Exam ────────────────────────────────────────────────────────────
-const PRACTICE_TOPICS = {
-  general: ['Mathematics','Physics of Aviation','Aircraft Drawings and Publications','Weight and Balance','Fluid Lines and Fittings','Materials and Processes','Ground Handling and Servicing','Cleaning and Corrosion Control','Electrical Fundamentals','Aircraft Regulations and Airworthiness','Inspection Fundamentals'],
-  airframe: ['Wood Structures','Fabric and Composite Covering','Sheet Metal Structures','Welding','Aircraft Hydraulics','Landing Gear Systems','Flight Controls and Rigging','Aircraft Fuel Systems','Environmental and Pneumatic Systems','Aircraft Inspection'],
-  powerplant: ['Reciprocating Engine Construction and Theory','Engine Fuel Metering Systems','Induction and Exhaust Systems','Engine Ignition Systems','Engine Lubrication Systems','Engine Cooling Systems','Reciprocating Engine Overhaul','Turbine Engine Construction and Theory','Turbine Engine Systems','Propellers']
-};
-let _pxSubject = null, _pxCount = 5, _pxQuestions = [], _pxAnswers = {};
+let _pxCount = 5, _pxQuestions = [], _pxAnswers = {};
 
-function practiceInitTab(){ practiceReset(); }
+function practiceInitTab(){
+  practiceRenderTopicPicker();
+  practiceSetCount(5);
+  ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,i)=>{
+    const el=document.getElementById(id); if(el) el.classList.toggle('hidden',i!==0);
+  });
+  const errEl=document.getElementById('pxError'); if(errEl) errEl.textContent='';
+}
 
-function practiceSelectSubject(sub){
-  _pxSubject = sub;
-  ['general','airframe','powerplant'].forEach(s => {
-    const btn = document.getElementById('pxBtn' + s.charAt(0).toUpperCase() + s.slice(1));
-    if(!btn) return;
-    const active = s === sub;
-    btn.style.background = active ? '#0891b2' : '';
-    btn.style.color = active ? '#fff' : '';
-    btn.style.borderColor = active ? '#0891b2' : '';
-  });
-  const sel = document.getElementById('pxTopicSelect');
-  if(!sel) return;
-  sel.innerHTML = '<option value="">— Select a topic —</option>';
-  (PRACTICE_TOPICS[sub] || []).forEach(t => {
-    const opt = document.createElement('option');
-    opt.value = t; opt.textContent = t;
-    sel.appendChild(opt);
-  });
+function practiceRenderTopicPicker(){
+  const container=document.getElementById('pxTopicPicker');
+  if(!container) return;
+  const sections=[
+    {label:'📋 General',color:'var(--accent)',topics:typeof QB!=='undefined'?Object.keys(QB):[],key:'general'},
+    {label:'✈ Airframe',color:'var(--blue)',topics:typeof QB_AIRFRAME!=='undefined'?Object.keys(QB_AIRFRAME):[],key:'airframe'},
+    {label:'⚙ Powerplant',color:'#cc4444',topics:typeof QB_POWERPLANT!=='undefined'?Object.keys(QB_POWERPLANT):[],key:'powerplant'}
+  ];
+  container.innerHTML=sections.map(sec=>`
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${sec.color}55">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:3px;color:${sec.color}">${sec.label}</div>
+        <button onclick="practiceToggleSection('${sec.key}')" id="pxSelAll_${sec.key}"
+          style="font-size:.7rem;padding:3px 10px;font-family:monospace;letter-spacing:1px;background:transparent;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;color:var(--muted)">
+          SELECT ALL
+        </button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${sec.topics.map(t=>`
+          <label class="topic-check" id="pxTc_${t.replace(/\W/g,'_')}">
+            <input type="checkbox" data-topic="${t}" data-section="${sec.key}" onchange="pxTopicToggle(this)">
+            <span class="topic-name" style="font-size:.9rem">${t}</span>
+          </label>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function pxTopicToggle(cb){
+  const label=cb.closest('.topic-check');
+  if(label) label.classList.toggle('selected',cb.checked);
+  const key=cb.dataset.section;
+  const all=[...document.querySelectorAll(`#pxTopicPicker input[data-section="${key}"]`)];
+  const btn=document.getElementById('pxSelAll_'+key);
+  if(btn) btn.textContent=all.every(c=>c.checked)?'DESELECT ALL':'SELECT ALL';
+}
+
+function practiceToggleSection(key){
+  const all=[...document.querySelectorAll(`#pxTopicPicker input[data-section="${key}"]`)];
+  const toCheck=!all.every(c=>c.checked);
+  all.forEach(cb=>{ cb.checked=toCheck; const l=cb.closest('.topic-check'); if(l) l.classList.toggle('selected',toCheck); });
+  const btn=document.getElementById('pxSelAll_'+key);
+  if(btn) btn.textContent=toCheck?'DESELECT ALL':'SELECT ALL';
 }
 
 function practiceSetCount(n){
@@ -11514,28 +11530,28 @@ function practiceSetCount(n){
 }
 
 async function practiceGenerate(){
-  const errEl = document.getElementById('pxError');
-  if(errEl) errEl.textContent = '';
-  if(!_pxSubject){ if(errEl) errEl.textContent = 'Please select a subject.'; return; }
-  const topic = document.getElementById('pxTopicSelect')?.value;
-  if(!topic){ if(errEl) errEl.textContent = 'Please select a topic.'; return; }
+  const errEl=document.getElementById('pxError');
+  if(errEl) errEl.textContent='';
+  const selected=[...document.querySelectorAll('#pxTopicPicker input[type=checkbox]:checked')].map(cb=>cb.dataset.topic);
+  if(!selected.length){ if(errEl) errEl.textContent='Please select at least one topic.'; return; }
   document.getElementById('practiceSetup').classList.add('hidden');
   document.getElementById('practiceLoading').classList.remove('hidden');
   try {
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject: _pxSubject, topic, count: _pxCount })
+    const res=await fetch('/api/generate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({topics:selected,count:_pxCount})
     });
-    const data = await res.json();
-    if(!res.ok || !data.questions) throw new Error(data.error || 'Failed to generate questions');
-    _pxQuestions = data.questions;
-    _pxAnswers = {};
-    practiceRenderExam(topic);
-  } catch(e) {
+    const data=await res.json();
+    if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
+    _pxQuestions=data.questions;
+    _pxAnswers={};
+    const label=selected.length===1?selected[0]:`${selected.length} Topics`;
+    practiceRenderExam(label);
+  } catch(e){
     document.getElementById('practiceLoading').classList.add('hidden');
     document.getElementById('practiceSetup').classList.remove('hidden');
-    if(errEl) errEl.textContent = e.message || 'Failed to generate. Please try again.';
+    if(errEl) errEl.textContent=e.message||'Failed to generate. Please try again.';
   }
 }
 
@@ -11609,20 +11625,18 @@ function practiceSubmit(){
 }
 
 function practiceReset(){
-  _pxSubject = null; _pxQuestions = []; _pxAnswers = {};
-  ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id, i) => {
-    const el = document.getElementById(id);
-    if(el) el.classList.toggle('hidden', i !== 0);
+  _pxQuestions=[]; _pxAnswers={};
+  ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,i)=>{
+    const el=document.getElementById(id); if(el) el.classList.toggle('hidden',i!==0);
   });
-  ['General','Airframe','Powerplant'].forEach(s => {
-    const btn = document.getElementById('pxBtn' + s);
-    if(btn){ btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+  document.querySelectorAll('#pxTopicPicker input[type=checkbox]').forEach(cb=>{
+    cb.checked=false; const l=cb.closest('.topic-check'); if(l) l.classList.remove('selected');
+  });
+  ['general','airframe','powerplant'].forEach(key=>{
+    const btn=document.getElementById('pxSelAll_'+key); if(btn) btn.textContent='SELECT ALL';
   });
   practiceSetCount(5);
-  const sel = document.getElementById('pxTopicSelect');
-  if(sel) sel.innerHTML = '<option value="">— Select a subject first —</option>';
-  const errEl = document.getElementById('pxError');
-  if(errEl) errEl.textContent = '';
+  const errEl=document.getElementById('pxError'); if(errEl) errEl.textContent='';
 }
 
 // In-memory cache so card flips feel instant — Firebase is source of truth
