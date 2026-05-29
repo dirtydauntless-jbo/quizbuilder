@@ -1182,6 +1182,10 @@ setTimeout(function(){
       style="flex:1;padding:16px 20px;border:none;cursor:pointer;font-family:monospace;font-size:1rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
       📝 Instructor Quizzes
     </button>
+    <button id="stuTabPractice" onclick="stuSwitchTab('practice')"
+      style="flex:1;padding:16px 20px;border:none;cursor:pointer;font-family:monospace;font-size:1rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
+      🧪 PRACTICE EXAM
+    </button>
     <button id="stuTabACS" onclick="stuSwitchTab('acs')"
       style="flex:1;padding:16px 20px;border:none;cursor:pointer;font-family:monospace;font-size:1rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
       📋 MY FAA TEST CODES
@@ -1205,6 +1209,66 @@ setTimeout(function(){
 
   <!-- Study / Flashcards view -->
   <div id="stuStudyView" class="hidden">
+  </div>
+
+  <!-- Practice Exam view -->
+  <div id="stuPracticeView" class="hidden stu-layout">
+    <div style="max-width:720px;margin:0 auto;padding:20px">
+      <!-- Setup -->
+      <div id="practiceSetup">
+        <div style="margin-bottom:20px">
+          <div class="section-head" style="margin:0 0 4px">🧪 Practice Exams</div>
+          <div style="font-family:monospace;font-size:.75rem;color:var(--muted)">Generate randomized FAA A&amp;P practice questions. New questions every time.</div>
+        </div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
+          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Subject</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="pxBtnGeneral" onclick="practiceSelectSubject('general')" class="btn" style="flex:1;min-width:100px">General</button>
+            <button id="pxBtnAirframe" onclick="practiceSelectSubject('airframe')" class="btn" style="flex:1;min-width:100px">Airframe</button>
+            <button id="pxBtnPowerplant" onclick="practiceSelectSubject('powerplant')" class="btn" style="flex:1;min-width:100px">Powerplant</button>
+          </div>
+        </div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
+          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Topic</div>
+          <select id="pxTopicSelect" class="input" style="width:100%">
+            <option value="">— Select a subject first —</option>
+          </select>
+        </div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
+          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Number of Questions</div>
+          <div style="display:flex;gap:8px">
+            <button onclick="practiceSetCount(5)" id="pxCount5" class="btn" style="flex:1;background:#0891b2;color:#fff;border-color:#0891b2">5</button>
+            <button onclick="practiceSetCount(10)" id="pxCount10" class="btn" style="flex:1">10</button>
+            <button onclick="practiceSetCount(15)" id="pxCount15" class="btn" style="flex:1">15</button>
+            <button onclick="practiceSetCount(20)" id="pxCount20" class="btn" style="flex:1">20</button>
+          </div>
+        </div>
+        <button onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
+        <div id="pxError" style="color:var(--wl);font-family:monospace;font-size:.8rem;margin-top:8px;text-align:center;min-height:18px"></div>
+      </div>
+      <!-- Loading -->
+      <div id="practiceLoading" class="hidden" style="text-align:center;padding:60px 20px">
+        <div style="font-size:2rem;margin-bottom:16px">⚙️</div>
+        <div style="font-family:monospace;font-size:.9rem;color:var(--muted)">Generating your practice exam...</div>
+      </div>
+      <!-- Exam -->
+      <div id="practiceExam" class="hidden">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <button onclick="practiceReset()" class="btn" style="font-size:.8rem">← Back</button>
+          <div id="pxExamTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--fg)"></div>
+        </div>
+        <div id="pxQuestions"></div>
+        <button onclick="practiceSubmit()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;margin-top:20px;background:#0891b2;border-color:#0891b2">SUBMIT EXAM</button>
+      </div>
+      <!-- Results -->
+      <div id="practiceResults" class="hidden">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <button onclick="practiceReset()" class="btn" style="font-size:.8rem">← New Exam</button>
+          <div id="pxResultsTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px"></div>
+        </div>
+        <div id="pxResultsBreakdown"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ACS Test Codes view -->
@@ -8469,7 +8533,7 @@ async function initStudentApp(){
   stuSimInitBackground();
   // Restore last tab or default to Study
   const lastTab = stuSession?.uid ? (localStorage.getItem('stuLastTab_' + stuSession.uid) || 'study') : 'study';
-  const safeTab = ['study','quizzes','acs','dme'].includes(lastTab) ? lastTab : 'study';
+  const safeTab = ['study','quizzes','practice','acs','dme'].includes(lastTab) ? lastTab : 'study';
   stuSwitchTab(safeTab);
 }
 
@@ -11344,6 +11408,8 @@ async function stuSwitchTab(tab){
   document.getElementById('stuQuizListView').classList.toggle('hidden', tab !== 'quizzes');
   document.getElementById('stuStudyView').classList.toggle('hidden', tab !== 'study');
   document.getElementById('stuACSView').classList.toggle('hidden', tab !== 'acs');
+  const pxv = document.getElementById('stuPracticeView');
+  if(pxv) pxv.classList.toggle('hidden', tab !== 'practice');
   document.getElementById('stuDMEView').classList.toggle('hidden', tab !== 'dme');
   const simEl = document.getElementById('stuSimView');
   if(simEl) simEl.classList.toggle('hidden', tab !== 'sim');
@@ -11365,6 +11431,12 @@ async function stuSwitchTab(tab){
     sBtn.style.color = tab === 'study' ? '#fff' : 'var(--muted)';
     sBtn.style.borderBottom = tab === 'study' ? '3px solid var(--blue)' : '3px solid transparent';
   }
+  const pxBtn = document.getElementById('stuTabPractice');
+  if(pxBtn){
+    pxBtn.style.background = tab === 'practice' ? '#0891b2' : 'var(--panel2)';
+    pxBtn.style.color = tab === 'practice' ? '#fff' : 'var(--muted)';
+    pxBtn.style.borderBottom = tab === 'practice' ? '3px solid #0891b2' : '3px solid transparent';
+  }
   const aBtn = document.getElementById('stuTabACS');
   if(aBtn){
     aBtn.style.background = tab === 'acs' ? '#8b5cf6' : 'var(--panel2)';
@@ -11383,6 +11455,7 @@ async function stuSwitchTab(tab){
     dBtn.style.color = tab === 'dme' ? '#fff' : 'var(--muted)';
     dBtn.style.borderBottom = tab === 'dme' ? '3px solid #e05c2a' : '3px solid transparent';
   }
+  if(tab === 'practice'){ practiceInitTab(); }
   if(tab === 'acs'){ acsMigrateAndRender(); if(!_practicalsLoaded) loadPracticalsFromSheet(); }
   if(tab === 'dme'){ dmeInitTab(); }
   if(tab === 'sim'){ stuSimInit(); }
@@ -11397,6 +11470,159 @@ async function stuSwitchTab(tab){
     loadStudentQuizzes();
   }
   navPush({ screen: 'stuApp', tab });
+}
+
+// ── Practice Exam ────────────────────────────────────────────────────────────
+const PRACTICE_TOPICS = {
+  general: ['Mathematics','Physics of Aviation','Aircraft Drawings and Publications','Weight and Balance','Fluid Lines and Fittings','Materials and Processes','Ground Handling and Servicing','Cleaning and Corrosion Control','Electrical Fundamentals','Aircraft Regulations and Airworthiness','Inspection Fundamentals'],
+  airframe: ['Wood Structures','Fabric and Composite Covering','Sheet Metal Structures','Welding','Aircraft Hydraulics','Landing Gear Systems','Flight Controls and Rigging','Aircraft Fuel Systems','Environmental and Pneumatic Systems','Aircraft Inspection'],
+  powerplant: ['Reciprocating Engine Construction and Theory','Engine Fuel Metering Systems','Induction and Exhaust Systems','Engine Ignition Systems','Engine Lubrication Systems','Engine Cooling Systems','Reciprocating Engine Overhaul','Turbine Engine Construction and Theory','Turbine Engine Systems','Propellers']
+};
+let _pxSubject = null, _pxCount = 5, _pxQuestions = [], _pxAnswers = {};
+
+function practiceInitTab(){ practiceReset(); }
+
+function practiceSelectSubject(sub){
+  _pxSubject = sub;
+  ['general','airframe','powerplant'].forEach(s => {
+    const btn = document.getElementById('pxBtn' + s.charAt(0).toUpperCase() + s.slice(1));
+    if(!btn) return;
+    const active = s === sub;
+    btn.style.background = active ? '#0891b2' : '';
+    btn.style.color = active ? '#fff' : '';
+    btn.style.borderColor = active ? '#0891b2' : '';
+  });
+  const sel = document.getElementById('pxTopicSelect');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">— Select a topic —</option>';
+  (PRACTICE_TOPICS[sub] || []).forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t; opt.textContent = t;
+    sel.appendChild(opt);
+  });
+}
+
+function practiceSetCount(n){
+  _pxCount = n;
+  [5,10,15,20].forEach(c => {
+    const btn = document.getElementById('pxCount' + c);
+    if(!btn) return;
+    btn.style.background = c === n ? '#0891b2' : '';
+    btn.style.color = c === n ? '#fff' : '';
+    btn.style.borderColor = c === n ? '#0891b2' : '';
+  });
+}
+
+async function practiceGenerate(){
+  const errEl = document.getElementById('pxError');
+  if(errEl) errEl.textContent = '';
+  if(!_pxSubject){ if(errEl) errEl.textContent = 'Please select a subject.'; return; }
+  const topic = document.getElementById('pxTopicSelect')?.value;
+  if(!topic){ if(errEl) errEl.textContent = 'Please select a topic.'; return; }
+  document.getElementById('practiceSetup').classList.add('hidden');
+  document.getElementById('practiceLoading').classList.remove('hidden');
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject: _pxSubject, topic, count: _pxCount })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.questions) throw new Error(data.error || 'Failed to generate questions');
+    _pxQuestions = data.questions;
+    _pxAnswers = {};
+    practiceRenderExam(topic);
+  } catch(e) {
+    document.getElementById('practiceLoading').classList.add('hidden');
+    document.getElementById('practiceSetup').classList.remove('hidden');
+    if(errEl) errEl.textContent = e.message || 'Failed to generate. Please try again.';
+  }
+}
+
+function practiceRenderExam(topic){
+  document.getElementById('practiceLoading').classList.add('hidden');
+  document.getElementById('practiceExam').classList.remove('hidden');
+  const titleEl = document.getElementById('pxExamTitle');
+  if(titleEl) titleEl.textContent = topic;
+  const container = document.getElementById('pxQuestions');
+  if(!container) return;
+  container.innerHTML = _pxQuestions.map((q, i) => `
+    <div id="pxQ${i}" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:12px">
+      <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px">QUESTION ${i+1} of ${_pxQuestions.length}</div>
+      <div style="font-weight:700;margin-bottom:14px;line-height:1.4">${q.question}</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${['A','B','C','D'].map(l => `
+          <button onclick="practiceSelect(${i},'${l}')" id="pxQ${i}${l}"
+            style="text-align:left;padding:10px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);cursor:pointer;font-family:monospace;font-size:.85rem;transition:all .15s;width:100%">
+            <span style="font-weight:700;margin-right:10px">${l}.</span>${q.choices[l]}
+          </button>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function practiceSelect(qIdx, letter){
+  _pxAnswers[qIdx] = letter;
+  ['A','B','C','D'].forEach(l => {
+    const btn = document.getElementById(`pxQ${qIdx}${l}`);
+    if(!btn) return;
+    btn.style.background = l === letter ? '#0891b2' : 'var(--panel2)';
+    btn.style.color = l === letter ? '#fff' : '';
+    btn.style.borderColor = l === letter ? '#0891b2' : 'var(--border)';
+  });
+}
+
+function practiceSubmit(){
+  const unanswered = _pxQuestions.length - Object.keys(_pxAnswers).length;
+  if(unanswered > 0 && !confirm(`You have ${unanswered} unanswered question${unanswered > 1 ? 's' : ''}. Submit anyway?`)) return;
+  let correct = 0;
+  _pxQuestions.forEach((q, i) => { if(_pxAnswers[i] === q.correct) correct++; });
+  const pct = Math.round((correct / _pxQuestions.length) * 100);
+  document.getElementById('practiceExam').classList.add('hidden');
+  document.getElementById('practiceResults').classList.remove('hidden');
+  const titleEl = document.getElementById('pxResultsTitle');
+  if(titleEl){ titleEl.textContent = `${correct}/${_pxQuestions.length} — ${pct}%`; titleEl.style.color = pct >= 70 ? 'var(--cl)' : 'var(--wl)'; }
+  const breakdown = document.getElementById('pxResultsBreakdown');
+  if(!breakdown) return;
+  breakdown.innerHTML = _pxQuestions.map((q, i) => {
+    const sel = _pxAnswers[i];
+    const ok = sel === q.correct;
+    return `<div style="background:var(--panel);border:1px solid ${ok ? 'var(--cl)' : 'var(--wl)'};border-radius:var(--r);padding:16px 18px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;color:var(--muted)">QUESTION ${i+1}</div>
+        <div style="font-family:monospace;font-size:.75rem;font-weight:700;color:${ok ? 'var(--cl)' : 'var(--wl)'}">${ok ? '✓ CORRECT' : '✗ INCORRECT'}</div>
+      </div>
+      <div style="font-weight:700;margin-bottom:12px;line-height:1.4">${q.question}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${['A','B','C','D'].map(l => {
+          const isCorrect = l === q.correct;
+          const isSelected = l === sel;
+          let bg = 'var(--panel2)', color = '', weight = 'normal';
+          if(isCorrect){ bg = 'rgba(34,197,94,.15)'; color = 'var(--cl)'; weight = '700'; }
+          else if(isSelected && !ok){ bg = 'rgba(204,68,68,.12)'; color = 'var(--wl)'; }
+          return `<div style="padding:8px 12px;border-radius:var(--r);background:${bg};color:${color};font-family:monospace;font-size:.82rem;font-weight:${weight}">
+            <span style="font-weight:700;margin-right:8px">${l}.</span>${q.choices[l]}${isCorrect ? ' ✓' : (isSelected && !ok ? ' ✗' : '')}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function practiceReset(){
+  _pxSubject = null; _pxQuestions = []; _pxAnswers = {};
+  ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('hidden', i !== 0);
+  });
+  ['General','Airframe','Powerplant'].forEach(s => {
+    const btn = document.getElementById('pxBtn' + s);
+    if(btn){ btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+  });
+  practiceSetCount(5);
+  const sel = document.getElementById('pxTopicSelect');
+  if(sel) sel.innerHTML = '<option value="">— Select a subject first —</option>';
+  const errEl = document.getElementById('pxError');
+  if(errEl) errEl.textContent = '';
 }
 
 // In-memory cache so card flips feel instant — Firebase is source of truth
