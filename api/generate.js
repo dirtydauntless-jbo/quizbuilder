@@ -1,6 +1,8 @@
 module.exports.config = { maxDuration: 60 };
 
 const path = require('path');
+
+// ── Lazy-load reference content (8083 text) ──────────────────────────────────
 let _content = null;
 function getContent() {
   if (!_content) {
@@ -9,6 +11,17 @@ function getContent() {
   return _content;
 }
 
+// ── Lazy-load FAA question bank ───────────────────────────────────────────────
+let _faaBank = null;
+function getFaaBank() {
+  if (_faaBank === null) {
+    try { _faaBank = require(path.join(process.cwd(), 'faa_questions.json')); }
+    catch { _faaBank = {}; }
+  }
+  return _faaBank;
+}
+
+// ── Topic → subject mapping ───────────────────────────────────────────────────
 const TOPIC_SUBJECT = {};
 const SUBJECT_TOPICS = {
   general:    ['Aircraft Drawings','Aircraft Material Hardware and Processes','Cleaning and Corrosion Control','Fluid Lines and Fittings','Forms and Regulations','Fundamentals of Electricity','Ground Operations and Servicing','Human Factors','Inspection Concepts and Techniques','Mathematics','Physics','Weight and Balance'],
@@ -19,6 +32,7 @@ for (const [subj, topics] of Object.entries(SUBJECT_TOPICS)) {
   for (const t of topics) TOPIC_SUBJECT[t] = subj;
 }
 
+// ── Shared utils ──────────────────────────────────────────────────────────────
 async function callClaude(prompt, maxTokens = 4096) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -37,7 +51,36 @@ function parseJSON(text) {
   return null;
 }
 
-// ── Step 1: Generate questions for a single topic ───────────────────────────
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ── Pull random FAA questions for a topic ────────────────────────────────────
+function getFaaQuestions(topic, n) {
+  if (n < 1) return [];
+  const subject = TOPIC_SUBJECT[topic] || 'general';
+  const bank = getFaaBank();
+  const pool = bank[subject]?.[topic];
+  if (!Array.isArray(pool) || !pool.length) return [];
+  const available = Math.min(n, pool.length);
+  // Random sample without replacement
+  const indices = shuffle([...Array(pool.length).keys()]).slice(0, available);
+  return indices.map(i => ({
+    question:    pool[i].question,
+    choices:     pool[i].choices,   // A, B, C only
+    correct:     pool[i].correct,
+    topic,
+    handbook:    subject === 'general' ? 'FAA-H-8083-30A' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32A',
+    explanation: '',  // FAA questions don't include explanations
+    source:      'faa',
+  }));
+}
+
+// ── AI-generate questions for a topic (3-choice to match FAA format) ─────────
 async function generateForTopic(topic, qCount, content) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
@@ -52,25 +95,25 @@ async function generateForTopic(topic, qCount, content) {
 Generate ${qCount} multiple choice practice question${qCount > 1 ? 's' : ''} about: ${topic}${contextSection}
 
 Rules:
-- Each question has exactly 4 choices: A, B, C, D
+- Each question has exactly 3 choices: A, B, C (this matches the real FAA AMT test format)
 - ONLY ONE choice is correct — verify that wrong answers are factually incorrect, not synonyms or paraphrases of the correct answer
 - Wrong answers must be plausible but unambiguously wrong per FAA standards
 - If the correct answer contains a number, ALL wrong answers must also contain a different specific number in the same units
 - If the correct answer contains units (psi, inches, degrees, volts, etc.), ALL wrong answers must use those same units
 - All choices should be similar in length and grammatical structure
-- For the explanation field: write 1-2 sentences explaining WHY the correct answer is correct per FAA standards, then cite the specific chapter number and section name from ${handbook} where this is covered (e.g. "Chapter 3, Measuring Systems")
+- For the explanation field: write 1-2 sentences explaining WHY the correct answer is correct per FAA standards, then cite the specific chapter number and section name from ${handbook} where this is covered
 - Return ONLY a valid JSON array, no markdown
 
-Format: [{"question":"...","choices":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A","explanation":"..."}]`;
+Format: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"..."}]`;
 
   try {
     const text = await callClaude(prompt);
     const arr = parseJSON(text);
-    return Array.isArray(arr) ? arr.map(q => ({ ...q, topic, handbook })) : [];
+    return Array.isArray(arr) ? arr.map(q => ({ ...q, topic, handbook, source: 'ai' })) : [];
   } catch { return []; }
 }
 
-// ── Step 2: QC pass — review a batch of questions and fix bad distractors ───
+// ── QC pass — only run on AI-generated questions ─────────────────────────────
 async function qcBatch(questions) {
   if (!questions.length) return questions;
 
@@ -84,7 +127,7 @@ Check for and fix:
 5. All choices should be similar in grammatical structure and length
 6. Each wrong answer must be clearly incorrect per FAA standards
 
-Return the corrected questions as a JSON array in EXACTLY the same format, preserving all fields (question, choices, correct, explanation, topic, handbook). Do not change questions, correct answers, or explanations — only fix wrong answer choices if needed. No markdown, just the JSON array.
+Return the corrected questions as a JSON array in EXACTLY the same format, preserving all fields (question, choices, correct, explanation, topic, handbook, source). Do not change questions, correct answers, or explanations — only fix wrong answer choices if needed. No markdown, just the JSON array.
 
 Questions to review:
 ${JSON.stringify(questions)}`;
@@ -93,11 +136,33 @@ ${JSON.stringify(questions)}`;
     const text = await callClaude(prompt, 4096);
     const arr = parseJSON(text);
     if (Array.isArray(arr) && arr.length === questions.length) return arr;
-    // If count mismatch, return originals rather than lose questions
     return questions;
   } catch { return questions; }
 }
 
+// ── Mix FAA + AI questions for one topic ──────────────────────────────────────
+async function buildTopicQuestions(topic, total, content) {
+  if (total < 1) return [];
+
+  const bank = getFaaBank();
+  const subject = TOPIC_SUBJECT[topic] || 'general';
+  const bankPool = bank[subject]?.[topic];
+  const bankSize = Array.isArray(bankPool) ? bankPool.length : 0;
+
+  // Randomly choose FAA ratio between 20–60%, but cap at what's available
+  const targetFaaPct = 0.20 + Math.random() * 0.40;  // 20%–60%
+  const faaCount = Math.min(Math.round(total * targetFaaPct), bankSize, total);
+  const aiCount = total - faaCount;
+
+  const [faaQuestions, aiQuestions] = await Promise.all([
+    Promise.resolve(getFaaQuestions(topic, faaCount)),
+    generateForTopic(topic, aiCount, content),
+  ]);
+
+  return [...faaQuestions, ...aiQuestions];
+}
+
+// ── Handler ───────────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -111,37 +176,33 @@ module.exports = async function handler(req, res) {
   const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
   const n = Math.min(topics.length, total);
   const selectedTopics = n < topics.length
-    ? topics.slice().sort(() => Math.random() - 0.5).slice(0, n)
+    ? shuffle(topics.slice()).slice(0, n)
     : topics;
   const base = Math.floor(total / n);
-  const rem = total % n;
+  const rem  = total % n;
   const counts = selectedTopics.map((_, i) => i < rem ? base + 1 : base);
 
   const content = getContent();
 
   try {
-    // Step 1: Generate all topic batches in parallel
+    // Step 1: Build each topic's question mix in parallel
     const batches = await Promise.all(
-      selectedTopics.map((t, i) => generateForTopic(t, counts[i], content))
+      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content))
     );
     let questions = batches.flat();
 
     if (!questions.length) return res.status(502).json({ error: 'No questions generated. Please try again.' });
 
-    // Step 2: QC pass — split into chunks of 10, run in parallel
-    const chunkSize = 10;
+    // Step 2: QC pass — only on AI-generated questions (in chunks of 10)
+    const aiQs   = questions.filter(q => q.source === 'ai');
+    const faaQs  = questions.filter(q => q.source === 'faa');
     const chunks = [];
-    for (let i = 0; i < questions.length; i += chunkSize) {
-      chunks.push(questions.slice(i, i + chunkSize));
-    }
-    const reviewed = await Promise.all(chunks.map(chunk => qcBatch(chunk)));
-    questions = reviewed.flat();
+    for (let i = 0; i < aiQs.length; i += 10) chunks.push(aiQs.slice(i, i + 10));
+    const reviewed = await Promise.all(chunks.map(c => qcBatch(c)));
+    questions = [...faaQs, ...reviewed.flat()];
 
-    // Shuffle and trim to requested total
-    for (let i = questions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [questions[i], questions[j]] = [questions[j], questions[i]];
-    }
+    // Step 3: Shuffle and trim
+    shuffle(questions);
     questions = questions.slice(0, total);
 
     return res.status(200).json({ questions });

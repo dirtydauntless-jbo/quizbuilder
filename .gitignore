@@ -1,5 +1,6 @@
 node_modules/
 *.pdf
 extract-8083.js
+extract-questions.js
 package.json
 package-lock.json
