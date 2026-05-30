@@ -9,7 +9,6 @@ function getContent() {
   return _content;
 }
 
-// Which handbook each topic belongs to
 const TOPIC_SUBJECT = {};
 const SUBJECT_TOPICS = {
   general:    ['Aircraft Drawings','Aircraft Material Hardware and Processes','Cleaning and Corrosion Control','Fluid Lines and Fittings','Forms and Regulations','Fundamentals of Electricity','Ground Operations and Servicing','Human Factors','Inspection Concepts and Techniques','Mathematics','Physics','Weight and Balance'],
@@ -18,6 +17,83 @@ const SUBJECT_TOPICS = {
 };
 for (const [subj, topics] of Object.entries(SUBJECT_TOPICS)) {
   for (const t of topics) TOPIC_SUBJECT[t] = subj;
+}
+
+async function callClaude(prompt, maxTokens = 4096) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+  });
+  if (!r.ok) throw new Error(`API ${r.status}`);
+  const d = await r.json();
+  return d.content?.[0]?.text || '';
+}
+
+function parseJSON(text) {
+  try { return JSON.parse(text); } catch {}
+  const m = text.match(/\[[\s\S]*\]/);
+  if (m) try { return JSON.parse(m[0]); } catch {}
+  return null;
+}
+
+// ── Step 1: Generate questions for a single topic ───────────────────────────
+async function generateForTopic(topic, qCount, content) {
+  if (qCount < 1) return [];
+  const subject = TOPIC_SUBJECT[topic] || 'general';
+  const sourceText = content[subject]?.[topic] || '';
+  const contextSection = sourceText
+    ? `\n\nReference text from FAA ${subject === 'general' ? '8083-30' : subject === 'airframe' ? '8083-31' : '8083-32'}:\n\n${sourceText.slice(0, 4000)}`
+    : '';
+
+  const prompt = `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
+
+Generate ${qCount} multiple choice practice question${qCount > 1 ? 's' : ''} about: ${topic}${contextSection}
+
+Rules:
+- Each question has exactly 4 choices: A, B, C, D
+- ONLY ONE choice is correct — verify that wrong answers are factually incorrect, not synonyms or paraphrases of the correct answer
+- Wrong answers must be plausible but unambiguously wrong per FAA standards
+- If the correct answer contains a number, ALL wrong answers must also contain a different specific number in the same units
+- If the correct answer contains units (psi, inches, degrees, volts, etc.), ALL wrong answers must use those same units
+- All choices should be similar in length and grammatical structure
+- Return ONLY a valid JSON array, no markdown
+
+Format: [{"question":"...","choices":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A"}]`;
+
+  try {
+    const text = await callClaude(prompt);
+    const arr = parseJSON(text);
+    return Array.isArray(arr) ? arr.map(q => ({ ...q, topic })) : [];
+  } catch { return []; }
+}
+
+// ── Step 2: QC pass — review a batch of questions and fix bad distractors ───
+async function qcBatch(questions) {
+  if (!questions.length) return questions;
+
+  const prompt = `You are a quality-control editor for FAA A&P exam questions. Review each question below and fix any issues with the answer choices.
+
+Check for and fix:
+1. If the correct answer has a number, every wrong answer must also have a DIFFERENT specific number (same units — do not drop units or change to a different unit type)
+2. If the correct answer has units (psi, inches, degrees, rpm, volts, lbs, etc.), all wrong answers must use those exact same units
+3. No wrong answer may be a synonym, paraphrase, or restatement of the correct answer — if one is, replace it with a factually incorrect but plausible alternative
+4. No two wrong answers may mean the same thing — if two are similar, replace one
+5. All choices should be similar in grammatical structure and length
+6. Each wrong answer must be clearly incorrect per FAA standards
+
+Return the corrected questions as a JSON array in EXACTLY the same format. Do not change questions or correct answers — only fix wrong answer choices if needed. No markdown, just the JSON array.
+
+Questions to review:
+${JSON.stringify(questions)}`;
+
+  try {
+    const text = await callClaude(prompt, 4096);
+    const arr = parseJSON(text);
+    if (Array.isArray(arr) && arr.length === questions.length) return arr;
+    // If count mismatch, return originals rather than lose questions
+    return questions;
+  } catch { return questions; }
 }
 
 module.exports = async function handler(req, res) {
@@ -41,58 +117,31 @@ module.exports = async function handler(req, res) {
 
   const content = getContent();
 
-  async function askTopic(topic, qCount) {
-    if (qCount < 1) return [];
-    const subject = TOPIC_SUBJECT[topic] || 'general';
-    const sourceText = content[subject]?.[topic] || '';
-    const contextSection = sourceText
-      ? `\n\nUse this reference text from the FAA ${subject === 'general' ? '8083-30' : subject === 'airframe' ? '8083-31' : '8083-32'} handbook to inform your questions:\n\n${sourceText.slice(0, 4000)}`
-      : '';
-
-    const prompt = `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
-
-Generate ${qCount} multiple choice practice question${qCount > 1 ? 's' : ''} specifically about: ${topic}${contextSection}
-
-Rules:
-- Base questions on real FAA A&P exam content for this topic
-- Each question must have exactly 4 answer choices labeled A, B, C, D
-- CRITICAL — only ONE answer choice may be correct. Before finalizing each question, verify that the 3 wrong answers are FACTUALLY INCORRECT — not just differently worded versions of the right answer. If two choices could both be argued as correct, rewrite the wrong ones until they are unambiguously false.
-- Wrong answers must be plausible and in the same category as the correct answer (same units, same type of thing) but must be definitively wrong per FAA standards
-- Do NOT use synonyms, paraphrases, or partial truths as distractors — each wrong answer must be clearly incorrect when checked against the FAA handbook
-- Wrong answers should reflect specific common misconceptions, wrong values, or incorrect procedures — not vague or opposite answers
-- Questions must match the difficulty of the FAA A&P written exam
-- Return ONLY a valid JSON array — no markdown, no explanation, no code blocks
-
-Format:
-[{"question":"...","choices":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A"}]`;
-
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] })
-    });
-    if (!r.ok) { console.error(`Topic "${topic}" API error`, r.status); return []; }
-    const d = await r.json();
-    const text = d.content?.[0]?.text || '';
-    try {
-      const arr = JSON.parse(text);
-      return Array.isArray(arr) ? arr.map(q => ({ ...q, topic })) : [];
-    } catch {
-      const m = text.match(/\[[\s\S]*?\]/);
-      if (!m) return [];
-      try { return JSON.parse(m[0]).map(q => ({ ...q, topic })); } catch { return []; }
-    }
-  }
-
   try {
-    const batches = await Promise.all(selectedTopics.map((t, i) => askTopic(t, counts[i])));
+    // Step 1: Generate all topic batches in parallel
+    const batches = await Promise.all(
+      selectedTopics.map((t, i) => generateForTopic(t, counts[i], content))
+    );
     let questions = batches.flat();
+
+    if (!questions.length) return res.status(502).json({ error: 'No questions generated. Please try again.' });
+
+    // Step 2: QC pass — split into chunks of 10, run in parallel
+    const chunkSize = 10;
+    const chunks = [];
+    for (let i = 0; i < questions.length; i += chunkSize) {
+      chunks.push(questions.slice(i, i + chunkSize));
+    }
+    const reviewed = await Promise.all(chunks.map(chunk => qcBatch(chunk)));
+    questions = reviewed.flat();
+
+    // Shuffle and trim to requested total
     for (let i = questions.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [questions[i], questions[j]] = [questions[j], questions[i]];
     }
     questions = questions.slice(0, total);
-    if (!questions.length) return res.status(502).json({ error: 'No questions generated. Please try again.' });
+
     return res.status(200).json({ questions });
   } catch (err) {
     console.error('generate error', err);
