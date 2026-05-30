@@ -720,6 +720,248 @@
           "C": "Circuit breaker."
         },
         "correct": "C"
+      },
+      {
+        "id": "9",
+        "question": "(Refer to Figure 1.) When different rated capacitors are connected in series in a circuit, the total capacitance is",
+        "choices": {
+          "A": "less than the capacitance of the lowest rated capacitor.",
+          "B": "greater than the capacitance of the highest rated capacitor.",
+          "C": "equal to the sum of all the capacitances."
+        },
+        "correct": "A",
+        "figureNum": "1"
+      },
+      {
+        "id": "13",
+        "question": "(Refer to Figure 2.) What is the total capacitance of a circuit containing three capacitors with capacitances of .02 microfarad, .05 microfarad, and .10 microfarad, respectively?",
+        "choices": {
+          "A": "170 uF.",
+          "B": "0.125 pF.",
+          "C": "0125 uF."
+        },
+        "correct": "C",
+        "figureNum": "2"
+      },
+      {
+        "id": "21",
+        "question": "(Refer to Figure 3.) When more than two inductors of different inductances are connected in parallel in a circuit, the total inductance is",
+        "choices": {
+          "A": "less than the inductance of the lowest rated inductor.",
+          "B": "equal to the inductance of the highest rated inductor.",
+          "C": "equal to the sum of the individual inductances."
+        },
+        "correct": "A",
+        "figureNum": "3"
+      },
+      {
+        "id": "32",
+        "question": "(Refer to Figure 4.) How much power is being furnished to the circuit?",
+        "choices": {
+          "A": "575 watts.",
+          "B": "2,875 watts.",
+          "C": "2,645 watts."
+        },
+        "correct": "A",
+        "figureNum": "4"
+      },
+      {
+        "id": "33",
+        "question": "(Refer to Figure 5.) What is the impedance of an ac-series circuit consisting of an inductor with a reactance of 10 ohms, a capacitor with a reactance of 4 ohms, and a resistor with a resistance of 8 ohms?",
+        "choices": {
+          "A": "22 ohms.",
+          "B": "5.29 ohms.",
+          "C": "10 ohms."
+        },
+        "correct": "C",
+        "figureNum": "5"
+      },
+      {
+        "id": "34",
+        "question": "(Refer to Figure 6.) If resistor R(5) is disconnected at the junction of R(4) and R(3) as shown, what will the ohmmeter read?",
+        "choices": {
+          "A": "2.76 ohms.",
+          "B": "3 ohms.",
+          "C": "12 ohms."
+        },
+        "correct": "A",
+        "figureNum": "6"
+      },
+      {
+        "id": "35",
+        "question": "(Refer to Figure 7.) If resistor R(3) is disconnected at terminal D, what will the ohmmeter read?",
+        "choices": {
+          "A": "Infinite resistance.",
+          "B": "10 ohms.",
+          "C": "20 ohms."
+        },
+        "correct": "A",
+        "figureNum": "7"
+      },
+      {
+        "id": "37",
+        "question": "(Refer to Figure 8.) With an ohmmeter connected into the circuit as shown, what will the ohmmeter read?",
+        "choices": {
+          "A": "20 ohms.",
+          "B": "Infinite resistance.",
+          "C": "10 ohms."
+        },
+        "correct": "A",
+        "figureNum": "8"
+      },
+      {
+        "id": "46",
+        "question": "(Refer to Figure 10.) What is the measured voltage of the series-parallel circuit between terminals A and B?",
+        "choices": {
+          "A": "1.5 volts.",
+          "B": "3.0 volts.",
+          "C": "4.5 volts."
+        },
+        "correct": "B",
+        "figureNum": "10"
+      },
+      {
+        "id": "47",
+        "question": "(Refer to Figure 64.) A 24-volt source is required to furnish 48 watts to a parallel circuit consisting of two resistors of equal value. What is the value of each resistor? (Note: R(t) = E^2/P)",
+        "choices": {
+          "A": "24 ohms.",
+          "B": "12 ohms.",
+          "C": "6 ohms."
+        },
+        "correct": "A",
+        "figureNum": "64"
+      },
+      {
+        "id": "58",
+        "question": "(Refer to Figure 11.) Find the total current flowing in the wire between points C and D.",
+        "choices": {
+          "A": "6.0 amperes.",
+          "B": "2.4 amperes.",
+          "C": "3.0 amperes."
+        },
+        "correct": "A",
+        "figureNum": "11"
+      },
+      {
+        "id": "59",
+        "question": "(Refer to Figure 11.) What happens to the current in the circuit if all the resistors double in value?",
+        "choices": {
+          "A": "The current is cut in half.",
+          "B": "The current doubles.",
+          "C": "The current remains the same."
+        },
+        "correct": "A",
+        "figureNum": "11"
+      },
+      {
+        "id": "60",
+        "question": "(Refer to Figure 11.) Find the voltage across the 8-ohm resistor.",
+        "choices": {
+          "A": "8 volts.",
+          "B": "20.4 volts.",
+          "C": "24 volts."
+        },
+        "correct": "A",
+        "figureNum": "11"
+      },
+      {
+        "id": "63",
+        "question": "(Refer to Figure 12.) Find the total resistance of the circuit.",
+        "choices": {
+          "A": "16 ohms.",
+          "B": "2.6 ohms.",
+          "C": "21.2 ohms."
+        },
+        "correct": "A",
+        "figureNum": "12"
+      },
+      {
+        "id": "66",
+        "question": "(Refer to Figure 13.) Determine the total current flow in the circuit.",
+        "choices": {
+          "A": "0.2 ampere.",
+          "B": "1.4 amperes.",
+          "C": "0.8 ampere."
+        },
+        "correct": "B",
+        "figureNum": "13"
+      },
+      {
+        "id": "68",
+        "question": "(Refer to Figure 14.) The total resistance of the circuit is",
+        "choices": {
+          "A": "25 ohms.",
+          "B": "35 ohms.",
+          "C": "17 ohms."
+        },
+        "correct": "A",
+        "figureNum": "14"
+      },
+      {
+        "id": "71",
+        "question": "(Refer to Figure 64.) A 48-volt source is required to furnish 192 watts to a parallel circuit consisting of three resistors of equal value. What is the value of each resistor?",
+        "choices": {
+          "A": "36 ohms.",
+          "B": "4 ohms.",
+          "C": "12 ohms."
+        },
+        "correct": "A",
+        "figureNum": "64"
+      },
+      {
+        "id": "82",
+        "question": "(Refer to Figure 16.) Energize the circuit with the fuel tank selector switch selected to the left-hand position. Using the schematic, identify the switches that will change position.",
+        "choices": {
+          "A": "5, 9, 10, 11, 12, 13, and 15.",
+          "B": "3, 5, 6, 7, 11, and 13.",
+          "C": "5, 6, 11, 12, 13, 15, and 16."
+        },
+        "correct": "A",
+        "figureNum": "16"
+      },
+      {
+        "id": "84",
+        "question": "(Refer to Figure 17.) The electrical symbol represented at number 5 is a variable",
+        "choices": {
+          "A": "inductor.",
+          "B": "resistor.",
+          "C": "capacitor."
+        },
+        "correct": "A",
+        "figureNum": "17"
+      },
+      {
+        "id": "92",
+        "question": "(Refer to Figure 20.) Troubleshooting an open circuit with a voltmeter as shown in this circuit will",
+        "choices": {
+          "A": "permit current to flow and illuminate the lamp.",
+          "B": "create a low resistance path and the current flow will be greater than normal.",
+          "C": "permit the battery voltage to appear on the voltmeter."
+        },
+        "correct": "C",
+        "figureNum": "20"
+      },
+      {
+        "id": "102",
+        "question": "(Refer to Figure 25.) In a functional and operating circuit, the depicted logic gate's output will be 0",
+        "choices": {
+          "A": "only when all inputs are 0.",
+          "B": "when all inputs are 1.",
+          "C": "when one or more inputs are 0."
+        },
+        "correct": "B",
+        "figureNum": "25"
+      },
+      {
+        "id": "180",
+        "question": "(Refer to Figure 39.) Determine the minimum wire size of a single cable in a bundle carrying a continuous current of 20 amperes 10 feet from the bus to the equipment in a 28-volt system with an allowable 1-volt drop.",
+        "choices": {
+          "A": "No. 12.",
+          "B": "No. 14.",
+          "C": "No. 16."
+        },
+        "correct": "A",
+        "figureNum": "39"
       }
     ],
     "Aircraft Material Hardware and Processes": [
@@ -1372,6 +1614,28 @@
           "C": "reflect ultraviolet from the fabric."
         },
         "correct": "C"
+      },
+      {
+        "id": "156",
+        "question": "(Refer to Figure 34.) Using the information, what size drill would be required to drill the clevis bolthole?",
+        "choices": {
+          "A": "5/16 inch.",
+          "B": "21/64 inch.",
+          "C": "1/2 inch."
+        },
+        "correct": "B",
+        "figureNum": "34"
+      },
+      {
+        "id": "326",
+        "question": "(Refer to Figure 42.) Which of the bolthead code markings shown identifies an AN corrosion resistant steel bolt?",
+        "choices": {
+          "A": "1",
+          "B": "2",
+          "C": "3"
+        },
+        "correct": "A",
+        "figureNum": "42"
       }
     ],
     "Mathematics": [
@@ -2254,6 +2518,94 @@
           "C": "reducing and containing error."
         },
         "correct": "A"
+      },
+      {
+        "id": "97",
+        "question": "(Refer to Figure 22.) Which illustration is correct concerning bias application and current (positive charge) flow?",
+        "choices": {
+          "A": "1",
+          "B": "2",
+          "C": "3"
+        },
+        "correct": "A",
+        "figureNum": "22"
+      },
+      {
+        "id": "138",
+        "question": "(Refer to Figure 31.) What are the proper procedural steps for sketching repairs and alterations?",
+        "choices": {
+          "A": "3, 1, 4, and 2.",
+          "B": "4, 2, 3, and 1.",
+          "C": "1, 3, 4, and 2."
+        },
+        "correct": "A",
+        "figureNum": "31"
+      },
+      {
+        "id": "140",
+        "question": "(Refer to Figure 32.) What is the next step required for a working sketch of the illustration?",
+        "choices": {
+          "A": "Darken the object outlines.",
+          "B": "Sketch extension and dimension lines.",
+          "C": "Add notes, dimensions, title, and date."
+        },
+        "correct": "B",
+        "figureNum": "32"
+      },
+      {
+        "id": "154",
+        "question": "(Refer to Figure 34.) What is the maximum diameter of the hole for the clevis pin?",
+        "choices": {
+          "A": "0.3175.",
+          "B": "0.3130.",
+          "C": "0.31255."
+        },
+        "correct": "A",
+        "figureNum": "34"
+      },
+      {
+        "id": "155",
+        "question": "(Refer to Figure 34.) What would be the minimum diameter of 4130 round stock required for the construction of the clevis that would produce a machined surface?",
+        "choices": {
+          "A": "55/64 inch.",
+          "B": "1 inch.",
+          "C": "7/8 inch."
+        },
+        "correct": "A",
+        "figureNum": "34"
+      },
+      {
+        "id": "480",
+        "question": "(Refer to Figure 55.) Find the area of the triangle shown.",
+        "choices": {
+          "A": "12 square inches.",
+          "B": "6 square inches.",
+          "C": "15 square inches."
+        },
+        "correct": "B",
+        "figureNum": "55"
+      },
+      {
+        "id": "522",
+        "question": "(Refer to Figure 59.) Solve the equation.",
+        "choices": {
+          "A": "+31.25",
+          "B": "5.20",
+          "C": "31.25"
+        },
+        "correct": "A",
+        "figureNum": "59"
+      },
+      {
+        "id": "626",
+        "question": "(Refer to Figure 62.) The -100 in the title block (Area 1) is applicable to which doubler part number(s)?",
+        "choices": {
+          "A": "101",
+          "B": "102",
+          "C": "Both."
+        },
+        "correct": "A",
+        "figureNum": "62"
       }
     ],
     "Physics": [
@@ -3056,6 +3408,182 @@
           "C": "Embedding of particles in the finish."
         },
         "correct": "B"
+      },
+      {
+        "id": "75",
+        "question": "(Refer to Figure 15.) With the landing gear retracted, the red indicator light will not come on if an open occurs in wire",
+        "choices": {
+          "A": "19.",
+          "B": "7.",
+          "C": "17."
+        },
+        "correct": "A",
+        "figureNum": "15"
+      },
+      {
+        "id": "76",
+        "question": "(Refer to Figure 15.) Wire 7 is used to",
+        "choices": {
+          "A": "close the PUSH-TO-TEST circuit.",
+          "B": "open the UP indicator light circuit when the landing gear is retracted.",
+          "C": "close the UP indicator light circuit when the landing gear is retracted."
+        },
+        "correct": "C",
+        "figureNum": "15"
+      },
+      {
+        "id": "77",
+        "question": "(Refer to Figure 15.) When the landing gear is down, the green light will not come on if an open occurs in wire",
+        "choices": {
+          "A": "7.",
+          "B": "6.",
+          "C": "17."
+        },
+        "correct": "A",
+        "figureNum": "15"
+      },
+      {
+        "id": "78",
+        "question": "(Refer to Figure 16.) What will be the effect if the PCO relay fails to operate when the left-hand tank is selected?",
+        "choices": {
+          "A": "The fuel pressure crossfeed valve will not open.",
+          "B": "The fuel tank crossfeed valve open light will illuminate.",
+          "C": "The fuel pressure crossfeed valve open light will not illuminate."
+        },
+        "correct": "A",
+        "figureNum": "16"
+      },
+      {
+        "id": "80",
+        "question": "(Refer to Figure 16.) With power to the bus and the fuel selector switched to the right-hand tank, how many relays in the system are operating?",
+        "choices": {
+          "A": "Three.",
+          "B": "Two.",
+          "C": "Four."
+        },
+        "correct": "A",
+        "figureNum": "16"
+      },
+      {
+        "id": "81",
+        "question": "(Refer to Figure 16.) When electrical power is applied to the bus, which relays are energized?",
+        "choices": {
+          "A": "PCC and TCC.",
+          "B": "TCC and TCO.",
+          "C": "PCO and PCC."
+        },
+        "correct": "A",
+        "figureNum": "16"
+      },
+      {
+        "id": "85",
+        "question": "(Refer to Figure 18.) When the landing gear is up and the throttles are retarded, the warning horn will not sound if an open occurs in wire",
+        "choices": {
+          "A": "4.",
+          "B": "2.",
+          "C": "9."
+        },
+        "correct": "A",
+        "figureNum": "18"
+      },
+      {
+        "id": "86",
+        "question": "(Refer to Figure 18.) The control valve switch must be placed in the neutral position when the landing gear is down to",
+        "choices": {
+          "A": "permit the test circuit to operate.",
+          "B": "prevent the warning horn from sounding when the throttles are closed.",
+          "C": "remove the ground from the green light."
+        },
+        "correct": "B",
+        "figureNum": "18"
+      },
+      {
+        "id": "88",
+        "question": "(Refer to Figure 19.) When the throttles are retarded with only the right gear down, the warning horn will not sound if an open occurs in wire",
+        "choices": {
+          "A": "5.",
+          "B": "13.",
+          "C": "6."
+        },
+        "correct": "A",
+        "figureNum": "19"
+      },
+      {
+        "id": "89",
+        "question": "(Refer to Figure 19.) When the landing gears are up and the throttles are retarded, the warning horn will not sound if an open occurs in wire",
+        "choices": {
+          "A": "5.",
+          "B": "7.",
+          "C": "6."
+        },
+        "correct": "A",
+        "figureNum": "19"
+      },
+      {
+        "id": "99",
+        "question": "(Refer to Figure 23.) If an open occurs at R(1), the light",
+        "choices": {
+          "A": "cannot be turned on.",
+          "B": "will not be affected.",
+          "C": "cannot be turned off."
+        },
+        "correct": "A",
+        "figureNum": "23"
+      },
+      {
+        "id": "100",
+        "question": "(Refer to Figure 23.) If R(2) sticks in the up position, the light will",
+        "choices": {
+          "A": "be on full bright.",
+          "B": "be very dim.",
+          "C": "not illuminate."
+        },
+        "correct": "C",
+        "figureNum": "23"
+      },
+      {
+        "id": "177",
+        "question": "(Refer to Figure 38.) An aircraft reciprocating engine has a 2,800 cubic-inch displacement and develops 2,000 brake-horsepower at 2,200 RPM. What is the brake mean effective pressure?",
+        "choices": {
+          "A": "257.5.",
+          "B": "242.5.",
+          "C": "275.0."
+        },
+        "correct": "A",
+        "figureNum": "38"
+      },
+      {
+        "id": "182",
+        "question": "(Refer to Figure 40.) Determine the proper tension for a 1/8-inch cable (7 x 19) if the temperature is 80F.",
+        "choices": {
+          "A": "70 pounds.",
+          "B": "75 pounds.",
+          "C": "80 pounds."
+        },
+        "correct": "A",
+        "figureNum": "40"
+      },
+      {
+        "id": "183",
+        "question": "(Refer to Figure 40.) Determine the proper tension for a 3/16-inch cable (7 x 19 extra flex) if the temperature is 87F.",
+        "choices": {
+          "A": "135 pounds.",
+          "B": "125 pounds.",
+          "C": "140 pounds."
+        },
+        "correct": "A",
+        "figureNum": "40"
+      },
+      {
+        "id": "623",
+        "question": "(Refer to Figure 62, 62A, and 62B as necessary.) Which doubler(s) require(s) heat treatment before installation?",
+        "choices": {
+          "A": "101",
+          "B": "102",
+          "C": "Both."
+        },
+        "correct": "A",
+        "figureNum": "62"
       }
     ],
     "Aircraft Drawings": [
@@ -3397,7 +3925,51 @@
           "B": "One triangle pointing to a vertical line.",
           "C": "Two triangles pointing to each other with a line on both sides of the triangles."
         },
-        "correct": "C"
+        "correct": "B"
+      },
+      {
+        "id": "93",
+        "question": "(Refer to Figure 21.) Which symbol represents a variable resistor?",
+        "choices": {
+          "A": "2",
+          "B": "1",
+          "C": "3"
+        },
+        "correct": "A",
+        "figureNum": "21"
+      },
+      {
+        "id": "128",
+        "question": "(Refer to Figure 27.) In the isometric view of a typical aileron balance weight, identify the view indicated by the arrow.",
+        "choices": {
+          "A": "1",
+          "B": "3",
+          "C": "2"
+        },
+        "correct": "A",
+        "figureNum": "27"
+      },
+      {
+        "id": "152",
+        "question": "(Refer to Figure 33.) Which material section-line symbol indicates cast iron?",
+        "choices": {
+          "A": "1",
+          "B": "2",
+          "C": "3"
+        },
+        "correct": "A",
+        "figureNum": "33"
+      },
+      {
+        "id": "153",
+        "question": "(Refer to Figure 34.) What is the dimension of the chamfer?",
+        "choices": {
+          "A": "1/16 X 37.",
+          "B": "0.3125 + .005 -0.",
+          "C": "0.0625 X 45."
+        },
+        "correct": "C",
+        "figureNum": "34"
       }
     ],
     "Weight and Balance": [
@@ -3659,7 +4231,7 @@
           "B": "151.700.",
           "C": "151.365."
         },
-        "correct": "C"
+        "correct": "A"
       },
       {
         "id": "4",
@@ -4283,7 +4855,7 @@
           "B": "move clear of the runway/taxiway immediately.",
           "C": "return to starting point."
         },
-        "correct": "B"
+        "correct": "A"
       },
       {
         "id": "402",
@@ -4454,6 +5026,28 @@
           "C": "the intervention point."
         },
         "correct": "A"
+      },
+      {
+        "id": "79",
+        "question": "(Refer to Figure 16.) The TCO relay will operate if 24-volts DC is applied to the bus and the fuel tank selector is in the",
+        "choices": {
+          "A": "right-hand tank position.",
+          "B": "crossfeed position.",
+          "C": "left-hand tank position."
+        },
+        "correct": "A",
+        "figureNum": "16"
+      },
+      {
+        "id": "389",
+        "question": "(Refer to Figure 51.) Which marshalling signal should be given if a taxiing aircraft is in imminent danger of striking an object?",
+        "choices": {
+          "A": "1 or 3.",
+          "B": "2.",
+          "C": "3."
+        },
+        "correct": "A",
+        "figureNum": "51"
       }
     ],
     "Fluid Lines and Fittings": [
@@ -6527,7 +7121,7 @@
           "B": "1/4 inch.",
           "C": "5/16 inch."
         },
-        "correct": "B"
+        "correct": "A"
       },
       {
         "id": "138",
@@ -6757,7 +7351,7 @@
           "B": "airframe and powerplant ratings.",
           "C": "airframe and powerplant ratings with an inspection authorization."
         },
-        "correct": "C"
+        "correct": "B"
       },
       {
         "id": "318",
@@ -7128,6 +7722,50 @@
           "C": "Monocoque."
         },
         "correct": "A"
+      },
+      {
+        "id": "165",
+        "question": "(Refer to Figure 6.) Determine the dimensions of A, B, and C in the flat layout. Setback = .252 Bend allowance = .345",
+        "choices": {
+          "A": "A = .748, B = 2.252, C = 2.004.",
+          "B": "A = .748, B = 1.496, C = 1.248.",
+          "C": "A = 1.252, B = 1.496, C = 1.752."
+        },
+        "correct": "B",
+        "figureNum": "6"
+      },
+      {
+        "id": "166",
+        "question": "(Refer to Figure 6.) What is dimension D? Setback = .252 Bend allowance = .345",
+        "choices": {
+          "A": "3.492.",
+          "B": "4.182.",
+          "C": "3.841."
+        },
+        "correct": "A",
+        "figureNum": "6"
+      },
+      {
+        "id": "168",
+        "question": "(Refer to Figure 7.) What is dimension F? Setback at D = .095 Setback at E = .068 Bend allowance at D = .150 Bend allowance at E = .112",
+        "choices": {
+          "A": "4.836.",
+          "B": "5.936.",
+          "C": "5.738."
+        },
+        "correct": "A",
+        "figureNum": "7"
+      },
+      {
+        "id": "969",
+        "question": "(Refer to Figure 19). Which repair should be made if the gear switch was placed in UP position and the gear does not retract?",
+        "choices": {
+          "A": "Replace electrical wire No. 15.",
+          "B": "Replace the down limit switch.",
+          "C": "Replace electrical wire No. 12."
+        },
+        "correct": "A",
+        "figureNum": "19"
       }
     ],
     "Landing Gear": [
@@ -7279,7 +7917,7 @@
           "B": "reduce brake pressure and maintain static pressure.",
           "C": "reduce the pressure and release the brakes rapidly."
         },
-        "correct": "C"
+        "correct": "B"
       },
       {
         "id": "316",
@@ -7889,7 +8527,7 @@
           "B": "carbon dioxide.",
           "C": "dry powder chemical."
         },
-        "correct": "A"
+        "correct": "C"
       },
       {
         "id": "1056",
@@ -7900,6 +8538,61 @@
           "C": "All landing gear are down and locked."
         },
         "correct": "A"
+      },
+      {
+        "id": "378",
+        "question": "(Refer to Figure 10.) The trunnion nut on an aircraft landing gear requires a torque of 320 inch-pounds. To reach the nut, a 2-inch straight adapter must be used on an 18-inch torque wrench. How many foot-pounds will be indicated on the torque wrench when the required torque of the nut is reached?",
+        "choices": {
+          "A": "24",
+          "B": "28.8.",
+          "C": "22"
+        },
+        "correct": "A",
+        "figureNum": "10"
+      },
+      {
+        "id": "926",
+        "question": "(Refer to Figure 19.) Upon completion of the landing gear extension cycle, the green light illuminated and the red light remained lit. What is the probable cause?",
+        "choices": {
+          "A": "Short in the down limit switch.",
+          "B": "Short in the gear safety switch.",
+          "C": "Short in the up limit switch."
+        },
+        "correct": "C",
+        "figureNum": "19"
+      },
+      {
+        "id": "968",
+        "question": "(Refer to Figure 19.) What is the indication of the red landing gear position light under the following conditions? Aircraft on jacks. Landing gear in transit. Warning horn sounding.",
+        "choices": {
+          "A": "extinguished.",
+          "B": "flashing.",
+          "C": "illuminated."
+        },
+        "correct": "A",
+        "figureNum": "19"
+      },
+      {
+        "id": "971",
+        "question": "(Refer to Figure 20.) What will illuminate the amber indicator light?",
+        "choices": {
+          "A": "Closing the nosewheel gear full retract switch.",
+          "B": "Retarding one throttle and closing the left wheel gear locked down switch.",
+          "C": "Closing the nose, left and right wheel gear full retract switches."
+        },
+        "correct": "A",
+        "figureNum": "20"
+      },
+      {
+        "id": "972",
+        "question": "(Refer to Figure 20.) What is the minimum circumstance that will cause the landing gear warning horn to indicate an unsafe condition?",
+        "choices": {
+          "A": "All gears up and one throttle retarded.",
+          "B": "Any gear up and both throttles retarded.",
+          "C": "Any gear not down and locked, and one throttle retarded."
+        },
+        "correct": "C",
+        "figureNum": "20"
       }
     ],
     "Flight Controls": [
@@ -8561,7 +9254,7 @@
           "B": "engine cowl flap system.",
           "C": "landing gear system."
         },
-        "correct": "A"
+        "correct": "B"
       },
       {
         "id": "486",
@@ -8932,6 +9625,50 @@
           "C": "drinking water."
         },
         "correct": "B"
+      },
+      {
+        "id": "119",
+        "question": "(Refer to Figure 2.) Select the preferred drawing for proper countersinking.",
+        "choices": {
+          "A": "All are acceptable.",
+          "B": "2",
+          "C": "1"
+        },
+        "correct": "B",
+        "figureNum": "2"
+      },
+      {
+        "id": "280",
+        "question": "(Refer to Figure 8.) Identify the cable that is used in primary control systems and in other places where operation over pulleys is frequent.",
+        "choices": {
+          "A": "2",
+          "B": "1",
+          "C": "3"
+        },
+        "correct": "A",
+        "figureNum": "8"
+      },
+      {
+        "id": "282",
+        "question": "(Refer to Figure 9.) When the outside air temperature is 80F, select the acceptable 3/16 cable tension range.",
+        "choices": {
+          "A": "130 pounds minimum, 140 pounds maximum.",
+          "B": "117 pounds minimum, 143 pounds maximum.",
+          "C": "120 pounds minimum, 140 pounds maximum."
+        },
+        "correct": "A",
+        "figureNum": "9"
+      },
+      {
+        "id": "567",
+        "question": "(Refer to Figure 14.) One hour after an oxygen system was charged for a leakage check, the oxygen pressure gauge read 460 psi at 63F; 6 hours later the temperature was 51F. (A 5 psi change is the maximum allowable in a 6-hour period.) What pressure gauge readings would be acceptable to remain within the allowable limits?",
+        "choices": {
+          "A": "445 to 450 psi.",
+          "B": "446 to 450 psi.",
+          "C": "455 to 460 psi."
+        },
+        "correct": "A",
+        "figureNum": "14"
       }
     ],
     "Airframe Inspection": [
@@ -10359,7 +11096,7 @@
           "B": "Naphtha.",
           "C": "Carbon tetrachloride."
         },
-        "correct": "A"
+        "correct": "C"
       },
       {
         "id": "422",
@@ -10609,7 +11346,7 @@
           "B": "while one or more actuating units are in operation.",
           "C": "with the power control valve in the OPEN position."
         },
-        "correct": "A"
+        "correct": "C"
       },
       {
         "id": "451",
@@ -11431,7 +12168,7 @@
           "B": "spring and/or viscous damper mounted racks.",
           "C": "rubber or foam cushioning material between circuit chassis and case."
         },
-        "correct": "A"
+        "correct": "B"
       },
       {
         "id": "657",
@@ -11731,7 +12468,7 @@
           "B": "the unit sends a test signal that will not generate an emergency signal.",
           "C": "care must be taken as the unit could send an emergency signal, activating search and rescue (SAR) agencies."
         },
-        "correct": "B"
+        "correct": "C"
       },
       {
         "id": "1054",
@@ -11752,6 +12489,204 @@
           "C": "Cospas-Sarsat."
         },
         "correct": "B"
+      },
+      {
+        "id": "538",
+        "question": "(Refer to Figure 13.) Determine what unit is located immediately downstream of the expansion valve in a freon refrigeration system.",
+        "choices": {
+          "A": "Condenser.",
+          "B": "Compressor.",
+          "C": "Evaporator coils."
+        },
+        "correct": "C",
+        "figureNum": "13"
+      },
+      {
+        "id": "682",
+        "question": "(Refer to Figure 15.) What is the approximate drag load on an antenna with a frontal area of .125 square feet installed on an aircraft with a speed of 225 mph?",
+        "choices": {
+          "A": "2.069 pounds.",
+          "B": "2.073 pounds.",
+          "C": "2.080 pounds."
+        },
+        "correct": "A",
+        "figureNum": "15"
+      },
+      {
+        "id": "683",
+        "question": "(Refer to Figure 15.) What is the approximate drag load on an antenna with a frontal area of .137 square feet installed on an aircraft with a speed of 275 mph?",
+        "choices": {
+          "A": "3.387 pounds.",
+          "B": "3.741 pounds.",
+          "C": "3.592 pounds."
+        },
+        "correct": "A",
+        "figureNum": "15"
+      },
+      {
+        "id": "687",
+        "question": "(Refer to Figure 16.) Which of the antennas shown is a typical DME antenna?",
+        "choices": {
+          "A": "1",
+          "B": "2",
+          "C": "4"
+        },
+        "correct": "A",
+        "figureNum": "16"
+      },
+      {
+        "id": "688",
+        "question": "(Refer to Figure 16.) Which of the antennas shown is a typical glideslope antenna?",
+        "choices": {
+          "A": "2",
+          "B": "3",
+          "C": "4"
+        },
+        "correct": "A",
+        "figureNum": "16"
+      },
+      {
+        "id": "689",
+        "question": "(Refer to Figure 31.) What kind of antenna is this?",
+        "choices": {
+          "A": "A lightning detector system antenna.",
+          "B": "A marker beacon receiver antenna.",
+          "C": "A satellite weather antenna."
+        },
+        "correct": "B",
+        "figureNum": "31"
+      },
+      {
+        "id": "690",
+        "question": "(Refer to Figure 22.) What kind of antenna is this?",
+        "choices": {
+          "A": "This is a glide slope antenna.",
+          "B": "This is a DME or a radar beacon transponder.",
+          "C": "This is a loop and sense antenna."
+        },
+        "correct": "B",
+        "figureNum": "22"
+      },
+      {
+        "id": "691",
+        "question": "(Refer to Figure 32.) What kind of antenna is this?",
+        "choices": {
+          "A": "A lightning detector system antenna.",
+          "B": "A marker beacon receiver antenna.",
+          "C": "A radar beacon transponder antenna."
+        },
+        "correct": "B",
+        "figureNum": "32"
+      },
+      {
+        "id": "692",
+        "question": "(Refer to Figure 33.) What kind of antenna is this?",
+        "choices": {
+          "A": "A VOR/glide slope antenna.",
+          "B": "A marker beacon receiver antenna.",
+          "C": "A radar beacon transponder antenna."
+        },
+        "correct": "A",
+        "figureNum": "33"
+      },
+      {
+        "id": "693",
+        "question": "(Refer to Figure 34.) What kind of antenna is this?",
+        "choices": {
+          "A": "A VOR/glide slope antenna.",
+          "B": "A marker beacon receiver antenna.",
+          "C": "A radar beacon transponder antenna."
+        },
+        "correct": "A",
+        "figureNum": "34"
+      },
+      {
+        "id": "694",
+        "question": "(Refer to Figure 23.) What is this antenna used for?",
+        "choices": {
+          "A": "This is an altitude encoder used with transponders.",
+          "B": "This is a TCAS receiver used with monitoring and alerting systems.",
+          "C": "This is an aircraft radar beacon transponder used for location identification."
+        },
+        "correct": "A",
+        "figureNum": "23"
+      },
+      {
+        "id": "695",
+        "question": "(Refer to Figure 24.) What kind of antenna is this?",
+        "choices": {
+          "A": "A dipole antenna.",
+          "B": "A Marconi antenna.",
+          "C": "A loop antenna."
+        },
+        "correct": "A",
+        "figureNum": "24"
+      },
+      {
+        "id": "696",
+        "question": "(Refer to Figure 25.) What kind of antenna is this?",
+        "choices": {
+          "A": "A dipole antenna.",
+          "B": "A canted antenna.",
+          "C": "A Marconi antenna."
+        },
+        "correct": "A",
+        "figureNum": "25"
+      },
+      {
+        "id": "697",
+        "question": "(Refer to Figure 26.) Where is the strongest signal for this antenna?",
+        "choices": {
+          "A": "Below the antenna.",
+          "B": "Above the antenna.",
+          "C": "Ahead of the antenna."
+        },
+        "correct": "A",
+        "figureNum": "26"
+      },
+      {
+        "id": "698",
+        "question": "(Refer to Figure 27.) What kind of antenna is this?",
+        "choices": {
+          "A": "A glide slope antenna.",
+          "B": "A VOR and localizer antenna.",
+          "C": "A radar beacon transponder antenna."
+        },
+        "correct": "B",
+        "figureNum": "27"
+      },
+      {
+        "id": "699",
+        "question": "(Refer to Figure 28.) What kind of antenna is this?",
+        "choices": {
+          "A": "An ELT antenna.",
+          "B": "A DME antenna.",
+          "C": "A VHF communications antenna."
+        },
+        "correct": "A",
+        "figureNum": "28"
+      },
+      {
+        "id": "700",
+        "question": "(Refer to Figure 29.) What kind of antenna is this?",
+        "choices": {
+          "A": "A glide slope antenna.",
+          "B": "A VOR and localizer antenna.",
+          "C": "A radar beacon transponder antenna."
+        },
+        "correct": "B",
+        "figureNum": "29"
+      },
+      {
+        "id": "701",
+        "question": "(Refer to Figure 30.) What kind of antenna is this?",
+        "choices": {
+          "A": "A lightning detector system antenna.",
+          "B": "A VOR and localizer antenna.",
+          "C": "A satellite weather antenna."
+        },
+        "correct": "A",
+        "figureNum": "30"
       }
     ],
     "Aircraft Electrical Systems": [
@@ -11933,7 +12868,7 @@
           "B": "check adjacent segments on commutator with an ohmmeter on the high resistance scale.",
           "C": "use a 12/24V test light between the armature core segments and the shaft."
         },
-        "correct": "A"
+        "correct": "B"
       },
       {
         "id": "843",
@@ -12083,7 +13018,7 @@
           "B": "75",
           "C": "100"
         },
-        "correct": "C"
+        "correct": "B"
       },
       {
         "id": "890",
@@ -12213,7 +13148,7 @@
           "B": "voltage regulator.",
           "C": "dc stator field current."
         },
-        "correct": "C"
+        "correct": "B"
       },
       {
         "id": "918",
@@ -12665,7 +13600,7 @@
           "B": "Vertical speed indicator.",
           "C": "Altimeter."
         },
-        "correct": "B"
+        "correct": "C"
       },
       {
         "id": "643",
@@ -12888,6 +13823,17 @@
           "C": "probe used for installing frangible disks in extinguisher bottles."
         },
         "correct": "B"
+      },
+      {
+        "id": "1038",
+        "question": "(Refer to Figure 21.) Determine what pressure is acceptable for a fire extinguisher when the surrounding area temperature is 33F. (Rounded to the nearest whole number.)",
+        "choices": {
+          "A": "215 to 302 psig.",
+          "B": "214 to 301 psig.",
+          "C": "215 to 301 psig."
+        },
+        "correct": "A",
+        "figureNum": "21"
       }
     ],
     "Aircraft Fuel Systems": [
@@ -13350,6 +14296,17 @@
           "C": "ethylene glycol."
         },
         "correct": "A"
+      },
+      {
+        "id": "713",
+        "question": "(Refer to Figure 17.) What is the purpose of the pump crossfeed valve?",
+        "choices": {
+          "A": "Balance the fuel in the tanks.",
+          "B": "Allow operation of engines from one tank.",
+          "C": "Allow operation of the left engine when the right fuel-boost pump is inoperative."
+        },
+        "correct": "C",
+        "figureNum": "17"
       }
     ],
     "Ice and Rain Control Systems": [
@@ -13411,7 +14368,7 @@
           "B": "To remove oil from air exhausted from the deicer boots.",
           "C": "To prevent an accumulation of oil in the vacuum system."
         },
-        "correct": "B"
+        "correct": "C"
       },
       {
         "id": "1000",
@@ -13835,7 +14792,7 @@
           "B": "The valves will open late and close early.",
           "C": "The valves will open early and close late."
         },
-        "correct": "A"
+        "correct": "B"
       },
       {
         "id": "39",
@@ -15947,7 +16904,7 @@
           "B": "The return oil will be pumped overboard.",
           "C": "The scavenger return line check valve will close and force the oil to bypass directly to the intake side of the pressure pump."
         },
-        "correct": "A"
+        "correct": "B"
       },
       {
         "id": "442",
@@ -16219,7 +17176,7 @@
           "B": "bump in propeller RPM.",
           "C": "drop in torque meter pressure indication."
         },
-        "correct": "C"
+        "correct": "A"
       },
       {
         "id": "96",
@@ -16599,7 +17556,7 @@
           "B": "Shellac.",
           "C": "Solder."
         },
-        "correct": "A"
+        "correct": "C"
       },
       {
         "id": "905",
@@ -17269,7 +18226,7 @@
           "B": "spring pressure.",
           "C": "centrifugal twisting moment."
         },
-        "correct": "B"
+        "correct": "A"
       },
       {
         "id": "972",
@@ -19752,6 +20709,28 @@
           "C": "Type Certificate Data Sheet (TCDS)."
         },
         "correct": "B"
+      },
+      {
+        "id": "378",
+        "question": "(Refer to Figure 4.) The following data concerning the installation of an electrical unit is known: current requirements for continuous operation -- 11 amperes; measured cable length -- 45 feet; system voltage -- 28 volts (do not exceed 1 volt drop); cable in conduit and bundles. What is the minimum size copper electrical cable that may be selected?",
+        "choices": {
+          "A": "No. 10.",
+          "B": "No. 12.",
+          "C": "No. 14."
+        },
+        "correct": "A",
+        "figureNum": "4"
+      },
+      {
+        "id": "704",
+        "question": "(Refer to Figure 6.) Which curve most nearly represents an aircraft engine's air-fuel ratio throughout its operating range?",
+        "choices": {
+          "A": "1",
+          "B": "3",
+          "C": "2"
+        },
+        "correct": "A",
+        "figureNum": "6"
       }
     ],
     "Ignition and Starting Systems": [
@@ -20844,6 +21823,50 @@
           "C": "an electric starter."
         },
         "correct": "C"
+      },
+      {
+        "id": "619",
+        "question": "(Refer to Figure 5.) With power applied to the bus bar, what wire supplies standby power to the starter relay contact?",
+        "choices": {
+          "A": "4.",
+          "B": "7.",
+          "C": "8."
+        },
+        "correct": "A",
+        "figureNum": "5"
+      },
+      {
+        "id": "620",
+        "question": "(Refer to Figure 5.) With power applied to the bus bar, what switch changes will allow the ignition exciters test switch to function?",
+        "choices": {
+          "A": "Engine master switch, battery switch, and power lever switch.",
+          "B": "Engine master switch, start switch, and test switch.",
+          "C": "Engine master switch and ignition switch."
+        },
+        "correct": "A",
+        "figureNum": "5"
+      },
+      {
+        "id": "622",
+        "question": "(Refer to Figure 5.) If wire 8 is broken or disconnected after starter rotation is initiated, and the power lever is advanced, the",
+        "choices": {
+          "A": "starting sequence will continue normally.",
+          "B": "starter will shut down, but the igniters will continue to fire.",
+          "C": "starting sequence will discontinue."
+        },
+        "correct": "A",
+        "figureNum": "5"
+      },
+      {
+        "id": "623",
+        "question": "(Refer to Figure 5.) When an external power source is connected to the aircraft,",
+        "choices": {
+          "A": "the battery cannot be connected to the bus.",
+          "B": "both battery power and external power are available to the bus.",
+          "C": "the starter relay coil has a path to ground."
+        },
+        "correct": "C",
+        "figureNum": "5"
       }
     ],
     "Engine Fuel and Fuel Metering Systems": [
