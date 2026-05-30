@@ -21,6 +21,16 @@ function getFaaBank() {
   return _faaBank;
 }
 
+// ── Lazy-load figures index (figure label → filename) ────────────────────────
+let _figIndex = null;
+function getFigureIndex() {
+  if (_figIndex === null) {
+    try { _figIndex = require(path.join(process.cwd(), 'figures-index.json')); }
+    catch { _figIndex = {}; }
+  }
+  return _figIndex;
+}
+
 // ── Topic → subject mapping ───────────────────────────────────────────────────
 const TOPIC_SUBJECT = {};
 const SUBJECT_TOPICS = {
@@ -64,19 +74,24 @@ function getFaaQuestions(topic, n) {
   if (n < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const bank = getFaaBank();
-  const pool = bank[subject]?.[topic];
-  if (!Array.isArray(pool) || !pool.length) return [];
+  const figIndex = getFigureIndex();
+  const allPool = bank[subject]?.[topic];
+  if (!Array.isArray(allPool) || !allPool.length) return [];
+  // Exclude figure questions whose image isn't in the figures index
+  const pool = allPool.filter(q => !q.figureNum || figIndex[q.figureNum]);
+  if (!pool.length) return [];
   const available = Math.min(n, pool.length);
-  // Random sample without replacement
   const indices = shuffle([...Array(pool.length).keys()]).slice(0, available);
+  const handbook = subject === 'general' ? 'FAA-H-8083-30A' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32A';
   return indices.map(i => ({
     question:    pool[i].question,
-    choices:     pool[i].choices,   // A, B, C only
+    choices:     pool[i].choices,
     correct:     pool[i].correct,
     topic,
-    handbook:    subject === 'general' ? 'FAA-H-8083-30A' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32A',
-    explanation: '',  // FAA questions don't include explanations
+    handbook,
+    explanation: '',
     source:      'faa',
+    ...(pool[i].figureNum ? { figureNum: pool[i].figureNum } : {}),
   }));
 }
 
