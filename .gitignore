@@ -1,0 +1,5 @@
+node_modules/
+*.pdf
+extract-8083.js
+package.json
+package-lock.json

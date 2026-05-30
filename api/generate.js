@@ -1,5 +1,25 @@
 module.exports.config = { maxDuration: 60 };
 
+const path = require('path');
+let _content = null;
+function getContent() {
+  if (!_content) {
+    try { _content = require(path.join(process.cwd(), '8083_content.json')); } catch { _content = {}; }
+  }
+  return _content;
+}
+
+// Which handbook each topic belongs to
+const TOPIC_SUBJECT = {};
+const SUBJECT_TOPICS = {
+  general:    ['Aircraft Drawings','Aircraft Material Hardware and Processes','Cleaning and Corrosion Control','Fluid Lines and Fittings','Forms and Regulations','Fundamentals of Electricity','Ground Operations and Servicing','Human Factors','Inspection Concepts and Techniques','Mathematics','Physics','Weight and Balance'],
+  airframe:   ['Aircraft Electrical Systems','Aircraft Fuel Systems','Aircraft Instrument Systems','Airframe Inspection','Communications and Navigation Systems','Environmental Systems','Fire Protection','Flight Controls','Hydraulic and Pneumatic Systems','Ice and Rain Control Systems','Landing Gear','Metallic Structures','Nonmetallic Structures','Rotorcraft'],
+  powerplant: ['Engine Electrical Systems','Engine Exhaust and Reverser Systems','Engine Fire Protection Systems','Engine Fuel and Fuel Metering Systems','Engine Inspection','Engine Instrument Systems','Engine Lubrication Systems','Ignition and Starting Systems','Propellers','Reciprocating Engines','Reciprocating Engine Induction and Cooling','Turbine Engine Air Systems','Turbine Engines']
+};
+for (const [subj, topics] of Object.entries(SUBJECT_TOPICS)) {
+  for (const t of topics) TOPIC_SUBJECT[t] = subj;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -11,8 +31,6 @@ module.exports = async function handler(req, res) {
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
 
   const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
-
-  // Distribute question count evenly across topics
   const n = Math.min(topics.length, total);
   const selectedTopics = n < topics.length
     ? topics.slice().sort(() => Math.random() - 0.5).slice(0, n)
@@ -21,16 +39,25 @@ module.exports = async function handler(req, res) {
   const rem = total % n;
   const counts = selectedTopics.map((_, i) => i < rem ? base + 1 : base);
 
+  const content = getContent();
+
   async function askTopic(topic, qCount) {
     if (qCount < 1) return [];
+    const subject = TOPIC_SUBJECT[topic] || 'general';
+    const sourceText = content[subject]?.[topic] || '';
+    const contextSection = sourceText
+      ? `\n\nUse this reference text from the FAA ${subject === 'general' ? '8083-30' : subject === 'airframe' ? '8083-31' : '8083-32'} handbook to inform your questions:\n\n${sourceText.slice(0, 4000)}`
+      : '';
+
     const prompt = `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
 
-Generate ${qCount} multiple choice practice question${qCount > 1 ? 's' : ''} specifically about: ${topic}
+Generate ${qCount} multiple choice practice question${qCount > 1 ? 's' : ''} specifically about: ${topic}${contextSection}
 
 Rules:
+- Base questions on real FAA A&P exam content for this topic
 - Each question must have exactly 4 answer choices labeled A, B, C, D
-- Wrong answers must be plausible — same units, same category, subtly wrong, not obviously wrong
-- Wrong answers should reflect real common misconceptions
+- Wrong answers must be plausible — same units, same category, subtly wrong
+- Wrong answers should reflect real common misconceptions or close-but-incorrect values
 - Questions must match the difficulty of the FAA A&P written exam
 - Return ONLY a valid JSON array — no markdown, no explanation, no code blocks
 
@@ -58,7 +85,6 @@ Format:
   try {
     const batches = await Promise.all(selectedTopics.map((t, i) => askTopic(t, counts[i])));
     let questions = batches.flat();
-    // Shuffle
     for (let i = questions.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [questions[i], questions[j]] = [questions[j], questions[i]];
