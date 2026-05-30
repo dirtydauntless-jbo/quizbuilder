@@ -7793,6 +7793,43 @@ Write exactly ${numWrong} wrong answer${numWrong>1?'s':''}.
   }
 }
 
+async function qcDistractorsQB(items){
+  // items: [{question, correct, wrong:[...]}, ...]
+  // Returns same structure with wrong answers fixed, or originals on failure
+  try {
+    const resp = await callAnthropic({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2048,
+      messages:[{ role:'user', content:`You are quality-checking wrong answer choices for FAA A&P exam questions.
+
+For each question, review the wrong answers and fix any of these issues:
+1. If the correct answer contains a number, every wrong answer must also contain a DIFFERENT specific number in the same units — never drop the number or change units
+2. If the correct answer contains units (psi, inches, degrees, rpm, volts, lbs, hours, etc.), all wrong answers must use those exact same units
+3. No wrong answer may be a synonym, paraphrase, or restatement of the correct answer — replace it with something factually incorrect
+4. No two wrong answers may mean the same thing — if two are duplicates or near-duplicates, replace one
+5. Wrong answers should match the grammatical structure and approximate length of the correct answer
+
+Return ONLY a JSON array, same order, same count — no markdown:
+[{"wrong":["fixed w1","fixed w2","fixed w3"]}]
+
+If a set looks fine already, return it unchanged.
+
+Questions:
+${JSON.stringify(items)}` }]
+    });
+    if(!resp.ok) return items.map(it=>({wrong:it.wrong}));
+    const data = await resp.json();
+    const text = data.content?.[0]?.text?.trim()||'';
+    let arr;
+    try { arr = JSON.parse(text); } catch {
+      const m = text.match(/\[[\s\S]*\]/);
+      if(m) try { arr = JSON.parse(m[0]); } catch{}
+    }
+    if(Array.isArray(arr) && arr.length === items.length) return arr;
+  } catch(e){ console.warn('qcDistractorsQB error', e.message); }
+  return items.map(it=>({wrong:it.wrong}));
+}
+
 async function generateDistractors(batch, choiceCount){
   const numWrong = choiceCount - 1;
   const results = [];
@@ -7800,20 +7837,38 @@ async function generateDistractors(batch, choiceCount){
   const chunkSize = 5;
   for(let i=0; i<batch.length; i+=chunkSize){
     const chunk = batch.slice(i, i+chunkSize);
-    const chunkResults = await Promise.all(chunk.map(async item => {
+    const statusEl = document.getElementById('genAiStatus');
+
+    // Step 1: Generate distractors for the chunk
+    const distractorResults = await Promise.all(chunk.map(async item => {
       const { distractors: wrong, usedAI, error } = await generateDistractorsAI(item, numWrong);
       if(usedAI) aiCount++; else { localCount++; if(!firstError && error) firstError = error; }
+      return { item, wrong };
+    }));
+
+    // Step 2: QC pass on the chunk
+    if(statusEl) statusEl.innerHTML = `<span style="color:var(--muted)">🔍 Reviewing chunk ${Math.floor(i/chunkSize)+1}...</span>`;
+    const qcInput = distractorResults.map(({item, wrong}) => ({
+      question: item.q,
+      correct: item.a,
+      wrong: wrong.map(w => fixDistractor(w, item.a))
+    }));
+    const qcFixed = await qcDistractorsQB(qcInput);
+
+    // Step 3: Assemble final questions using QC'd distractors
+    const chunkResults = distractorResults.map(({item}, ci) => {
+      const fixedWrong = qcFixed[ci]?.wrong || distractorResults[ci].wrong;
       const correctPos = Math.floor(Math.random() * choiceCount);
       const options = []; let wi = 0;
       for(let j=0;j<choiceCount;j++){
         if(j===correctPos) options.push(fixAMTText(item.a));
-        else options.push(fixDistractor(wrong[wi++] || 'Not applicable', item.a));
+        else options.push(fixDistractor(fixedWrong[wi++] || 'Not applicable', item.a));
       }
       return { id:item.id||0, q:fixAMTText(item.q), topic:item.topic, type:'mc', options, correct:correctPos };
-    }));
+    });
+
     results.push(...chunkResults);
-    // Update overlay status after each chunk
-    const statusEl = document.getElementById('genAiStatus');
+
     if(statusEl){
       const total = aiCount + localCount;
       if(localCount === 0){
@@ -7826,7 +7881,6 @@ async function generateDistractors(batch, choiceCount){
     }
     if(i+chunkSize < batch.length) await new Promise(r=>setTimeout(r,400));
   }
-  // If any local fallback occurred, show a persistent warning after generation
   if(localCount > 0) window._lastGenFallbackError = firstError;
   else window._lastGenFallbackError = null;
   return results;
