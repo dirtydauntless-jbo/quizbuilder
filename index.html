@@ -1265,12 +1265,22 @@ setTimeout(function(){
       </div>
       <!-- Exam -->
       <div id="practiceExam" class="hidden">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-          <button onclick="practiceReset()" class="btn" style="font-size:.8rem">← Back</button>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <button onclick="practiceReset()" class="btn" style="font-size:.8rem">← Exit</button>
           <div id="pxExamTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--fg)"></div>
         </div>
-        <div id="pxQuestions"></div>
-        <button onclick="practiceSubmit()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;margin-top:20px;background:#0891b2;border-color:#0891b2">SUBMIT EXAM</button>
+        <!-- Live score progress bar -->
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+            <div id="pxProgressLabel" style="font-family:monospace;font-size:.78rem;color:var(--muted)">Q 1 of —</div>
+            <div id="pxScoreLabel" style="font-family:monospace;font-size:.84rem;font-weight:700;color:var(--cl)">100%</div>
+          </div>
+          <div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden">
+            <div id="pxScoreBar" style="height:100%;width:100%;background:var(--cl);border-radius:4px;transition:width .5s,background .5s"></div>
+          </div>
+        </div>
+        <!-- One-question-at-a-time area -->
+        <div id="pxQuestionArea"></div>
       </div>
       <!-- Results -->
       <div id="practiceResults" class="hidden">
@@ -11552,9 +11562,10 @@ const OFFICIAL_TOPICS = {
   powerplant: ['Engine Electrical Systems','Engine Exhaust and Reverser Systems','Engine Fire Protection Systems','Engine Fuel and Fuel Metering Systems','Engine Inspection','Engine Instrument Systems','Engine Lubrication Systems','Ignition and Starting Systems','Propellers','Reciprocating Engines','Reciprocating Engine Induction and Cooling','Turbine Engine Air Systems','Turbine Engines']
 };
 let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _pxAnswers={};
+let _pxCurrentQ=0, _pxCorrectCount=0, _pxAnsweredCount=0, _pxTopicStats={};
 
 function practiceInitTab(){
-  _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={};
+  _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={};
   practiceRenderTopicPicker();
   practiceSetMode('official');
   ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,i)=>{
@@ -11680,7 +11691,7 @@ async function practiceGenerate(){
     const data=await res.json();
     if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
     _pxQuestions=data.questions;
-    _pxAnswers={};
+    _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={};
     practiceRenderExam(label);
   } catch(e){
     document.getElementById('practiceLoading').classList.add('hidden');
@@ -11689,61 +11700,123 @@ async function practiceGenerate(){
   }
 }
 
-function practiceRenderExam(topic){
+function practiceRenderExam(label){
   document.getElementById('practiceLoading').classList.add('hidden');
   document.getElementById('practiceExam').classList.remove('hidden');
   const titleEl = document.getElementById('pxExamTitle');
-  if(titleEl) titleEl.textContent = topic;
-  const container = document.getElementById('pxQuestions');
-  if(!container) return;
-  container.innerHTML = _pxQuestions.map((q, i) => `
-    <div id="pxQ${i}" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:12px">
-      <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px">QUESTION ${i+1} of ${_pxQuestions.length}</div>
-      <div style="font-weight:700;margin-bottom:14px;line-height:1.4">${q.question}</div>
+  if(titleEl) titleEl.textContent = label;
+  practiceUpdateProgress();
+  practiceRenderQuestion(0);
+}
+
+function practiceUpdateProgress(){
+  const total = _pxQuestions.length;
+  const qNum = Math.min(_pxCurrentQ + 1, total);
+  const pct = _pxAnsweredCount === 0 ? 100 : Math.round(_pxCorrectCount / _pxAnsweredCount * 100);
+  const col = pct >= 70 ? 'var(--cl)' : pct >= 50 ? '#f59e0b' : 'var(--wl)';
+  const labelEl = document.getElementById('pxProgressLabel');
+  const scoreEl = document.getElementById('pxScoreLabel');
+  const barEl = document.getElementById('pxScoreBar');
+  if(labelEl) labelEl.textContent = `Q ${qNum} of ${total}`;
+  if(scoreEl){ scoreEl.textContent = pct+'%'; scoreEl.style.color = col; }
+  if(barEl){ barEl.style.width = pct+'%'; barEl.style.background = col; }
+}
+
+function practiceRenderQuestion(idx){
+  const q = _pxQuestions[idx];
+  const area = document.getElementById('pxQuestionArea');
+  if(!area || !q) return;
+  const isLast = idx + 1 >= _pxQuestions.length;
+  area.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;margin-bottom:12px">
+      <div style="font-family:monospace;font-size:.72rem;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px">QUESTION ${idx+1} of ${_pxQuestions.length}${q.topic ? ' &nbsp;·&nbsp; '+q.topic : ''}</div>
+      <div style="font-weight:700;margin-bottom:16px;line-height:1.5;font-size:.95rem">${q.question}</div>
       <div style="display:flex;flex-direction:column;gap:8px">
         ${['A','B','C','D'].map(l => `
-          <button onclick="practiceSelect(${i},'${l}')" id="pxQ${i}${l}"
-            style="text-align:left;padding:10px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);cursor:pointer;font-family:monospace;font-size:.85rem;transition:all .15s;width:100%">
+          <button onclick="practiceSelectAnswer('${l}')" id="pxBtn${l}"
+            style="text-align:left;padding:11px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);cursor:pointer;font-family:monospace;font-size:.85rem;transition:all .15s;width:100%">
             <span style="font-weight:700;margin-right:10px">${l}.</span>${q.choices[l]}
           </button>`).join('')}
       </div>
-    </div>`).join('');
+      <div id="pxFeedback" style="display:none;margin-top:14px;padding:13px 15px;border-radius:var(--r);border:1px solid"></div>
+    </div>
+    <button id="pxNextBtn" onclick="practiceAdvance()" style="display:none;width:100%;padding:14px;font-size:.9rem;letter-spacing:2px" class="btn btn-primary">
+      ${isLast ? 'SEE RESULTS →' : 'NEXT QUESTION →'}
+    </button>`;
 }
 
-function practiceSelect(qIdx, letter){
-  _pxAnswers[qIdx] = letter;
+function practiceSelectAnswer(letter){
+  const idx = _pxCurrentQ;
+  const q = _pxQuestions[idx];
+  if(!q) return;
+  _pxAnswers[idx] = letter;
+  // Lock all buttons immediately
   ['A','B','C','D'].forEach(l => {
-    const btn = document.getElementById(`pxQ${qIdx}${l}`);
-    if(!btn) return;
-    btn.style.background = l === letter ? '#0891b2' : 'var(--panel2)';
-    btn.style.color = l === letter ? '#fff' : '';
-    btn.style.borderColor = l === letter ? '#0891b2' : 'var(--border)';
+    const btn = document.getElementById('pxBtn'+l);
+    if(btn){ btn.onclick = null; btn.style.cursor = 'default'; }
   });
+  const ok = letter === q.correct;
+  _pxAnsweredCount++;
+  if(ok) _pxCorrectCount++;
+  // Track topic stats
+  const t = q.topic || 'General';
+  if(!_pxTopicStats[t]) _pxTopicStats[t] = {correct:0,total:0};
+  _pxTopicStats[t].total++;
+  if(ok) _pxTopicStats[t].correct++;
+  // Color the choice buttons
+  ['A','B','C','D'].forEach(l => {
+    const btn = document.getElementById('pxBtn'+l);
+    if(!btn) return;
+    if(l === q.correct){
+      btn.style.background='rgba(34,197,94,.15)'; btn.style.borderColor='var(--cl)'; btn.style.color='var(--cl)'; btn.style.fontWeight='700';
+    } else if(l === letter && !ok){
+      btn.style.background='rgba(204,68,68,.12)'; btn.style.borderColor='var(--wl)'; btn.style.color='var(--wl)';
+    } else {
+      btn.style.opacity='.38';
+    }
+  });
+  // Show instant feedback with explanation
+  const fbEl = document.getElementById('pxFeedback');
+  if(fbEl){
+    const ref = q.handbook ? `📚 ${q.handbook}${q.topic ? ' &nbsp;·&nbsp; '+q.topic : ''}` : '';
+    fbEl.style.display = 'block';
+    fbEl.style.borderColor = ok ? 'rgba(34,197,94,.35)' : 'rgba(204,68,68,.35)';
+    fbEl.style.background = ok ? 'rgba(34,197,94,.06)' : 'rgba(204,68,68,.06)';
+    fbEl.innerHTML =
+      `<div style="font-family:monospace;font-size:.78rem;font-weight:700;margin-bottom:${q.explanation?'9':'0'}px;color:${ok?'var(--cl)':'var(--wl)'}">` +
+        (ok ? '✓ CORRECT' : `✗ INCORRECT &nbsp;— Correct answer: ${q.correct}. &nbsp;${q.choices[q.correct]||''}`) +
+      `</div>` +
+      (q.explanation ? `<div style="font-size:.86rem;line-height:1.6;color:var(--fg)">${q.explanation}</div>` : '') +
+      (ref ? `<div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:9px;border-top:1px solid var(--border);padding-top:7px">${ref}</div>` : '');
+  }
+  practiceUpdateProgress();
+  const nextBtn = document.getElementById('pxNextBtn');
+  if(nextBtn) nextBtn.style.display = 'block';
 }
 
-function practiceSubmit(){
-  const unanswered=_pxQuestions.length-Object.keys(_pxAnswers).length;
-  if(unanswered>0&&!confirm(`You have ${unanswered} unanswered question${unanswered>1?'s':''}. Submit anyway?`)) return;
-  let correct=0;
-  const topicStats={};
-  _pxQuestions.forEach((q,i)=>{
-    const t=q.topic||'General';
-    if(!topicStats[t]) topicStats[t]={correct:0,total:0};
-    topicStats[t].total++;
-    if(_pxAnswers[i]===q.correct){ correct++; topicStats[t].correct++; }
-  });
-  const pct=Math.round((correct/_pxQuestions.length)*100);
+function practiceAdvance(){
+  _pxCurrentQ++;
+  if(_pxCurrentQ >= _pxQuestions.length){ practiceFinish(); return; }
+  practiceUpdateProgress();
+  practiceRenderQuestion(_pxCurrentQ);
+  document.getElementById('pxQuestionArea')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function practiceFinish(){
+  const correct = _pxCorrectCount;
+  const total = _pxQuestions.length;
+  const pct = Math.round(correct/total*100);
   document.getElementById('practiceExam').classList.add('hidden');
   document.getElementById('practiceResults').classList.remove('hidden');
   const titleEl=document.getElementById('pxResultsTitle');
-  if(titleEl){ titleEl.textContent=`${correct}/${_pxQuestions.length} — ${pct}%`; titleEl.style.color=pct>=70?'var(--cl)':'var(--wl)'; }
+  if(titleEl){ titleEl.textContent=`${correct}/${total} — ${pct}%`; titleEl.style.color=pct>=70?'var(--cl)':'var(--wl)'; }
   if(stuSession?.uid){
     const label=document.getElementById('pxExamTitle')?.textContent||'Practice Exam';
-    db.ref('practiceHistory/'+stuSession.uid).push({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',score:correct,total:_pxQuestions.length,pct,topicStats}).catch(()=>{});
+    db.ref('practiceHistory/'+stuSession.uid).push({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',score:correct,total,pct,topicStats:_pxTopicStats}).catch(()=>{});
   }
   const bd=document.getElementById('pxResultsBreakdown');
   if(!bd) return;
-  const topicRows=Object.entries(topicStats).sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total));
+  const topicRows=Object.entries(_pxTopicStats).sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total));
   const weak=topicRows.filter(([,v])=>v.correct/v.total<0.7).map(([k])=>k);
   const passBar=pct>=70
     ?`<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-family:monospace;font-size:.85rem;color:var(--cl)">✓ PASSING — FAA requires 70%</div>`
@@ -11751,8 +11824,8 @@ function practiceSubmit(){
   const focusBox=weak.length
     ?`<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.2);border-radius:var(--r);padding:14px 16px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wl);margin-bottom:8px">Focus On These Topics</div>${weak.map(t=>`<div style="font-family:monospace;font-size:.83rem;padding:2px 0">→ ${t}</div>`).join('')}</div>`
     :`<div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-family:monospace;font-size:.85rem;color:var(--cl)">✓ Strong across all topics!</div>`;
-  const topicTable=topicRows.length>1?`<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:16px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Topic Breakdown</div>${topicRows.map(([t,d])=>{const p=Math.round((d.correct/d.total)*100);const col=p>=70?'var(--cl)':p>=50?'#f59e0b':'var(--wl)';return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)33"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t}</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted);white-space:nowrap">${d.correct}/${d.total}</div><div style="width:34px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:${col}">${p}%</div><div style="width:66px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:${p}%;height:100%;background:${col};border-radius:3px"></div></div></div>`;}).join('')}</div>`:''
-  const reviewHtml=`<div><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Answer Review</div>${_pxQuestions.map((q,i)=>{const sel=_pxAnswers[i],ok=sel===q.correct;return `<div style="background:var(--panel);border:1px solid ${ok?'var(--cl)':'var(--wl)'};border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q${i+1}${q.topic?' · '+q.topic:''}</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:${ok?'var(--cl)':'var(--wl)'}">${ok?'✓ CORRECT':'✗ INCORRECT'}</div></div><div style="font-weight:700;margin-bottom:9px;font-size:.88rem;line-height:1.4">${q.question}</div><div style="display:flex;flex-direction:column;gap:4px">${['A','B','C','D'].map(l=>{const ic=l===q.correct,is=l===sel;let bg='var(--panel2)',col='',fw='normal';if(ic){bg='rgba(34,197,94,.15)';col='var(--cl)';fw='700';}else if(is&&!ok){bg='rgba(204,68,68,.12)';col='var(--wl)';}return `<div style="padding:6px 10px;border-radius:var(--r);background:${bg};color:${col};font-family:monospace;font-size:.79rem;font-weight:${fw}"><span style="font-weight:700;margin-right:7px">${l}.</span>${q.choices[l]}${ic?' ✓':(is&&!ok?' ✗':'')}</div>`;}).join('')}</div></div>`;}).join('')}</div>`;
+  const topicTable=topicRows.length>1?`<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:16px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Topic Breakdown</div>${topicRows.map(([t,d])=>{const p=Math.round((d.correct/d.total)*100);const col=p>=70?'var(--cl)':p>=50?'#f59e0b':'var(--wl)';return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)33"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t}</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted);white-space:nowrap">${d.correct}/${d.total}</div><div style="width:34px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:${col}">${p}%</div><div style="width:66px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:${p}%;height:100%;background:${col};border-radius:3px"></div></div></div>`;}).join('')}</div>`:'';
+  const reviewHtml=`<div><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Answer Review</div>${_pxQuestions.map((q,i)=>{const sel=_pxAnswers[i],ok=sel===q.correct;return `<div style="background:var(--panel);border:1px solid ${ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'};border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q${i+1}${q.topic?' · '+q.topic:''}</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:${ok?'var(--cl)':'var(--wl)'}">${ok?'✓ CORRECT':'✗ INCORRECT'}</div></div><div style="font-weight:700;margin-bottom:9px;font-size:.88rem;line-height:1.4">${q.question}</div><div style="display:flex;flex-direction:column;gap:4px">${['A','B','C','D'].map(l=>{const ic=l===q.correct,is=l===sel;let bg='var(--panel2)',col='',fw='normal';if(ic){bg='rgba(34,197,94,.15)';col='var(--cl)';fw='700';}else if(is&&!ok){bg='rgba(204,68,68,.12)';col='var(--wl)';}return `<div style="padding:6px 10px;border-radius:var(--r);background:${bg};color:${col};font-family:monospace;font-size:.79rem;font-weight:${fw}"><span style="font-weight:700;margin-right:7px">${l}.</span>${q.choices[l]}${ic?' ✓':(is&&!ok?' ✗':'')}</div>`;}).join('')}</div>${q.explanation?`<div style="margin-top:9px;padding:9px 11px;background:rgba(8,145,178,.07);border:1px solid rgba(8,145,178,.2);border-radius:var(--r);font-size:.79rem;line-height:1.55;color:var(--fg)">${q.explanation}</div>`:''}${q.handbook?`<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 ${q.handbook}${q.topic?' · '+q.topic:''}</div>`:''}</div>`;}).join('')}</div>`;
   bd.innerHTML=passBar+focusBox+topicTable+reviewHtml;
 }
 
@@ -11778,7 +11851,7 @@ async function practiceLoadHistory(){
 }
 
 function practiceReset(){
-  _pxQuestions=[]; _pxAnswers={};
+  _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={};
   ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,i)=>{
     const el=document.getElementById(id); if(el) el.classList.toggle('hidden',i!==0);
   });

@@ -41,9 +41,10 @@ function parseJSON(text) {
 async function generateForTopic(topic, qCount, content) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
+  const handbook = subject === 'general' ? 'FAA-H-8083-30A' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32A';
   const sourceText = content[subject]?.[topic] || '';
   const contextSection = sourceText
-    ? `\n\nReference text from FAA ${subject === 'general' ? '8083-30' : subject === 'airframe' ? '8083-31' : '8083-32'}:\n\n${sourceText.slice(0, 4000)}`
+    ? `\n\nReference text from ${handbook}:\n\n${sourceText.slice(0, 4000)}`
     : '';
 
   const prompt = `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
@@ -57,14 +58,15 @@ Rules:
 - If the correct answer contains a number, ALL wrong answers must also contain a different specific number in the same units
 - If the correct answer contains units (psi, inches, degrees, volts, etc.), ALL wrong answers must use those same units
 - All choices should be similar in length and grammatical structure
+- For the explanation field: write 1-2 sentences explaining WHY the correct answer is correct per FAA standards, then cite the specific chapter number and section name from ${handbook} where this is covered (e.g. "Chapter 3, Measuring Systems")
 - Return ONLY a valid JSON array, no markdown
 
-Format: [{"question":"...","choices":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A"}]`;
+Format: [{"question":"...","choices":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A","explanation":"..."}]`;
 
   try {
     const text = await callClaude(prompt);
     const arr = parseJSON(text);
-    return Array.isArray(arr) ? arr.map(q => ({ ...q, topic })) : [];
+    return Array.isArray(arr) ? arr.map(q => ({ ...q, topic, handbook })) : [];
   } catch { return []; }
 }
 
@@ -82,7 +84,7 @@ Check for and fix:
 5. All choices should be similar in grammatical structure and length
 6. Each wrong answer must be clearly incorrect per FAA standards
 
-Return the corrected questions as a JSON array in EXACTLY the same format. Do not change questions or correct answers — only fix wrong answer choices if needed. No markdown, just the JSON array.
+Return the corrected questions as a JSON array in EXACTLY the same format, preserving all fields (question, choices, correct, explanation, topic, handbook). Do not change questions, correct answers, or explanations — only fix wrong answer choices if needed. No markdown, just the JSON array.
 
 Questions to review:
 ${JSON.stringify(questions)}`;
