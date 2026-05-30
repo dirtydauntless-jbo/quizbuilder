@@ -1,6 +1,7 @@
 module.exports.config = { maxDuration: 60 };
 
 const path = require('path');
+const fs   = require('fs');
 
 // ── Lazy-load reference content (8083 text) ──────────────────────────────────
 let _content = null;
@@ -21,14 +22,22 @@ function getFaaBank() {
   return _faaBank;
 }
 
-// ── Lazy-load figures index (figure label → filename) ────────────────────────
-let _figIndex = null;
-function getFigureIndex() {
-  if (_figIndex === null) {
-    try { _figIndex = require(path.join(process.cwd(), 'figures-index.json')); }
-    catch { _figIndex = {}; }
-  }
-  return _figIndex;
+// ── Build verified set of figure labels whose image file is actually on disk ──
+// Checked once per cold start — the only guarantee a figure question is askable.
+let _availableFigures = null;
+function getAvailableFigures() {
+  if (_availableFigures !== null) return _availableFigures;
+  _availableFigures = new Set();
+  try {
+    const index = require(path.join(process.cwd(), 'figures-index.json'));
+    const dir   = path.join(process.cwd(), 'public', 'figures');
+    for (const [label, filename] of Object.entries(index)) {
+      if (fs.existsSync(path.join(dir, filename))) {
+        _availableFigures.add(label);
+      }
+    }
+  } catch { /* no index → set stays empty → all figure questions excluded */ }
+  return _availableFigures;
 }
 
 // ── Topic → subject mapping ───────────────────────────────────────────────────
@@ -74,11 +83,11 @@ function getFaaQuestions(topic, n) {
   if (n < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const bank = getFaaBank();
-  const figIndex = getFigureIndex();
+  const available = getAvailableFigures();
   const allPool = bank[subject]?.[topic];
   if (!Array.isArray(allPool) || !allPool.length) return [];
-  // Exclude figure questions whose image isn't in the figures index
-  const pool = allPool.filter(q => !q.figureNum || figIndex[q.figureNum]);
+  // Only include figure questions whose image file is confirmed present on disk
+  const pool = allPool.filter(q => !q.figureNum || available.has(q.figureNum));
   if (!pool.length) return [];
   const available = Math.min(n, pool.length);
   const indices = shuffle([...Array(pool.length).keys()]).slice(0, available);
