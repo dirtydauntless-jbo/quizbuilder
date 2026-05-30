@@ -135,6 +135,22 @@
     "moderationLog": {
       ".read": "auth != null && (root.child('config/masterAdmins').child(auth.uid).val() === true || root.child('config/superAdmins').child(auth.uid).val() === true)",
       ".write": false
+    },
+    "practiceHistory": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$examId": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()"
+        }
+      }
+    },
+    "practiceExamData": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$examId": {
+          ".write": "auth != null && auth.uid === $uid && newData.exists()"
+        }
+      }
     }
   }
 }

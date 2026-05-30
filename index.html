@@ -1293,6 +1293,29 @@ setTimeout(function(){
     </div>
   </div>
 
+  <!-- Practice Exam Review Modal -->
+  <div id="practiceReviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:900;overflow-y:auto;align-items:flex-start;justify-content:center" onclick="if(event.target===this)practiceCloseReview()">
+    <div style="background:var(--bg);width:100%;max-width:720px;min-height:100%;padding:20px" onclick="event.stopPropagation()">
+      <!-- Modal header -->
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px">
+          <div style="min-width:0">
+            <div id="pxRevTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--fg)"></div>
+            <div id="pxRevMeta" style="font-family:monospace;font-size:.73rem;color:var(--muted);margin-top:3px"></div>
+          </div>
+          <button onclick="practiceCloseReview()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1;flex-shrink:0;padding:4px">✕</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="pxRevResumeBtn" onclick="practiceResumeFromModal()" class="btn btn-primary" style="display:none;font-size:.85rem;background:#f59e0b;border-color:#f59e0b">→ RESUME EXAM</button>
+          <button onclick="practicePrint()" class="btn" style="font-size:.85rem">🖨 Print</button>
+          <button onclick="practiceCloseReview()" class="btn" style="font-size:.85rem">← Close</button>
+        </div>
+      </div>
+      <!-- Modal body (populated by practiceRenderReview) -->
+      <div id="pxRevContent"></div>
+    </div>
+  </div>
+
   <!-- ACS Test Codes view -->
   <div id="stuACSView" class="hidden stu-layout">
     <div style="max-width:720px;margin:0 auto;padding:20px">
@@ -11563,9 +11586,11 @@ const OFFICIAL_TOPICS = {
 };
 let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _pxAnswers={};
 let _pxCurrentQ=0, _pxCorrectCount=0, _pxAnsweredCount=0, _pxTopicStats={};
+let _pxExamKey=null;
+let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null;
 
 function practiceInitTab(){
-  _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={};
+  _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null;
   practiceRenderTopicPicker();
   practiceSetMode('official');
   ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,i)=>{
@@ -11691,7 +11716,13 @@ async function practiceGenerate(){
     const data=await res.json();
     if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
     _pxQuestions=data.questions;
-    _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={};
+    _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null;
+    if(stuSession?.uid){
+      const histRef=db.ref('practiceHistory/'+stuSession.uid).push();
+      _pxExamKey=histRef.key;
+      histRef.set({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',total:_pxQuestions.length,score:0,pct:0,answeredCount:0,topicStats:{},status:'incomplete'}).catch(()=>{});
+      db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey).set({questions:_pxQuestions,answers:{}}).catch(()=>{});
+    }
     practiceRenderExam(label);
   } catch(e){
     document.getElementById('practiceLoading').classList.add('hidden');
@@ -11763,6 +11794,12 @@ function practiceSelectAnswer(letter){
   if(!_pxTopicStats[t]) _pxTopicStats[t] = {correct:0,total:0};
   _pxTopicStats[t].total++;
   if(ok) _pxTopicStats[t].correct++;
+  // Auto-save progress to Firebase after every answer
+  if(stuSession?.uid && _pxExamKey){
+    const sp=Math.round(_pxCorrectCount/_pxAnsweredCount*100);
+    db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:_pxCorrectCount,pct:sp,answeredCount:_pxAnsweredCount,topicStats:_pxTopicStats}).catch(()=>{});
+    db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey+'/answers').set(_pxAnswers).catch(()=>{});
+  }
   // Color the choice buttons
   ['A','B','C','D'].forEach(l => {
     const btn = document.getElementById('pxBtn'+l);
@@ -11810,9 +11847,8 @@ function practiceFinish(){
   document.getElementById('practiceResults').classList.remove('hidden');
   const titleEl=document.getElementById('pxResultsTitle');
   if(titleEl){ titleEl.textContent=`${correct}/${total} — ${pct}%`; titleEl.style.color=pct>=70?'var(--cl)':'var(--wl)'; }
-  if(stuSession?.uid){
-    const label=document.getElementById('pxExamTitle')?.textContent||'Practice Exam';
-    db.ref('practiceHistory/'+stuSession.uid).push({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',score:correct,total,pct,topicStats:_pxTopicStats}).catch(()=>{});
+  if(stuSession?.uid && _pxExamKey){
+    db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:correct,pct,topicStats:_pxTopicStats,answeredCount:total,status:'complete'}).catch(()=>{});
   }
   const bd=document.getElementById('pxResultsBreakdown');
   if(!bd) return;
@@ -11832,26 +11868,163 @@ function practiceFinish(){
 async function practiceLoadHistory(){
   if(!stuSession?.uid) return;
   try {
-    const snap=await db.ref('practiceHistory/'+stuSession.uid).orderByChild('date').limitToLast(10).once('value');
+    const snap=await db.ref('practiceHistory/'+stuSession.uid).orderByChild('date').limitToLast(50).once('value');
     const rows=[];
-    snap.forEach(c=>rows.unshift(c.val()));
+    snap.forEach(c=>rows.unshift({...c.val(),_key:c.key}));
     const el=document.getElementById('pxHistoryList');
     if(!el) return;
     if(!rows.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No attempts yet</div>'; return; }
-    el.innerHTML=rows.map(r=>{
-      const pass=r.pct>=70;
-      const d=new Date(r.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px">
-        <div style="width:44px;height:44px;border-radius:50%;background:${pass?'rgba(34,197,94,.12)':'rgba(204,68,68,.12)'};border:2px solid ${pass?'var(--cl)':'var(--wl)'};display:flex;align-items:center;justify-content:center;font-family:monospace;font-weight:700;font-size:.82rem;color:${pass?'var(--cl)':'var(--wl)'};flex-shrink:0">${r.pct}%</div>
-        <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.label||'Practice Exam'}</div><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">${r.score}/${r.total} · ${d}</div></div>
-        <div style="font-family:monospace;font-size:.7rem;font-weight:700;color:${pass?'var(--cl)':'var(--wl)'}">${pass?'PASS':'FAIL'}</div>
-      </div>`;
-    }).join('');
+    el.innerHTML=rows.map(r=>buildPxHistoryCard(r)).join('');
   } catch(e){ console.error('practiceLoadHistory',e); }
 }
 
+function buildPxHistoryCard(r){
+  const isComplete=r.status==='complete';
+  const inProgress=r.status==='incomplete';
+  const pct=isComplete?r.pct:(r.answeredCount>0?Math.round(r.score/r.answeredCount*100):null);
+  const scoreColor=isComplete?(r.pct>=70?'var(--cl)':'var(--wl)'):'#f59e0b';
+  const scoreBg=isComplete?(r.pct>=70?'rgba(34,197,94,.1)':'rgba(204,68,68,.1)'):'rgba(245,158,11,.1)';
+  const badge=isComplete?(r.pct>=70?'PASS':'FAIL'):'IN PROGRESS';
+  const badgeColor=isComplete?(r.pct>=70?'var(--cl)':'var(--wl)'):'#f59e0b';
+  const badgeBg=isComplete?(r.pct>=70?'rgba(34,197,94,.12)':'rgba(204,68,68,.12)'):'rgba(245,158,11,.12)';
+  const d=new Date(r.date);
+  const dateStr=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' · '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const scoreDisplay=pct!=null?pct+'%':(r.answeredCount?r.answeredCount+'/'+r.total:'—');
+  const subDisplay=isComplete?r.score+'/'+r.total+' correct':(r.answeredCount>0?r.answeredCount+' of '+r.total+' answered':'Not started');
+  // Top 3 weak topics
+  const ts=r.topicStats||{};
+  const weak=Object.entries(ts).filter(([,v])=>v.total>0).sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total)).slice(0,3).map(([t])=>t);
+  const weakHtml=weak.length?`<div style="font-family:monospace;font-size:.67rem;color:var(--wl);margin-top:4px;line-height:1.4">Work on: ${weak.join(' · ')}</div>`:'';
+  return `<div onclick="practiceOpenReview('${r._key}')" style="display:flex;align-items:flex-start;gap:11px;padding:11px 14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);margin-bottom:7px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='#0891b2'" onmouseout="this.style.borderColor='var(--border)'">
+    <div style="width:46px;height:46px;border-radius:50%;background:${scoreBg};border:2px solid ${scoreColor};display:flex;align-items:center;justify-content:center;font-family:monospace;font-weight:700;font-size:.78rem;color:${scoreColor};flex-shrink:0;text-align:center;line-height:1.2">${scoreDisplay}</div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:2px">
+        <div style="font-weight:700;font-size:.87rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.label||'Practice Exam'}</div>
+        <div style="font-family:monospace;font-size:.62rem;padding:2px 7px;border-radius:3px;background:${badgeBg};color:${badgeColor};white-space:nowrap">${badge}</div>
+      </div>
+      <div style="font-family:monospace;font-size:.71rem;color:var(--muted)">${subDisplay} · ${dateStr}</div>
+      ${weakHtml}
+    </div>
+    <div style="color:var(--muted);font-size:1rem;flex-shrink:0;margin-top:12px">›</div>
+  </div>`;
+}
+
+async function practiceOpenReview(key){
+  if(!stuSession?.uid) return;
+  const modal=document.getElementById('practiceReviewModal');
+  if(!modal) return;
+  document.getElementById('pxRevContent').innerHTML='<div style="text-align:center;padding:48px;font-family:monospace;font-size:.85rem;color:var(--muted)">Loading exam...</div>';
+  modal.style.display='flex';
+  try {
+    const [summSnap,dataSnap]=await Promise.all([
+      db.ref('practiceHistory/'+stuSession.uid+'/'+key).once('value'),
+      db.ref('practiceExamData/'+stuSession.uid+'/'+key).once('value')
+    ]);
+    const summary=summSnap.val();
+    const examData=dataSnap.val();
+    if(!summary){ document.getElementById('pxRevContent').innerHTML='<div style="font-family:monospace;padding:24px;color:var(--wl)">Exam not found.</div>'; return; }
+    _pxRevKey=key; _pxRevSummary=summary; _pxRevData=examData;
+    practiceRenderReview(summary,examData);
+  } catch(e){ document.getElementById('pxRevContent').innerHTML='<div style="font-family:monospace;padding:24px;color:var(--wl)">Error loading exam.</div>'; }
+}
+
+function practiceRenderReview(summary,examData){
+  const isComplete=summary.status==='complete';
+  const d=new Date(summary.date);
+  const dateStr=d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+' at '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const titleEl=document.getElementById('pxRevTitle');
+  const metaEl=document.getElementById('pxRevMeta');
+  const resumeBtn=document.getElementById('pxRevResumeBtn');
+  if(titleEl) titleEl.textContent=summary.label||'Practice Exam';
+  if(metaEl) metaEl.textContent=dateStr+(isComplete?' · '+summary.score+'/'+summary.total+' — '+summary.pct+'%':' · '+(summary.answeredCount||0)+'/'+summary.total+' answered');
+  if(resumeBtn) resumeBtn.style.display=isComplete?'none':'inline-flex';
+  const questions=examData?.questions||[];
+  const answers=examData?.answers||{};
+  const pct=summary.pct||0;
+  const passBar=isComplete?(pct>=70
+    ?'<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:var(--r);padding:11px 15px;margin-bottom:14px;font-family:monospace;font-size:.84rem;color:var(--cl)">✓ PASSING — FAA requires 70%</div>'
+    :'<div style="background:rgba(204,68,68,.1);border:1px solid rgba(204,68,68,.3);border-radius:var(--r);padding:11px 15px;margin-bottom:14px;font-family:monospace;font-size:.84rem;color:var(--wl)">✗ NOT PASSING — FAA requires 70%</div>'):'';
+  const ts=summary.topicStats||{};
+  const topicRows=Object.entries(ts).filter(([,v])=>v.total>0).sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total));
+  const weak=topicRows.filter(([,v])=>v.correct/v.total<0.7).map(([k])=>k);
+  const focusBox=weak.length?'<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.2);border-radius:var(--r);padding:13px 15px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wl);margin-bottom:8px">Focus On These Topics</div>'+weak.map(t=>'<div style="font-family:monospace;font-size:.82rem;padding:2px 0">→ '+t+'</div>').join('')+'</div>':'';
+  const topicTable=topicRows.length>1?'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px">Topic Breakdown</div>'+topicRows.map(([t,d])=>{const p=Math.round(d.correct/d.total*100);const col=p>=70?'var(--cl)':p>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)33"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+d.correct+'/'+d.total+'</div><div style="width:34px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+p+'%</div><div style="width:60px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+p+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>':'';
+  const reviewHtml=questions.length?'<div><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Question Review</div>'+questions.map((q,i)=>{const sel=answers[i],ok=sel===q.correct,answered=sel!==undefined;return '<div style="background:var(--panel);border:1px solid '+(answered?(ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'):'var(--border)')+ ';border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q'+(i+1)+(q.topic?' · '+q.topic:'')+'</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:'+(answered?(ok?'var(--cl)':'var(--wl)'):'var(--muted)')+'">'+(!answered?'NOT ANSWERED':ok?'✓ CORRECT':'✗ INCORRECT')+'</div></div><div style="font-weight:700;margin-bottom:9px;font-size:.87rem;line-height:1.4">'+q.question+'</div><div style="display:flex;flex-direction:column;gap:4px">'+['A','B','C','D'].map(l=>{const ic=l===q.correct,is=l===sel;let bg='var(--panel2)',col='',fw='normal';if(ic){bg='rgba(34,197,94,.15)';col='var(--cl)';fw='700';}else if(is&&!ok){bg='rgba(204,68,68,.12)';col='var(--wl)';}return '<div style="padding:6px 10px;border-radius:var(--r);background:'+bg+';color:'+col+';font-family:monospace;font-size:.79rem;font-weight:'+fw+'"><span style="font-weight:700;margin-right:7px">'+l+'.</span>'+q.choices[l]+(ic?' ✓':(is&&!ok?' ✗':''))+'</div>';}).join('')+'</div>'+(q.explanation?'<div style="margin-top:9px;padding:9px 11px;background:rgba(8,145,178,.07);border:1px solid rgba(8,145,178,.2);border-radius:var(--r);font-size:.79rem;line-height:1.55;color:var(--fg)">'+q.explanation+'</div>':'')+(q.handbook?'<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 '+q.handbook+(q.topic?' · '+q.topic:'')+'</div>':'')+'</div>';}).join('')+'</div>':'<div style="font-family:monospace;font-size:.82rem;color:var(--muted);padding:16px 0">Question data not available for this exam.</div>';
+  document.getElementById('pxRevContent').innerHTML=passBar+focusBox+topicTable+reviewHtml;
+}
+
+function practiceCloseReview(){
+  const modal=document.getElementById('practiceReviewModal');
+  if(modal) modal.style.display='none';
+  _pxRevKey=null; _pxRevSummary=null; _pxRevData=null;
+}
+
+async function practiceResumeFromModal(){
+  const summary=_pxRevSummary, examData=_pxRevData, key=_pxRevKey;
+  if(!summary||!examData||!key) return;
+  practiceCloseReview();
+  _pxQuestions=examData.questions||[];
+  _pxAnswers=examData.answers||{};
+  _pxExamKey=key;
+  _pxMode=summary.mode||'official';
+  _pxOfficialSubject=summary.subject!=='mixed'?summary.subject:null;
+  // Rebuild running stats from stored answers
+  _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={};
+  Object.entries(_pxAnswers).forEach(([idxStr,letter])=>{
+    const idx=parseInt(idxStr);
+    const q=_pxQuestions[idx];
+    if(!q) return;
+    _pxAnsweredCount++;
+    const t=q.topic||'General';
+    if(!_pxTopicStats[t]) _pxTopicStats[t]={correct:0,total:0};
+    _pxTopicStats[t].total++;
+    if(letter===q.correct){_pxCorrectCount++;_pxTopicStats[t].correct++;}
+  });
+  // Find first unanswered question
+  _pxCurrentQ=_pxQuestions.length; // assume done
+  for(let i=0;i<_pxQuestions.length;i++){
+    if(_pxAnswers[i]===undefined){_pxCurrentQ=i;break;}
+  }
+  if(_pxCurrentQ>=_pxQuestions.length){practiceFinish();return;}
+  ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,j)=>{
+    const el=document.getElementById(id);if(el) el.classList.toggle('hidden',j!==2);
+  });
+  const titleEl=document.getElementById('pxExamTitle');
+  if(titleEl) titleEl.textContent=summary.label||'Practice Exam';
+  practiceUpdateProgress();
+  practiceRenderQuestion(_pxCurrentQ);
+  document.getElementById('stuPracticeView')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function practicePrint(){
+  const summary=_pxRevSummary, examData=_pxRevData;
+  if(!summary||!examData) return;
+  const questions=examData.questions||[];
+  const answers=examData.answers||{};
+  const d=new Date(summary.date);
+  const dateStr=d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+' at '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const qHtml=questions.map((q,i)=>{
+    const sel=answers[i],ok=sel===q.correct,answered=sel!==undefined;
+    return `<div style="margin-bottom:22px;page-break-inside:avoid;border:1px solid #ddd;border-radius:6px;padding:14px">
+      <div style="font-size:10px;color:#666;margin-bottom:4px;font-family:monospace">Q${i+1}${q.topic?' · '+q.topic:''}${answered?(ok?' · ✓ CORRECT':' · ✗ INCORRECT'):' · NOT ANSWERED'}</div>
+      <div style="font-weight:bold;margin-bottom:10px;font-size:13px">${q.question}</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${['A','B','C','D'].map(l=>{const ic=l===q.correct,is=l===sel&&!ok;return `<div style="padding:5px 10px;border-radius:4px;font-size:12px;background:${ic?'#e8faf0':is?'#fde8e8':'#f5f5f5'};color:${ic?'#166534':is?'#991b1b':'#111'};font-weight:${ic?'bold':'normal'}"><b>${l}.</b> ${q.choices[l]}${ic?' ✓':''}</div>`;}).join('')}
+      </div>
+      ${q.explanation?`<div style="margin-top:9px;padding:8px 10px;background:#eff8ff;border-left:3px solid #0891b2;font-size:11px;color:#0c4a6e;border-radius:0 4px 4px 0">${q.explanation}</div>`:''}
+      ${q.handbook?`<div style="font-size:10px;color:#888;margin-top:5px;font-family:monospace">📚 ${q.handbook}${q.topic?' · '+q.topic:''}</div>`:''}
+    </div>`;
+  }).join('');
+  const win=window.open('','_blank');
+  if(!win) return;
+  win.document.write(`<!DOCTYPE html><html><head><title>${summary.label||'Practice Exam'}</title><style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:32px;max-width:800px}h1{font-size:18px;margin-bottom:2px}@media print{body{margin:16px}}</style></head><body><h1>${summary.label||'Practice Exam'}</h1><div style="font-family:monospace;font-size:11px;color:#555;margin-bottom:4px">${dateStr}</div><div style="font-size:14px;font-weight:bold;margin-bottom:4px">${summary.score||0}/${summary.total} — ${summary.pct||0}% &nbsp;${(summary.pct||0)>=70?'✓ PASSING':'✗ NOT PASSING'}</div><div style="font-family:monospace;font-size:11px;color:#555;margin-bottom:20px">${summary.status==='complete'?'Complete':'In Progress · '+(summary.answeredCount||0)+' of '+summary.total+' answered'}</div><hr style="margin-bottom:20px">${qHtml}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>win.print(),400);
+}
+
 function practiceReset(){
-  _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={};
+  _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null;
   ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,i)=>{
     const el=document.getElementById(id); if(el) el.classList.toggle('hidden',i!==0);
   });
