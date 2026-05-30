@@ -56,8 +56,10 @@ Generate ${qCount} multiple choice practice question${qCount > 1 ? 's' : ''} spe
 Rules:
 - Base questions on real FAA A&P exam content for this topic
 - Each question must have exactly 4 answer choices labeled A, B, C, D
-- Wrong answers must be plausible — same units, same category, subtly wrong
-- Wrong answers should reflect real common misconceptions or close-but-incorrect values
+- CRITICAL — only ONE answer choice may be correct. Before finalizing each question, verify that the 3 wrong answers are FACTUALLY INCORRECT — not just differently worded versions of the right answer. If two choices could both be argued as correct, rewrite the wrong ones until they are unambiguously false.
+- Wrong answers must be plausible and in the same category as the correct answer (same units, same type of thing) but must be definitively wrong per FAA standards
+- Do NOT use synonyms, paraphrases, or partial truths as distractors — each wrong answer must be clearly incorrect when checked against the FAA handbook
+- Wrong answers should reflect specific common misconceptions, wrong values, or incorrect procedures — not vague or opposite answers
 - Questions must match the difficulty of the FAA A&P written exam
 - Return ONLY a valid JSON array — no markdown, no explanation, no code blocks
 
