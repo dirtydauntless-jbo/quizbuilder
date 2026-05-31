@@ -83,12 +83,13 @@ function getFaaQuestions(topic, n) {
   if (n < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const bank = getFaaBank();
+  const available = getAvailableFigures();
   const allPool = bank[subject]?.[topic];
   if (!Array.isArray(allPool) || !allPool.length) return [];
-  // Figure questions are TEMPORARILY DISABLED pending a Vision verification pass
-  // (figure numbers collide across supplement appendices → some images/answers were wrong).
-  // Re-enable by switching back to: q => !q.figureNum || getAvailableFigures().has(q.figureNum)
-  const pool = allPool.filter(q => !q.figureNum);
+  // Only serve figure questions whose VERIFIED image (appendix-qualified id, e.g. "1-15")
+  // is confirmed present on disk. The 21 unverifiable ones keep their old numeric figureNum
+  // (not in the index) and stay excluded.
+  const pool = allPool.filter(q => !q.figureNum || available.has(q.figureNum));
   if (!pool.length) return [];
   const take = Math.min(n, pool.length);
   const indices = shuffle([...Array(pool.length).keys()]).slice(0, take);
