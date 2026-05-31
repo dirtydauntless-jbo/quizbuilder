@@ -89,8 +89,8 @@ function getFaaQuestions(topic, n) {
   // Only include figure questions whose image file is confirmed present on disk
   const pool = allPool.filter(q => !q.figureNum || available.has(q.figureNum));
   if (!pool.length) return [];
-  const available = Math.min(n, pool.length);
-  const indices = shuffle([...Array(pool.length).keys()]).slice(0, available);
+  const take = Math.min(n, pool.length);
+  const indices = shuffle([...Array(pool.length).keys()]).slice(0, take);
   const handbook = subject === 'general' ? 'FAA-H-8083-30A' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32A';
   return indices.map(i => ({
     question:    pool[i].question,
