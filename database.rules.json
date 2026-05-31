@@ -113,7 +113,7 @@
     },
     "leaderboard": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
     },
     "integrityLog": {
       ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
@@ -137,16 +137,18 @@
       ".write": false
     },
     "practiceHistory": {
+      ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
       "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
+        ".read": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         "$examId": {
           ".write": "auth != null && auth.uid === $uid && newData.exists()"
         }
       }
     },
     "practiceExamData": {
+      ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
       "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
+        ".read": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         "$examId": {
           ".write": "auth != null && auth.uid === $uid && newData.exists()"
         }
