@@ -1323,6 +1323,7 @@ setTimeout(function(){
       <div id="practiceResults" class="hidden">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
           <button onclick="practiceReset()" class="btn" style="font-size:.8rem">← New Exam</button>
+          <button onclick="practicePrintResults()" class="btn" style="font-size:.8rem">🖨 Print / Email Results</button>
           <div id="pxResultsTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px"></div>
         </div>
         <div id="pxResultsBreakdown"></div>
@@ -12195,18 +12196,39 @@ function practicePrint(){
       <div style="font-size:10px;color:#666;margin-bottom:4px;font-family:monospace">Q${i+1}${q.topic?' · '+q.topic:''}${answered?(ok?' · ✓ CORRECT':' · ✗ INCORRECT'):' · NOT ANSWERED'}</div>
       <div style="font-weight:bold;margin-bottom:10px;font-size:13px">${q.question}</div>
       <div style="display:flex;flex-direction:column;gap:4px">
-        ${['A','B','C','D'].map(l=>{const ic=l===q.correct,is=l===sel&&!ok;return `<div style="padding:5px 10px;border-radius:4px;font-size:12px;background:${ic?'#e8faf0':is?'#fde8e8':'#f5f5f5'};color:${ic?'#166534':is?'#991b1b':'#111'};font-weight:${ic?'bold':'normal'}"><b>${l}.</b> ${q.choices[l]}${ic?' ✓':''}</div>`;}).join('')}
+        ${Object.keys(q.choices||{}).map(l=>{const ic=l===q.correct,is=l===sel&&!ok;return `<div style="padding:5px 10px;border-radius:4px;font-size:12px;background:${ic?'#e8faf0':is?'#fde8e8':'#f5f5f5'};color:${ic?'#166534':is?'#991b1b':'#111'};font-weight:${ic?'bold':'normal'}"><b>${l}.</b> ${q.choices[l]}${ic?' ✓':''}</div>`;}).join('')}
       </div>
       ${q.explanation?`<div style="margin-top:9px;padding:8px 10px;background:#eff8ff;border-left:3px solid #0891b2;font-size:11px;color:#0c4a6e;border-radius:0 4px 4px 0">${q.explanation}</div>`:''}
       ${q.handbook?`<div style="font-size:10px;color:#888;margin-top:5px;font-family:monospace">📚 ${q.handbook}${q.topic?' · '+q.topic:''}</div>`:''}
     </div>`;
   }).join('');
+  // Student identity (so an instructor receiving the PDF knows whose it is)
+  const cls = (stuSession?.classroomName) || (stuSession?.classrooms && stuSession.classrooms[0]?.classroomName) || '';
+  const stuHtml = stuSession ? `<div style="font-size:12px;color:#333;margin-bottom:10px">Student: <b>${stuSession.name||''}</b>${stuSession.email?' &nbsp;·&nbsp; '+stuSession.email:''}${cls?' &nbsp;·&nbsp; Class: '+cls:''}</div>` : '';
+  // Performance by topic
+  const topics = pxAnalyzeTopics(questions, answers).filter(t=>t.total>0).sort((a,b)=>a.pct-b.pct);
+  const breakdownHtml = topics.length ? `<h2 style="font-size:14px;margin:18px 0 6px">Performance by Topic</h2><table style="width:100%;border-collapse:collapse;font-size:12px">${topics.map(t=>`<tr><td style="padding:3px 0;border-bottom:1px solid #eee">${t.topic}</td><td style="text-align:right;padding:3px 8px;color:#555;border-bottom:1px solid #eee">${t.correct}/${t.total}</td><td style="text-align:right;width:48px;font-weight:bold;border-bottom:1px solid #eee;color:${t.pct>=70?'#166534':t.pct>=50?'#b45309':'#991b1b'}">${t.pct}%</td></tr>`).join('')}</table>` : '';
+  // Study plan
+  const plan = pxStudyPlan(questions, answers);
+  const planHtml = plan.length ? `<h2 style="font-size:14px;margin:18px 0 6px">Study Plan — Top 3 Problem Areas</h2>${plan.map(t=>`<div style="margin-bottom:11px;page-break-inside:avoid"><div style="font-weight:bold;font-size:13px">${t.topic} — ${t.correct}/${t.total} (${t.pct}%)</div>${t.refs.length?`<div style="font-size:11px;color:#555;font-family:monospace;margin:2px 0">📚 Revisit: ${t.refs.join(' · ')}</div>`:''}<ul style="margin:4px 0 0;padding-left:18px;font-size:12px;line-height:1.5">${t.concepts.map(c=>`<li>${c}</li>`).join('')}</ul></div>`).join('')}` : '';
   const win=window.open('','_blank');
   if(!win) return;
-  win.document.write(`<!DOCTYPE html><html><head><title>${summary.label||'Practice Exam'}</title><style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:32px;max-width:800px}h1{font-size:18px;margin-bottom:2px}@media print{body{margin:16px}}</style></head><body><h1>${summary.label||'Practice Exam'}</h1><div style="font-family:monospace;font-size:11px;color:#555;margin-bottom:4px">${dateStr}</div><div style="font-size:14px;font-weight:bold;margin-bottom:4px">${summary.score||0}/${summary.total} — ${summary.pct||0}% &nbsp;${(summary.pct||0)>=70?'✓ PASSING':'✗ NOT PASSING'}</div><div style="font-family:monospace;font-size:11px;color:#555;margin-bottom:20px">${summary.status==='complete'?'Complete':'In Progress · '+(summary.answeredCount||0)+' of '+summary.total+' answered'}</div><hr style="margin-bottom:20px">${qHtml}</body></html>`);
+  win.document.write(`<!DOCTYPE html><html><head><title>${summary.label||'Practice Exam'}</title><style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:32px;max-width:800px}h1{font-size:18px;margin-bottom:2px}h2{border-bottom:2px solid #0891b2;padding-bottom:3px}@media print{body{margin:16px}}</style></head><body><h1>${summary.label||'Practice Exam'} — Results</h1>${stuHtml}<div style="font-family:monospace;font-size:11px;color:#555;margin-bottom:4px">${dateStr}</div><div style="font-size:15px;font-weight:bold;margin-bottom:4px">${summary.score||0}/${summary.total} — ${summary.pct||0}% &nbsp;${(summary.pct||0)>=70?'✓ PASSING':'✗ NOT PASSING (FAA requires 70%)'}</div><div style="font-family:monospace;font-size:11px;color:#555;margin-bottom:14px">${summary.status==='complete'?'Complete':'In Progress · '+(summary.answeredCount||0)+' of '+summary.total+' answered'}</div>${breakdownHtml}${planHtml}<hr style="margin:22px 0 20px"><h2 style="font-size:14px;margin:0 0 12px">Question Review</h2>${qHtml}</body></html>`);
   win.document.close();
   win.focus();
   setTimeout(()=>win.print(),400);
+}
+
+// Print the just-finished exam (populate the review buffers from live state, then print)
+function practicePrintResults(){
+  const total=_pxQuestions.length;
+  let label='Practice Exam';
+  try { if(_pxMode==='official' && _pxOfficialSubject && typeof OFFICIAL_EXAMS!=='undefined') label=OFFICIAL_EXAMS[_pxOfficialSubject].label+' — Official Practice'; else if(_pxMode!=='official') label='Topic Practice'; } catch(e){}
+  _pxRevSummary={ label, date:Date.now(), total, score:_pxCorrectCount,
+    pct: total?Math.round(_pxCorrectCount/total*100):0, answeredCount:_pxAnsweredCount,
+    status: _pxAnsweredCount>=total?'complete':'incomplete', topicStats:_pxTopicStats };
+  _pxRevData={ questions:_pxQuestions, answers:_pxAnswers };
+  practicePrint();
 }
 
 function practiceReset(){
