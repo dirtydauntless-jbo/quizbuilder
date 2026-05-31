@@ -525,27 +525,33 @@ a{color:var(--accent);text-decoration:none}
 @keyframes quizPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.8;transform:scale(1.1)}}
 
 /* ── PRACTICE EXAM HISTORY TABLE ───────────────────── */
+/* Break the history out of the narrow 720px column so all columns fit without scrolling */
+.pxh-section{width:min(97vw,1200px);margin-left:50%;transform:translateX(-50%)}
 .pxh-wrap{width:100%;overflow-x:auto}
-.pxh-table{width:100%;border-collapse:collapse;font-size:.8rem}
-.pxh-table th{font-family:monospace;font-size:.64rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
-.pxh-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.pxh-table{width:100%;border-collapse:collapse;font-size:.95rem}
+.pxh-table th{font-family:monospace;font-size:.75rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:left;padding:10px 11px;border-bottom:1px solid var(--border);white-space:nowrap}
+.pxh-table td{padding:12px 11px;border-bottom:1px solid var(--border);vertical-align:middle}
 .pxh-table tbody tr{cursor:pointer;transition:background .12s}
 .pxh-table tbody tr:hover{background:var(--panel2)}
 .pxh-num{font-family:monospace;color:var(--muted);font-weight:700}
-.pxh-bar{display:flex;height:13px;width:130px;border-radius:3px;overflow:hidden;background:var(--border)}
+.pxh-bar{display:flex;height:15px;width:150px;border-radius:3px;overflow:hidden;background:var(--border)}
 .pxh-bar>span{display:block;height:100%}
-.pxh-pass{font-family:monospace;font-size:.7rem;font-weight:700;margin-left:7px;white-space:nowrap}
-.pxh-areas{color:var(--wl);font-size:.74rem;line-height:1.35;max-width:200px}
+.pxh-pass{font-family:monospace;font-size:.82rem;font-weight:700;margin-left:8px;white-space:nowrap}
+.pxh-areas{color:var(--wl);font-size:.86rem;line-height:1.35;max-width:260px}
 .pxh-areas.none{color:var(--cl)}
-.pxh-view{color:var(--blue);font-family:monospace;font-size:.72rem;white-space:nowrap}
+.pxh-view{color:var(--blue);font-family:monospace;font-size:.84rem;white-space:nowrap}
 .pxh-mono{font-family:monospace;white-space:nowrap}
 /* Stack into cards on narrow screens */
+@media (max-width:760px){
+  .pxh-section{width:auto;margin-left:0;transform:none}
+}
 @media (max-width:680px){
+  .pxh-table{font-size:1rem}
   .pxh-table thead{display:none}
   .pxh-table,.pxh-table tbody,.pxh-table tr,.pxh-table td{display:block;width:100%}
-  .pxh-table tr{border:1px solid var(--border);border-radius:var(--r);margin-bottom:9px;padding:6px 4px;background:var(--panel)}
-  .pxh-table td{border:none;padding:4px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
-  .pxh-table td::before{content:attr(data-label);font-family:monospace;font-size:.64rem;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);flex-shrink:0}
+  .pxh-table tr{border:1px solid var(--border);border-radius:var(--r);margin-bottom:11px;padding:7px 5px;background:var(--panel)}
+  .pxh-table td{border:none;padding:6px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .pxh-table td::before{content:attr(data-label);font-family:monospace;font-size:.74rem;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);flex-shrink:0}
   .pxh-table td.pxh-cell-areas{flex-direction:column;align-items:flex-start;gap:3px}
   .pxh-areas{max-width:none}
 }
@@ -1282,7 +1288,7 @@ setTimeout(function(){
         <button onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
         <div id="pxError" style="color:var(--wl);font-family:monospace;font-size:.8rem;margin-top:8px;text-align:center;min-height:18px"></div>
         <!-- History -->
-        <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+        <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
           <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Past Attempts</div>
           <div id="pxHistoryList"><div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No attempts yet</div></div>
         </div>
@@ -11750,8 +11756,17 @@ async function practiceGenerate(){
     if(stuSession?.uid){
       const histRef=db.ref('practiceHistory/'+stuSession.uid).push();
       _pxExamKey=histRef.key;
-      histRef.set({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',total:_pxQuestions.length,score:0,pct:0,answeredCount:0,topicStats:{},status:'incomplete'}).catch(()=>{});
-      db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey).set({questions:_pxQuestions,answers:{}}).catch(()=>{});
+      // Await both writes so we KNOW the exam (and its questions) are saved before the student starts.
+      // If this fails, the exam can't be resumed later — surface it instead of failing silently.
+      try {
+        await Promise.all([
+          histRef.set({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',total:_pxQuestions.length,score:0,pct:0,answeredCount:0,topicStats:{},status:'incomplete'}),
+          db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey).set({questions:_pxQuestions,answers:{}})
+        ]);
+      } catch(saveErr){
+        console.error('practice exam save failed (resume will not work):', saveErr);
+        _pxExamKey=null; // don't pretend it's being saved
+      }
     }
     practiceRenderExam(label);
   } catch(e){
@@ -11831,8 +11846,8 @@ function practiceSelectAnswer(letter){
   // Auto-save progress to Firebase after every answer
   if(stuSession?.uid && _pxExamKey){
     const sp=Math.round(_pxCorrectCount/_pxAnsweredCount*100);
-    db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:_pxCorrectCount,pct:sp,answeredCount:_pxAnsweredCount,topicStats:_pxTopicStats}).catch(()=>{});
-    db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey+'/answers').set(_pxAnswers).catch(()=>{});
+    db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:_pxCorrectCount,pct:sp,answeredCount:_pxAnsweredCount,topicStats:_pxTopicStats}).catch(e=>console.warn('progress save failed:',e&&e.message||e));
+    db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey+'/answers').set(_pxAnswers).catch(e=>console.warn('answer save failed:',e&&e.message||e));
   }
   // Color the choice buttons
   choiceKeys.forEach(l => {
@@ -11882,7 +11897,7 @@ function practiceFinish(){
   const titleEl=document.getElementById('pxResultsTitle');
   if(titleEl){ titleEl.textContent=`${correct}/${total} — ${pct}%`; titleEl.style.color=pct>=70?'var(--cl)':'var(--wl)'; }
   if(stuSession?.uid && _pxExamKey){
-    db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:correct,pct,topicStats:_pxTopicStats,answeredCount:total,status:'complete'}).catch(()=>{});
+    db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:correct,pct,topicStats:_pxTopicStats,answeredCount:total,status:'complete'}).catch(e=>console.warn('finish save failed:',e&&e.message||e));
   }
   const bd=document.getElementById('pxResultsBreakdown');
   if(!bd) return;
@@ -11912,7 +11927,7 @@ async function practiceLoadHistory(){
     if(!el) return;
     if(!rows.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No attempts yet</div>'; return; }
     el.innerHTML='<div class="pxh-wrap"><table class="pxh-table"><thead><tr>'+
-      '<th>#</th><th>Date</th><th>Pool</th><th>Type</th><th>Result</th><th>Size</th><th>Not&nbsp;Ans.</th><th>Incorrect</th><th>Correct</th><th>Problem&nbsp;Areas</th><th></th>'+
+      '<th>#</th><th>Date</th><th>Pool</th><th>Result</th><th>Size</th><th>Not&nbsp;Ans.</th><th>Incorrect</th><th>Correct</th><th>Problem&nbsp;Areas</th><th></th>'+
       '</tr></thead><tbody>'+rows.map(r=>buildPxHistoryRow(r)).join('')+'</tbody></table></div>';
   } catch(e){ console.error('practiceLoadHistory',e); }
 }
@@ -11939,7 +11954,6 @@ function buildPxHistoryRow(r){
   const d=new Date(r.date);
   const dateStr=d.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
   const pool=({general:'General',airframe:'Airframe',powerplant:'Powerplant',mixed:'Mixed'})[r.subject]||(r.subject||'—');
-  const type=r.mode==='official'?'Simulated exam':'Topic practice';
   const cW=pctOf(correct),iW=pctOf(incorrect),nW=pctOf(notAns);
   const bar='<div class="pxh-bar">'+
     (cW?'<span style="width:'+cW+'%;background:var(--cl)"></span>':'')+
@@ -11957,7 +11971,6 @@ function buildPxHistoryRow(r){
     '<td data-label="#"><span class="pxh-num">'+r._num+'</span></td>'+
     '<td data-label="Date" class="pxh-mono" style="color:var(--muted);font-size:.73rem">'+dateStr+'</td>'+
     '<td data-label="Pool">'+pool+'</td>'+
-    '<td data-label="Type" style="color:var(--muted)">'+type+'</td>'+
     '<td data-label="Result"><div style="display:flex;align-items:center">'+bar+passLbl+'</div></td>'+
     '<td data-label="Size" class="pxh-mono">'+total+'</td>'+
     '<td data-label="Not answered" class="pxh-mono" style="color:var(--blue)">'+notAns+' ('+pctOf(notAns)+'%)</td>'+

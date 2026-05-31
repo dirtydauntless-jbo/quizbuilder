@@ -164,18 +164,14 @@
       ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
-        "$examId": {
-          ".write": "auth != null && auth.uid === $uid && newData.exists()"
-        }
+        ".write": "auth != null && auth.uid === $uid"
       }
     },
     "practiceExamData": {
       ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
-        "$examId": {
-          ".write": "auth != null && auth.uid === $uid && newData.exists()"
-        }
+        ".write": "auth != null && auth.uid === $uid"
       }
     }
   }
