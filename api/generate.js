@@ -89,7 +89,7 @@ function getFaaQuestions(topic, n) {
   // Only serve figure questions whose VERIFIED image (appendix-qualified id, e.g. "1-15")
   // is confirmed present on disk. The 21 unverifiable ones keep their old numeric figureNum
   // (not in the index) and stay excluded.
-  const pool = allPool.filter(q => !q.figureNum || available.has(q.figureNum));
+  const pool = allPool.filter(q => (!q.figureNum || available.has(q.figureNum)) && !q.needsReview);
   if (!pool.length) return [];
   const take = Math.min(n, pool.length);
   const indices = shuffle([...Array(pool.length).keys()]).slice(0, take);
