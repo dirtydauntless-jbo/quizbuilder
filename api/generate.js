@@ -92,7 +92,7 @@ function getFaaQuestions(topic, n) {
   if (!pool.length) return [];
   const take = Math.min(n, pool.length);
   const indices = shuffle([...Array(pool.length).keys()]).slice(0, take);
-  const handbook = subject === 'general' ? 'FAA-H-8083-30A' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32A';
+  const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
   return indices.map(i => ({
     question:    pool[i].question,
     choices:     pool[i].choices,
@@ -109,7 +109,7 @@ function getFaaQuestions(topic, n) {
 async function generateForTopic(topic, qCount, content) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
-  const handbook = subject === 'general' ? 'FAA-H-8083-30A' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32A';
+  const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
   const sourceText = content[subject]?.[topic] || '';
   const contextSection = sourceText
     ? `\n\nReference text from ${handbook}:\n\n${sourceText.slice(0, 4000)}`
