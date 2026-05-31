@@ -23,7 +23,7 @@
   --blue:#4a9eff;--purple:#9b6dff;--green:#3aaa66;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{font-size:18px}
+html{font-size:20px}
 body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:1rem;min-height:100vh;overflow-x:hidden}
 .hidden{display:none!important}
 a{color:var(--accent);text-decoration:none}
@@ -527,7 +527,7 @@ a{color:var(--accent);text-decoration:none}
 
 /* ── PRACTICE EXAM HISTORY TABLE ───────────────────── */
 /* Break the history out of the narrow 720px column so all columns fit without scrolling */
-.pxh-section{width:min(97vw,1200px);margin-left:50%;transform:translateX(-50%)}
+.pxh-section{width:min(98vw,1400px);margin-left:50%;transform:translateX(-50%)}
 .pxh-wrap{width:100%;overflow-x:auto}
 .pxh-table{width:100%;border-collapse:collapse;font-size:.95rem}
 .pxh-table th{font-family:monospace;font-size:.75rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:left;padding:10px 11px;border-bottom:1px solid var(--border);white-space:nowrap}
@@ -11907,9 +11907,7 @@ function practiceFinish(){
   const passBar=pct>=70
     ?`<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-family:monospace;font-size:.85rem;color:var(--cl)">✓ PASSING — FAA requires 70%</div>`
     :`<div style="background:rgba(204,68,68,.1);border:1px solid rgba(204,68,68,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-family:monospace;font-size:.85rem;color:var(--wl)">✗ NOT PASSING — FAA requires 70%</div>`;
-  const focusBox=weak.length
-    ?`<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.2);border-radius:var(--r);padding:14px 16px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wl);margin-bottom:8px">Focus On These Topics</div>${weak.map(t=>`<div style="font-family:monospace;font-size:.83rem;padding:2px 0">→ ${t}</div>`).join('')}</div>`
-    :`<div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-family:monospace;font-size:.85rem;color:var(--cl)">✓ Strong across all topics!</div>`;
+  const focusBox=pxStudyPlanHTML(_pxQuestions,_pxAnswers);
   const topicTable=topicRows.length>1?`<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:16px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Topic Breakdown</div>${topicRows.map(([t,d])=>{const p=Math.round((d.correct/d.total)*100);const col=p>=70?'var(--cl)':p>=50?'#f59e0b':'var(--wl)';return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)33"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t}</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted);white-space:nowrap">${d.correct}/${d.total}</div><div style="width:34px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:${col}">${p}%</div><div style="width:66px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:${p}%;height:100%;background:${col};border-radius:3px"></div></div></div>`;}).join('')}</div>`:'';
   const reviewHtml=`<div><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Answer Review</div>${_pxQuestions.map((q,i)=>{const sel=_pxAnswers[i],ok=sel===q.correct;return `<div style="background:var(--panel);border:1px solid ${ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'};border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q${i+1}${q.topic?' · '+q.topic:''}</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:${ok?'var(--cl)':'var(--wl)'}">${ok?'✓ CORRECT':'✗ INCORRECT'}</div></div><div style="font-weight:700;margin-bottom:9px;font-size:.88rem;line-height:1.4">${q.question}</div><div style="display:flex;flex-direction:column;gap:4px">${['A','B','C','D'].map(l=>{const ic=l===q.correct,is=l===sel;let bg='var(--panel2)',col='var(--text)',fw='normal';if(ic){bg='rgba(34,197,94,.15)';col='var(--cl)';fw='700';}else if(is&&!ok){bg='rgba(204,68,68,.12)';col='var(--wl)';}return `<div style="padding:6px 10px;border-radius:var(--r);background:${bg};color:${col};font-family:monospace;font-size:.79rem;font-weight:${fw}"><span style="font-weight:700;margin-right:7px">${l}.</span>${q.choices[l]}${ic?' ✓':(is&&!ok?' ✗':'')}</div>`;}).join('')}</div>${q.explanation?`<div style="margin-top:9px;padding:9px 11px;background:rgba(8,145,178,.07);border:1px solid rgba(8,145,178,.2);border-radius:var(--r);font-size:.79rem;line-height:1.55;color:var(--fg)">${q.explanation}</div>`:''}${q.handbook?`<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 ${q.handbook}${q.topic?' · '+q.topic:''}</div>`:''}</div>`;}).join('')}</div>`;
   bd.innerHTML=passBar+focusBox+topicTable+reviewHtml;
@@ -11941,6 +11939,61 @@ function pxProblemAreas(topicStats,n){
     .sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total))
     .slice(0,n||3)
     .map(([t])=>t);
+}
+
+// ── Study-plan analysis: per-topic accuracy + the concepts/chapters missed ──
+function pxAnalyzeTopics(questions,answers){
+  const m={};
+  (questions||[]).forEach((q,i)=>{
+    const t=q.topic||'General';
+    if(!m[t]) m[t]={topic:t,correct:0,total:0,missed:[]};
+    m[t].total++;
+    if(answers[i]===q.correct) m[t].correct++; else m[t].missed.push(q);
+  });
+  return Object.values(m).map(x=>({...x,pct:x.total?Math.round(x.correct/x.total*100):0}));
+}
+function pxExtractRef(expl){
+  if(!expl) return null;
+  const m=String(expl).match(/FAA-H-8083-\d+[AB][^.)]*/i);
+  return m ? m[0].replace(/\s+/g,' ').replace(/[\s,;]+$/,'').trim() : null;
+}
+function pxConcept(q){
+  let e=String(q.explanation||'').replace(/\s*\(Ref:[^)]*\)\s*$/i,'').replace(/\s*Reference:.*$/i,'').trim();
+  const s=e.split(/(?<=\.)\s/)[0]||e;
+  return (s||q.question||'').slice(0,150);
+}
+// Top-3 weakest topics with what to revisit. Returns {topics:[...]} for rendering/email.
+function pxStudyPlan(questions,answers){
+  const topics=pxAnalyzeTopics(questions,answers)
+    .filter(t=>t.missed.length>0)
+    .sort((a,b)=>a.pct-b.pct)
+    .slice(0,3)
+    .map(t=>({
+      topic:t.topic, correct:t.correct, total:t.total, pct:t.pct,
+      refs:[...new Set(t.missed.map(q=>pxExtractRef(q.explanation)).filter(Boolean))],
+      concepts:t.missed.slice(0,4).map(pxConcept)
+    }));
+  return topics;
+}
+function pxStudyPlanHTML(questions,answers){
+  const topics=pxStudyPlan(questions,answers);
+  if(!topics.length) return '<div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:var(--r);padding:13px 15px;margin-bottom:14px;font-family:monospace;font-size:.85rem;color:var(--cl)">✓ No weak areas — strong across all topics!</div>';
+  return '<div style="background:rgba(8,145,178,.06);border:1px solid rgba(8,145,178,.25);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">'+
+    '<div style="font-family:monospace;font-size:.72rem;letter-spacing:1.5px;text-transform:uppercase;color:#22b8d8;margin-bottom:11px">📋 Study Plan — Top 3 Problem Areas</div>'+
+    topics.map((t,i)=>'<div style="'+(i<topics.length-1?'margin-bottom:12px;padding-bottom:11px;border-bottom:1px solid var(--border)':'')+'">'+
+      '<div style="font-weight:700;font-size:.95rem;margin-bottom:4px">'+t.topic+' — <span style="color:'+(t.pct>=50?'#f59e0b':'var(--wl)')+'">'+t.correct+'/'+t.total+' ('+t.pct+'%)</span></div>'+
+      (t.refs.length?'<div style="font-family:monospace;font-size:.76rem;color:var(--muted);margin-bottom:6px">📚 Revisit: '+t.refs.join(' · ')+'</div>':'')+
+      '<div style="font-size:.8rem;color:var(--muted);margin-bottom:2px">Concepts you missed:</div>'+
+      '<ul style="margin:4px 0 0;padding-left:20px;font-size:.86rem;line-height:1.55">'+t.concepts.map(c=>'<li>'+c+'</li>').join('')+'</ul>'+
+    '</div>').join('')+
+  '</div>';
+}
+function pxStudyPlanText(questions,answers){
+  const topics=pxStudyPlan(questions,answers);
+  if(!topics.length) return 'No weak areas — strong across all topics!';
+  return topics.map((t,i)=>(i+1)+'. '+t.topic+' — '+t.correct+'/'+t.total+' ('+t.pct+'%)\n'+
+    (t.refs.length?'   Revisit: '+t.refs.join(' | ')+'\n':'')+
+    '   Concepts missed:\n'+t.concepts.map(c=>'     - '+c).join('\n')).join('\n\n');
 }
 
 function buildPxHistoryRow(r){
@@ -12040,7 +12093,7 @@ function practiceRenderReview(summary,examData){
   ).filter(([,v])=>v.total>0).sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total));
   const weak=topicRows.filter(([,v])=>v.correct/v.total<0.7);
 
-  const focusBox=weak.length?'<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.2);border-radius:var(--r);padding:13px 15px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wl);margin-bottom:8px">⚠ What To Work On</div>'+weak.map(([t,v])=>{const miss=(v.wrong||0)+(v.unans||0);return '<div style="font-family:monospace;font-size:.82rem;padding:3px 0;display:flex;justify-content:space-between;gap:10px"><span>→ '+t+'</span>'+(miss?'<span style="color:var(--muted);white-space:nowrap">'+miss+' to review</span>':'')+'</div>';}).join('')+'</div>':'';
+  const focusBox=pxStudyPlanHTML(questions,answers);
 
   const topicTable=topicRows.length?'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px">Performance By Topic</div>'+topicRows.map(([t,d])=>{const p=Math.round(d.correct/d.total*100);const col=p>=70?'var(--cl)':p>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+d.correct+'/'+d.total+'</div><div style="width:38px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+p+'%</div><div style="width:60px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+p+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>':'';
 
