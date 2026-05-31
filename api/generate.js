@@ -98,7 +98,7 @@ function getFaaQuestions(topic, n) {
     correct:     pool[i].correct,
     topic,
     handbook,
-    explanation: '',
+    explanation: pool[i].explanation || '',
     source:      'faa',
     ...(pool[i].figureNum ? { figureNum: pool[i].figureNum } : {}),
   }));
