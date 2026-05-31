@@ -53,8 +53,14 @@
       ".write": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
     },
     "classroomStudents": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      "$classId": {
+        ".read": "auth != null && (root.child('classroomStudents').child($classId).child(auth.uid).exists() || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        "$stuKey": {
+          ".read": "auth != null && $stuKey === auth.uid",
+          ".write": "auth != null && ($stuKey === auth.uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+        }
+      }
     },
     "studentProfiles": {
       ".read": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
@@ -62,7 +68,7 @@
         ".read": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".write": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         "classrooms": {
-          ".write": "auth != null"
+          ".write": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
         }
       }
     },
@@ -73,8 +79,17 @@
       }
     },
     "quizProgress": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      ".write": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      "$classId": {
+        ".read": "auth != null && (root.child('classroomStudents').child($classId).child(auth.uid).exists() || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        "$quizId": {
+          "$stuKey": {
+            ".read": "auth != null && $stuKey === auth.uid",
+            ".write": "auth != null && ($stuKey === auth.uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+          }
+        }
+      }
     },
     "opSimSignups": {
       ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
@@ -94,8 +109,17 @@
       }
     },
     "quizSessions": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      ".write": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      "$classId": {
+        ".read": "auth != null && (root.child('classroomStudents').child($classId).child(auth.uid).exists() || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        "$quizId": {
+          "$stuKey": {
+            ".read": "auth != null && $stuKey === auth.uid",
+            ".write": "auth != null && ($stuKey === auth.uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+          }
+        }
+      }
     },
     "instrumentSessions": {
       ".read": "auth != null",
