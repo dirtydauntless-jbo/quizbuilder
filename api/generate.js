@@ -225,6 +225,20 @@ module.exports = async function handler(req, res) {
     const reviewed = await Promise.all(chunks.map(c => qcBatch(c)));
     questions = [...faaQs, ...reviewed.flat()];
 
+    // Step 2.5: Backfill from the FAA bank if the AI under-generated, so the
+    // exam always reaches `total` whenever enough unique questions exist.
+    if (questions.length < total) {
+      const used = new Set(questions.map(q => q.question));
+      const extras = [];
+      for (const t of selectedTopics) {
+        for (const q of getFaaQuestions(t, 1000)) {        // whole available pool for the topic
+          if (!used.has(q.question)) { used.add(q.question); extras.push(q); }
+        }
+      }
+      shuffle(extras);
+      for (const q of extras) { if (questions.length >= total) break; questions.push(q); }
+    }
+
     // Step 3: Shuffle and trim
     shuffle(questions);
     questions = questions.slice(0, total);
