@@ -11708,7 +11708,7 @@ async function practiceGenerate(){
   const msgEl=document.getElementById('pxLoadingMsg');
   if(msgEl) msgEl.textContent=`Generating ${count} question${count>1?'s':''} across ${topics.length} topic${topics.length>1?'s':''}...`;
   try {
-    const res=await fetch('/api/generate',{
+    const res=await fetch('https://api.classroomamt.com/api/generate',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({topics,count})
