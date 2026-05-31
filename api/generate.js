@@ -121,7 +121,11 @@ Generate ${qCount} multiple choice practice question${qCount > 1 ? 's' : ''} abo
 Rules:
 - Each question has exactly 3 choices: A, B, C (this matches the real FAA AMT test format)
 - ONLY ONE choice is correct — verify that wrong answers are factually incorrect, not synonyms or paraphrases of the correct answer
-- Wrong answers must be plausible but unambiguously wrong per FAA standards
+- DISTRACTOR QUALITY (important): the two wrong answers must be moderately challenging — about a 7 out of 10 in how closely they relate to the correct answer. A well-prepared student should still pick the right one after careful reading, but a guesser must NOT be able to eliminate the wrong answers at a glance. Specifically:
+  * Keep every choice in the SAME subject area and addressing the SAME concept as the question — NEVER use an obviously off-topic or absurd option (for example, do not put "computer programming skills" or "engine overhaul training" as a distractor on a human-factors question)
+  * Build each wrong answer from a realistic mistake an AMT student might actually make: a common misconception, a true-but-irrelevant fact, a correct principle applied to the wrong situation, or the right idea with one key detail changed
+  * Match the correct answer's length, specificity, terminology, and tone so the correct choice does not visibly stand out
+  * Still keep each wrong answer unambiguously incorrect to a knowledgeable A&P technician — there must be exactly one defensible answer
 - If the correct answer contains a number, ALL wrong answers must also contain a different specific number in the same units
 - If the correct answer contains units (psi, inches, degrees, volts, etc.), ALL wrong answers must use those same units
 - All choices should be similar in length and grammatical structure
@@ -150,6 +154,7 @@ Check for and fix:
 4. No two wrong answers may mean the same thing — if two are similar, replace one
 5. All choices should be similar in grammatical structure and length
 6. Each wrong answer must be clearly incorrect per FAA standards
+7. DISTRACTOR DIFFICULTY: replace any wrong answer that is off-topic, absurd, or eliminable without real subject knowledge. Every distractor must stay in the same subject area and address the same concept as the question, and should read as a realistic mistake (a common misconception, a true-but-irrelevant fact, or a correct principle applied to the wrong context). Aim for moderately challenging (about 7/10 related to the correct answer) while keeping exactly one defensible answer
 
 Return the corrected questions as a JSON array in EXACTLY the same format, preserving all fields (question, choices, correct, explanation, topic, handbook, source). Do not change questions, correct answers, or explanations — only fix wrong answer choices if needed. No markdown, just the JSON array.
 
