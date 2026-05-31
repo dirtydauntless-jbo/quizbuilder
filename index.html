@@ -523,6 +523,36 @@ a{color:var(--accent);text-decoration:none}
 
 .new-quiz-pulse{animation:quizPulse 1.5s ease-in-out infinite}
 @keyframes quizPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.8;transform:scale(1.1)}}
+
+/* ── PRACTICE EXAM HISTORY TABLE ───────────────────── */
+.pxh-wrap{width:100%;overflow-x:auto}
+.pxh-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.pxh-table th{font-family:monospace;font-size:.64rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.pxh-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.pxh-table tbody tr{cursor:pointer;transition:background .12s}
+.pxh-table tbody tr:hover{background:var(--panel2)}
+.pxh-num{font-family:monospace;color:var(--muted);font-weight:700}
+.pxh-bar{display:flex;height:13px;width:130px;border-radius:3px;overflow:hidden;background:var(--border)}
+.pxh-bar>span{display:block;height:100%}
+.pxh-pass{font-family:monospace;font-size:.7rem;font-weight:700;margin-left:7px;white-space:nowrap}
+.pxh-areas{color:var(--wl);font-size:.74rem;line-height:1.35;max-width:200px}
+.pxh-areas.none{color:var(--cl)}
+.pxh-view{color:var(--blue);font-family:monospace;font-size:.72rem;white-space:nowrap}
+.pxh-mono{font-family:monospace;white-space:nowrap}
+/* Stack into cards on narrow screens */
+@media (max-width:680px){
+  .pxh-table thead{display:none}
+  .pxh-table,.pxh-table tbody,.pxh-table tr,.pxh-table td{display:block;width:100%}
+  .pxh-table tr{border:1px solid var(--border);border-radius:var(--r);margin-bottom:9px;padding:6px 4px;background:var(--panel)}
+  .pxh-table td{border:none;padding:4px 12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .pxh-table td::before{content:attr(data-label);font-family:monospace;font-size:.64rem;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);flex-shrink:0}
+  .pxh-table td.pxh-cell-areas{flex-direction:column;align-items:flex-start;gap:3px}
+  .pxh-areas{max-width:none}
+}
+/* Review filter toggle */
+.pxf-btn{font-family:monospace;font-size:.74rem;letter-spacing:.5px;padding:6px 13px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--muted);cursor:pointer;transition:all .12s}
+.pxf-btn:hover{color:var(--text)}
+.pxf-btn.active{background:rgba(8,145,178,.15);border-color:#0891b2;color:#22b8d8}
 </style>
 </head>
 <body>
@@ -11587,7 +11617,7 @@ const OFFICIAL_TOPICS = {
 let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _pxAnswers={};
 let _pxCurrentQ=0, _pxCorrectCount=0, _pxAnsweredCount=0, _pxTopicStats={};
 let _pxExamKey=null;
-let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null;
+let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null, _pxRevFilter='all';
 
 function practiceInitTab(){
   _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null;
@@ -11874,43 +11904,68 @@ async function practiceLoadHistory(){
   try {
     const snap=await db.ref('practiceHistory/'+stuSession.uid).orderByChild('date').limitToLast(50).once('value');
     const rows=[];
-    snap.forEach(c=>rows.unshift({...c.val(),_key:c.key}));
+    snap.forEach(c=>rows.push({...c.val(),_key:c.key}));
+    // orderByChild returns oldest→newest; number chronologically, then show newest first
+    rows.forEach((r,i)=>{ r._num=i+1; });
+    rows.reverse();
     const el=document.getElementById('pxHistoryList');
     if(!el) return;
     if(!rows.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No attempts yet</div>'; return; }
-    el.innerHTML=rows.map(r=>buildPxHistoryCard(r)).join('');
+    el.innerHTML='<div class="pxh-wrap"><table class="pxh-table"><thead><tr>'+
+      '<th>#</th><th>Date</th><th>Pool</th><th>Type</th><th>Result</th><th>Size</th><th>Not&nbsp;Ans.</th><th>Incorrect</th><th>Correct</th><th>Problem&nbsp;Areas</th><th></th>'+
+      '</tr></thead><tbody>'+rows.map(r=>buildPxHistoryRow(r)).join('')+'</tbody></table></div>';
   } catch(e){ console.error('practiceLoadHistory',e); }
 }
 
-function buildPxHistoryCard(r){
+// Top N topics where the student scored below 70% (worst first)
+function pxProblemAreas(topicStats,n){
+  const ts=topicStats||{};
+  return Object.entries(ts)
+    .filter(([,v])=>v&&v.total>0&&(v.correct/v.total)<0.7)
+    .sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total))
+    .slice(0,n||3)
+    .map(([t])=>t);
+}
+
+function buildPxHistoryRow(r){
+  const total=r.total||0;
+  const correct=r.score||0;
+  const answered=r.answeredCount||0;
+  const incorrect=Math.max(0,answered-correct);
+  const notAns=Math.max(0,total-answered);
   const isComplete=r.status==='complete';
-  const inProgress=r.status==='incomplete';
-  const pct=isComplete?r.pct:(r.answeredCount>0?Math.round(r.score/r.answeredCount*100):null);
-  const scoreColor=isComplete?(r.pct>=70?'var(--cl)':'var(--wl)'):'#f59e0b';
-  const scoreBg=isComplete?(r.pct>=70?'rgba(34,197,94,.1)':'rgba(204,68,68,.1)'):'rgba(245,158,11,.1)';
-  const badge=isComplete?(r.pct>=70?'PASS':'FAIL'):'IN PROGRESS';
-  const badgeColor=isComplete?(r.pct>=70?'var(--cl)':'var(--wl)'):'#f59e0b';
-  const badgeBg=isComplete?(r.pct>=70?'rgba(34,197,94,.12)':'rgba(204,68,68,.12)'):'rgba(245,158,11,.12)';
+  const pct=isComplete?(r.pct||0):(total?Math.round(correct/total*100):0);
+  const pctOf=v=>total?Math.round(v/total*100):0;
   const d=new Date(r.date);
-  const dateStr=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' · '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-  const scoreDisplay=pct!=null?pct+'%':(r.answeredCount?r.answeredCount+'/'+r.total:'—');
-  const subDisplay=isComplete?r.score+'/'+r.total+' correct':(r.answeredCount>0?r.answeredCount+' of '+r.total+' answered':'Not started');
-  // Top 3 weak topics
-  const ts=r.topicStats||{};
-  const weak=Object.entries(ts).filter(([,v])=>v.total>0).sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total)).slice(0,3).map(([t])=>t);
-  const weakHtml=weak.length?`<div style="font-family:monospace;font-size:.67rem;color:var(--wl);margin-top:4px;line-height:1.4">Work on: ${weak.join(' · ')}</div>`:'';
-  return `<div onclick="practiceOpenReview('${r._key}')" style="display:flex;align-items:flex-start;gap:11px;padding:11px 14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);margin-bottom:7px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='#0891b2'" onmouseout="this.style.borderColor='var(--border)'">
-    <div style="width:46px;height:46px;border-radius:50%;background:${scoreBg};border:2px solid ${scoreColor};display:flex;align-items:center;justify-content:center;font-family:monospace;font-weight:700;font-size:.78rem;color:${scoreColor};flex-shrink:0;text-align:center;line-height:1.2">${scoreDisplay}</div>
-    <div style="flex:1;min-width:0">
-      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:2px">
-        <div style="font-weight:700;font-size:.87rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.label||'Practice Exam'}</div>
-        <div style="font-family:monospace;font-size:.62rem;padding:2px 7px;border-radius:3px;background:${badgeBg};color:${badgeColor};white-space:nowrap">${badge}</div>
-      </div>
-      <div style="font-family:monospace;font-size:.71rem;color:var(--muted)">${subDisplay} · ${dateStr}</div>
-      ${weakHtml}
-    </div>
-    <div style="color:var(--muted);font-size:1rem;flex-shrink:0;margin-top:12px">›</div>
-  </div>`;
+  const dateStr=d.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
+  const pool=({general:'General',airframe:'Airframe',powerplant:'Powerplant',mixed:'Mixed'})[r.subject]||(r.subject||'—');
+  const type=r.mode==='official'?'Simulated exam':'Topic practice';
+  const cW=pctOf(correct),iW=pctOf(incorrect),nW=pctOf(notAns);
+  const bar='<div class="pxh-bar">'+
+    (cW?'<span style="width:'+cW+'%;background:var(--cl)"></span>':'')+
+    (iW?'<span style="width:'+iW+'%;background:var(--wl)"></span>':'')+
+    (nW?'<span style="width:'+nW+'%;background:var(--accent)"></span>':'')+
+    '</div>';
+  const passLbl=isComplete
+    ?(pct>=70?'<span class="pxh-pass" style="color:var(--cl)">Pass!</span>':'<span class="pxh-pass" style="color:var(--wl)">Fail</span>')
+    :'<span class="pxh-pass" style="color:var(--blue)">Unfinished</span>';
+  const areas=pxProblemAreas(r.topicStats,3);
+  const areasHtml=areas.length
+    ?'<span class="pxh-areas">'+areas.join(' · ')+'</span>'
+    :'<span class="pxh-areas none">'+(answered?'None — solid!':'—')+'</span>';
+  return '<tr onclick="practiceOpenReview(\''+r._key+'\')">'+
+    '<td data-label="#"><span class="pxh-num">'+r._num+'</span></td>'+
+    '<td data-label="Date" class="pxh-mono" style="color:var(--muted);font-size:.73rem">'+dateStr+'</td>'+
+    '<td data-label="Pool">'+pool+'</td>'+
+    '<td data-label="Type" style="color:var(--muted)">'+type+'</td>'+
+    '<td data-label="Result"><div style="display:flex;align-items:center">'+bar+passLbl+'</div></td>'+
+    '<td data-label="Size" class="pxh-mono">'+total+'</td>'+
+    '<td data-label="Not answered" class="pxh-mono" style="color:var(--blue)">'+notAns+' ('+pctOf(notAns)+'%)</td>'+
+    '<td data-label="Incorrect" class="pxh-mono" style="color:var(--wl)">'+incorrect+' ('+pctOf(incorrect)+'%)</td>'+
+    '<td data-label="Correct" class="pxh-mono" style="color:var(--cl)">'+correct+' ('+pctOf(correct)+'%)</td>'+
+    '<td data-label="Problem areas" class="pxh-cell-areas">'+areasHtml+'</td>'+
+    '<td data-label="" class="pxh-view">View →</td>'+
+    '</tr>';
 }
 
 async function practiceOpenReview(key){
@@ -11952,13 +12007,69 @@ function practiceRenderReview(summary,examData){
   const passBar=isComplete?(pct>=70
     ?'<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:var(--r);padding:11px 15px;margin-bottom:14px;font-family:monospace;font-size:.84rem;color:var(--cl)">✓ PASSING — FAA requires 70%</div>'
     :'<div style="background:rgba(204,68,68,.1);border:1px solid rgba(204,68,68,.3);border-radius:var(--r);padding:11px 15px;margin-bottom:14px;font-family:monospace;font-size:.84rem;color:var(--wl)">✗ NOT PASSING — FAA requires 70%</div>'):'';
-  const ts=summary.topicStats||{};
-  const topicRows=Object.entries(ts).filter(([,v])=>v.total>0).sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total));
-  const weak=topicRows.filter(([,v])=>v.correct/v.total<0.7).map(([k])=>k);
-  const focusBox=weak.length?'<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.2);border-radius:var(--r);padding:13px 15px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wl);margin-bottom:8px">Focus On These Topics</div>'+weak.map(t=>'<div style="font-family:monospace;font-size:.82rem;padding:2px 0">→ '+t+'</div>').join('')+'</div>':'';
-  const topicTable=topicRows.length>1?'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px">Topic Breakdown</div>'+topicRows.map(([t,d])=>{const p=Math.round(d.correct/d.total*100);const col=p>=70?'var(--cl)':p>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)33"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+d.correct+'/'+d.total+'</div><div style="width:34px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+p+'%</div><div style="width:60px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+p+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>':'';
-  const reviewHtml=questions.length?'<div><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Question Review</div>'+questions.map((q,i)=>{const sel=answers[i],ok=sel===q.correct,answered=sel!==undefined;const figImg=q.figureNum?'<div style="margin-bottom:9px;text-align:center"><img src="/public/figures/figure-'+q.figureNum+'.jpg" alt="Figure '+q.figureNum+'" style="max-width:100%;border:1px solid var(--border);border-radius:var(--r)" onerror="this.parentNode.innerHTML=\'<div style=&quot;padding:11px 14px;border:1px dashed var(--border);border-radius:var(--r);font-family:monospace;font-size:.78rem;color:var(--muted);text-align:center&quot;>⚠ Figure '+q.figureNum+' image unavailable</div>\'"></div>':'';return '<div style="background:var(--panel);border:1px solid '+(answered?(ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'):'var(--border)')+ ';border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q'+(i+1)+(q.topic?' · '+q.topic:'')+'</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:'+(answered?(ok?'var(--cl)':'var(--wl)'):'var(--muted)')+'">'+(!answered?'NOT ANSWERED':ok?'✓ CORRECT':'✗ INCORRECT')+'</div></div>'+figImg+'<div style="font-weight:700;margin-bottom:9px;font-size:.87rem;line-height:1.4">'+q.question+'</div><div style="display:flex;flex-direction:column;gap:4px">'+Object.keys(q.choices||{}).map(l=>{const ic=l===q.correct,is=l===sel;let bg='var(--panel2)',col='var(--text)',fw='normal';if(ic){bg='rgba(34,197,94,.15)';col='var(--cl)';fw='700';}else if(is&&!ok){bg='rgba(204,68,68,.12)';col='var(--wl)';}return '<div style="padding:6px 10px;border-radius:var(--r);background:'+bg+';color:'+col+';font-family:monospace;font-size:.79rem;font-weight:'+fw+'"><span style="font-weight:700;margin-right:7px">'+l+'.</span>'+q.choices[l]+(ic?' ✓':(is&&!ok?' ✗':''))+'</div>';}).join('')+'</div>'+(q.explanation?'<div style="margin-top:9px;padding:9px 11px;background:rgba(8,145,178,.07);border:1px solid rgba(8,145,178,.2);border-radius:var(--r);font-size:.79rem;line-height:1.55;color:var(--fg)">'+q.explanation+'</div>':'')+(q.handbook?'<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 '+q.handbook+(q.topic?' · '+q.topic:'')+'</div>':'')+'</div>';}).join('')+'</div>':'<div style="font-family:monospace;font-size:.82rem;color:var(--muted);padding:16px 0">Question data not available for this exam.</div>';
-  document.getElementById('pxRevContent').innerHTML=passBar+focusBox+topicTable+reviewHtml;
+
+  // Detailed analysis — recompute per-topic accuracy & misses from the actual answers when available
+  const haveQ=questions.length>0;
+  const topicAgg={};
+  questions.forEach((q,i)=>{
+    const t=q.topic||'General';
+    if(!topicAgg[t]) topicAgg[t]={correct:0,wrong:0,unans:0,total:0};
+    topicAgg[t].total++;
+    const sel=answers[i];
+    if(sel===undefined) topicAgg[t].unans++;
+    else if(sel===q.correct) topicAgg[t].correct++;
+    else topicAgg[t].wrong++;
+  });
+  const topicRows=(haveQ
+    ? Object.entries(topicAgg).map(([t,v])=>[t,v])
+    : Object.entries(summary.topicStats||{}).map(([t,v])=>[t,{correct:v.correct,total:v.total,wrong:Math.max(0,v.total-v.correct),unans:0}])
+  ).filter(([,v])=>v.total>0).sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total));
+  const weak=topicRows.filter(([,v])=>v.correct/v.total<0.7);
+
+  const focusBox=weak.length?'<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.2);border-radius:var(--r);padding:13px 15px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--wl);margin-bottom:8px">⚠ What To Work On</div>'+weak.map(([t,v])=>{const miss=(v.wrong||0)+(v.unans||0);return '<div style="font-family:monospace;font-size:.82rem;padding:3px 0;display:flex;justify-content:space-between;gap:10px"><span>→ '+t+'</span>'+(miss?'<span style="color:var(--muted);white-space:nowrap">'+miss+' to review</span>':'')+'</div>';}).join('')+'</div>':'';
+
+  const topicTable=topicRows.length?'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:14px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px">Performance By Topic</div>'+topicRows.map(([t,d])=>{const p=Math.round(d.correct/d.total*100);const col=p>=70?'var(--cl)':p>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+d.correct+'/'+d.total+'</div><div style="width:38px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+p+'%</div><div style="width:60px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+p+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>':'';
+
+  // Filter toggle (All / Missed / Correct)
+  let nCorrect=0,nMissed=0;
+  questions.forEach((q,i)=>{const sel=answers[i];if(sel===undefined||sel!==q.correct)nMissed++;else nCorrect++;});
+  const filterBar=haveQ?'<div style="display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap">'+
+    '<button class="pxf-btn" id="pxf-all" onclick="pxSetReviewFilter(\'all\')">All ('+questions.length+')</button>'+
+    '<button class="pxf-btn" id="pxf-missed" onclick="pxSetReviewFilter(\'missed\')">Missed ('+nMissed+')</button>'+
+    '<button class="pxf-btn" id="pxf-correct" onclick="pxSetReviewFilter(\'correct\')">Correct ('+nCorrect+')</button>'+
+    '</div>':'';
+
+  const reviewSection=haveQ
+    ?'<div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Question Review</div>'+filterBar+'<div id="pxRevQuestions"></div>'
+    :'<div style="font-family:monospace;font-size:.82rem;color:var(--muted);padding:16px 0">Question data not available for this exam.</div>';
+
+  document.getElementById('pxRevContent').innerHTML=passBar+focusBox+topicTable+reviewSection;
+  if(haveQ){ _pxRevFilter='all'; pxRenderRevQuestions(); }
+}
+
+function pxSetReviewFilter(f){ _pxRevFilter=f; pxRenderRevQuestions(); }
+
+function pxRenderRevQuestions(){
+  const cont=document.getElementById('pxRevQuestions');
+  if(!cont) return;
+  const questions=_pxRevData?.questions||[];
+  const answers=_pxRevData?.answers||{};
+  ['all','missed','correct'].forEach(f=>{const b=document.getElementById('pxf-'+f);if(b)b.classList.toggle('active',f===_pxRevFilter);});
+  const items=[];
+  questions.forEach((q,i)=>{
+    const sel=answers[i];
+    const ok=sel===q.correct, answered=sel!==undefined;
+    if(_pxRevFilter==='correct' && !ok) return;
+    if(_pxRevFilter==='missed' && ok) return;
+    items.push(buildRevQuestionCard(q,i,sel,ok,answered));
+  });
+  cont.innerHTML=items.length?items.join(''):'<div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:20px 0">No questions in this filter.</div>';
+}
+
+function buildRevQuestionCard(q,i,sel,ok,answered){
+  const figImg=q.figureNum?'<div style="margin-bottom:9px;text-align:center"><img src="/public/figures/figure-'+q.figureNum+'.jpg" alt="Figure '+q.figureNum+'" style="max-width:100%;border:1px solid var(--border);border-radius:var(--r)" onerror="this.parentNode.innerHTML=\'<div style=&quot;padding:11px 14px;border:1px dashed var(--border);border-radius:var(--r);font-family:monospace;font-size:.78rem;color:var(--muted);text-align:center&quot;>⚠ Figure '+q.figureNum+' image unavailable</div>\'"></div>':'';
+  const choices=Object.keys(q.choices||{}).map(l=>{const ic=l===q.correct,is=l===sel;let bg='var(--panel2)',col='var(--text)',fw='normal';if(ic){bg='rgba(34,197,94,.15)';col='var(--cl)';fw='700';}else if(is&&!ok){bg='rgba(204,68,68,.12)';col='var(--wl)';}return '<div style="padding:6px 10px;border-radius:var(--r);background:'+bg+';color:'+col+';font-family:monospace;font-size:.79rem;font-weight:'+fw+'"><span style="font-weight:700;margin-right:7px">'+l+'.</span>'+q.choices[l]+(ic?' ✓':(is&&!ok?' ✗':''))+'</div>';}).join('');
+  return '<div style="background:var(--panel);border:1px solid '+(answered?(ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'):'var(--border)')+';border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q'+(i+1)+(q.topic?' · '+q.topic:'')+'</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:'+(answered?(ok?'var(--cl)':'var(--wl)'):'var(--muted)')+'">'+(!answered?'NOT ANSWERED':ok?'✓ CORRECT':'✗ INCORRECT')+'</div></div>'+figImg+'<div style="font-weight:700;margin-bottom:9px;font-size:.87rem;line-height:1.4">'+q.question+'</div><div style="display:flex;flex-direction:column;gap:4px">'+choices+'</div>'+(q.explanation?'<div style="margin-top:9px;padding:9px 11px;background:rgba(8,145,178,.07);border:1px solid rgba(8,145,178,.2);border-radius:var(--r);font-size:.79rem;line-height:1.55;color:var(--text)">'+q.explanation+'</div>':'')+(q.handbook?'<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 '+q.handbook+(q.topic?' · '+q.topic:'')+'</div>':'')+'</div>';
 }
 
 function practiceCloseReview(){
