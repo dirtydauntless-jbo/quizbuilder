@@ -12098,10 +12098,9 @@ function practiceRenderExam(label){
 function practiceUpdateProgress(){
   const total = _pxQuestions.length;
   const qNum = Math.min(_pxCurrentQ + 1, total);
-  // Grade view: start at 100% and drop by one slot per missed question (e.g. -1% per miss on a 100-q exam).
-  // Converges to the true score once every question is answered.
-  const missed = Math.max(0, _pxAnsweredCount - _pxCorrectCount);
-  const pct = total ? Math.round((total - missed) / total * 100) : 100;
+  // Running accuracy: starts at 100%, then averages correct ÷ answered-so-far as questions are answered.
+  // e.g. 2 right of 3 answered = 66%. Converges to the true score once every question is answered.
+  const pct = _pxAnsweredCount === 0 ? 100 : Math.floor(_pxCorrectCount / _pxAnsweredCount * 100);
   const col = pct >= 70 ? 'var(--cl)' : pct >= 50 ? '#f59e0b' : 'var(--wl)';
   const labelEl = document.getElementById('pxProgressLabel');
   const scoreEl = document.getElementById('pxScoreLabel');
