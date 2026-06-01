@@ -599,6 +599,7 @@ setTimeout(function(){
   </div>
   <!-- O&P Simulator sign-up banner (landing) -->
   <div id="opSimLandingBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator" style="width:100%;max-width:640px;border-radius:8px;margin-bottom:4px"></div>
+  <button id="opSimLandingBtn" class="hidden" onclick="opSimOpenSignup()" style="width:100%;max-width:640px;padding:12px;margin-bottom:6px;background:#7c3aed;border:none;border-radius:8px;color:#fff;font-family:monospace;font-weight:700;letter-spacing:1px;font-size:.85rem;cursor:pointer">✈ SIGN UP FOR THE O&amp;P SIMULATOR</button>
   <div id="announceLandingBanner" class="announce-banner-wrap hidden" style="width:100%;max-width:640px;border-radius:8px;margin-bottom:4px"></div>
 
   <div class="landing-cards">
@@ -1262,6 +1263,7 @@ setTimeout(function(){
     </div>
   </div>
   <div id="opSimStuBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator"></div>
+  <button id="opSimStuBtn" class="hidden" onclick="opSimOpenSignup()" style="width:100%;padding:12px;background:#7c3aed;border:none;color:#fff;font-family:monospace;font-weight:700;letter-spacing:1px;font-size:.85rem;cursor:pointer">✈ SIGN UP FOR THE O&amp;P SIMULATOR</button>
   <div id="announceStuBanner" class="announce-banner-wrap hidden"></div>
 
   <!-- Student nav tabs -->
@@ -3591,6 +3593,11 @@ async function opSimInit(){
       if(!el) return;
       if(enabled){ el.innerHTML = html; el.classList.remove('hidden'); }
       else { el.classList.add('hidden'); el.innerHTML = ''; }
+    });
+    // Static sign-up buttons (redundant with the scrolling banner)
+    ['opSimLandingBtn','opSimStuBtn'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.classList.toggle('hidden', !enabled);
     });
   }catch(e){ /* non-critical */ }
 }
