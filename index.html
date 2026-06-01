@@ -98,6 +98,7 @@ a{color:var(--accent);text-decoration:none}
 .opsim-banner-wrap:hover{filter:brightness(1.15)}
 .opsim-banner-track{display:flex;white-space:nowrap;-webkit-animation:opSimScroll 32s linear infinite;animation:opSimScroll 32s linear infinite}
 .opsim-banner-track:hover{animation-play-state:paused}
+.opsim-banner-static{display:flex;justify-content:center;align-items:center;padding:2px 4px}
 .opsim-banner-item{display:inline-flex;align-items:center;gap:14px;padding:10px 32px;font-family:'Bebas Neue',monospace;font-size:1rem;letter-spacing:2px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
 .opsim-banner-dot{color:rgba(255,255,255,.5);font-size:.75rem}
 @-webkit-keyframes opSimScroll{0%{-webkit-transform:translateX(0)}100%{-webkit-transform:translateX(-50%)}}
@@ -3319,6 +3320,10 @@ async function masterDashLoad(){
             <input type="checkbox" id="opSimEnabled" style="width:16px;height:16px;cursor:pointer" onchange="opSimAdminToggle()"/>
             Banner Active (students can see &amp; sign up)
           </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:monospace;font-size:.82rem">
+            <input type="checkbox" id="opSimScrolls" style="width:16px;height:16px;cursor:pointer" onchange="opSimScrollToggle()"/>
+            Banner Scrolls (uncheck for a static banner)
+          </label>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
@@ -3576,7 +3581,11 @@ function _opSimBannerHTML(cfg){
   const msg = sessionLine
     ? `🔥 Airframe O&P Simulator Sign-Up Now Open!  ·  ${sessionLine}  ·  Click Here to Register`
     : '🔥 Airframe O&P Simulator  ·  ✈ Sign Up Now  ·  Click Here to Register  ·  📚 Limited Spots Available';
-  // Duplicate so seamless loop works at any screen width
+  // Static banner (scroll disabled): single centered message, no animation
+  if(cfg.scroll === false){
+    return `<div class="opsim-banner-static"><span class="opsim-banner-item" style="white-space:normal;text-align:center">${esc(msg)}</span></div>`;
+  }
+  // Scrolling marquee — duplicate so the seamless loop works at any screen width
   const item = `<span class="opsim-banner-item">${esc(msg)}<span class="opsim-banner-dot">  ★  </span></span>`;
   return `<div class="opsim-banner-track">${item.repeat(6)}</div>`;
 }
@@ -3673,6 +3682,19 @@ async function opSimAdminToggle(){
   }
 }
 
+async function opSimScrollToggle(){
+  const scroll = document.getElementById('opSimScrolls')?.checked;
+  const msgEl = document.getElementById('opSimAdminMsg');
+  try{
+    await dbSet('config/opSim/scroll', !!scroll);
+    if(_opSimConfig) _opSimConfig.scroll = !!scroll;
+    await opSimInit();
+    if(msgEl){ msgEl.style.color='#16a34a'; msgEl.textContent = scroll ? '✓ Banner scrolls.' : '✓ Banner is now static.'; }
+  }catch(e){
+    if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='Error saving.'; }
+  }
+}
+
 async function opSimAdminSave(){
   const date     = (document.getElementById('opSimDate')?.value||'').trim();
   const time     = (document.getElementById('opSimTime')?.value||'').trim();
@@ -3681,7 +3703,8 @@ async function opSimAdminSave(){
   const msgEl    = document.getElementById('opSimAdminMsg');
   if(msgEl){ msgEl.textContent=''; msgEl.style.color='#16a34a'; }
   try{
-    const cfg = { enabled: !!enabled, date, time, location };
+    const scroll = document.getElementById('opSimScrolls')?.checked;
+    const cfg = { enabled: !!enabled, scroll: !!scroll, date, time, location };
     await dbSet('config/opSim', cfg);
     _opSimConfig = cfg;
     await opSimInit();
@@ -3717,6 +3740,8 @@ async function _opSimLoadAdminPanel(){
   _opSimConfig = cfg;
   const enEl = document.getElementById('opSimEnabled');
   if(enEl) enEl.checked = !!cfg.enabled;
+  const scrEl = document.getElementById('opSimScrolls');
+  if(scrEl) scrEl.checked = cfg.scroll !== false; // default to scrolling for existing configs
   const dEl = document.getElementById('opSimDate');     if(dEl) dEl.value = cfg.date||'';
   const tEl = document.getElementById('opSimTime');     if(tEl) tEl.value = cfg.time||'';
   const lEl = document.getElementById('opSimLocation'); if(lEl) lEl.value = cfg.location||'';
