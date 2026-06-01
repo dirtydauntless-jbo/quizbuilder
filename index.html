@@ -5768,6 +5768,16 @@ async function _checkInstNotifications(){
   } catch(e){ console.warn('Notification check error:', e); }
 }
 
+// Universal toast (used by O&P sign-up and elsewhere). type: success | warn | error
+function showToast(msg, type){
+  const border = type==='success' ? 'var(--cl)' : type==='error' ? 'var(--wl)' : 'var(--accent)';
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid '+border+';border-radius:var(--r);padding:14px 20px;font-family:monospace;font-size:.82rem;color:var(--text);z-index:99999;max-width:90vw;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.5)';
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(()=>t.remove(),400); }, 3500);
+}
+
 function _showInstToast(html, duration=5000){
   const toast = document.createElement('div');
   toast.innerHTML = html;
