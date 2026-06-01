@@ -12107,6 +12107,26 @@ function practiceUpdateProgress(){
   if(barEl){ barEl.style.width = pct+'%'; barEl.style.background = col; }
 }
 
+// Recap of the just-answered question shown above the current one (no explanation — that's for review)
+function pxPrevRecapHTML(i){
+  const q = _pxQuestions[i];
+  if(!q) return '';
+  const sel = _pxAnswers[i];
+  if(sel === undefined) return '';
+  const ok = sel === q.correct;
+  const border = ok ? 'var(--cl)' : 'var(--wl)';
+  const choices = Object.keys(q.choices||{}).map(l=>{
+    const isCorrect = l===q.correct, isSel = l===sel;
+    let color='var(--muted)', label='', fw='normal';
+    if(isCorrect){ color='var(--cl)'; fw='700'; label = isSel ? ' — Correct!' : ' — Correct answer'; }
+    else if(isSel){ color='var(--wl)'; label=' — Your answer (incorrect)'; }
+    return '<div style="font-size:.82rem;color:'+color+';font-weight:'+fw+';padding:2px 0"><span style="font-weight:700;margin-right:6px">'+l+'.</span>'+q.choices[l]+label+'</div>';
+  }).join('');
+  return '<div style="background:var(--panel2);border:1px solid '+border+';border-radius:var(--r);padding:12px 15px;margin-bottom:14px">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:10px"><span style="font-family:monospace;font-size:.66rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Previous question</span><span style="font-family:monospace;font-size:.74rem;font-weight:700;color:'+border+'">'+(ok?'✓ Correct':'✗ Incorrect')+'</span></div>'+
+    '<div style="font-weight:700;font-size:.85rem;line-height:1.4;margin-bottom:8px">'+q.question+'</div>'+choices+'</div>';
+}
+
 function practiceRenderQuestion(idx){
   const q = _pxQuestions[idx];
   const area = document.getElementById('pxQuestionArea');
@@ -12115,7 +12135,9 @@ function practiceRenderQuestion(idx){
   const figHtml = q.figureNum
     ? `<div style="margin-bottom:14px;text-align:center"><img src="/public/figures/figure-${q.figureNum}.jpg" alt="Figure ${q.figureNum}" style="max-width:100%;border:1px solid var(--border);border-radius:var(--r)" onerror="this.parentNode.innerHTML='<div style=&quot;padding:11px 14px;border:1px dashed var(--border);border-radius:var(--r);font-family:monospace;font-size:.78rem;color:var(--muted);text-align:center&quot;>⚠ Figure ${q.figureNum} image unavailable — contact your instructor</div>'"></div>`
     : '';
+  const prevHtml = idx > 0 ? pxPrevRecapHTML(idx - 1) : '';
   area.innerHTML = `
+    ${prevHtml}
     <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;margin-bottom:12px">
       <div style="font-family:monospace;font-size:.72rem;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px">QUESTION ${idx+1} of ${_pxQuestions.length}</div>
       ${figHtml}<div style="font-weight:700;margin-bottom:16px;line-height:1.5;font-size:.95rem">${q.question}</div>
