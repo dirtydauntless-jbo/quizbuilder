@@ -542,6 +542,8 @@ a{color:var(--accent);text-decoration:none}
 .pxh-areas{color:var(--wl);font-size:.86rem;line-height:1.35;max-width:260px}
 .pxh-areas.none{color:var(--cl)}
 .pxh-view{color:var(--blue);font-family:monospace;font-size:.84rem;white-space:nowrap}
+.pxh-action{display:inline-block;border:1px solid var(--accent);color:var(--accent);border-radius:var(--r);font-family:monospace;font-size:.8rem;font-weight:700;padding:5px 13px;white-space:nowrap;transition:background .12s,color .12s}
+.pxh-table tbody tr:hover .pxh-action{background:var(--accent);color:#000}
 .pxh-mono{font-family:monospace;white-space:nowrap}
 /* Stack into cards on narrow screens */
 @media (max-width:760px){
@@ -12315,16 +12317,12 @@ function buildPxHistoryRow(r){
     '<td data-label="Incorrect" class="pxh-mono" style="color:var(--wl)">'+incorrect+' ('+pctOf(incorrect)+'%)</td>'+
     '<td data-label="Correct" class="pxh-mono" style="color:var(--cl)">'+correct+' ('+pctOf(correct)+'%)</td>'+
     '<td data-label="Problem areas" class="pxh-cell-areas">'+areasHtml+'</td>'+
-    '<td data-label="" class="pxh-view">View →</td>'+
+    '<td data-label=""><span class="pxh-action">'+(isComplete?'Review Exam →':'Resume →')+'</span></td>'+
     '</tr>';
 }
 
 async function practiceOpenReview(key){
   if(!stuSession?.uid) return;
-  const modal=document.getElementById('practiceReviewModal');
-  if(!modal) return;
-  document.getElementById('pxRevContent').innerHTML='<div style="text-align:center;padding:48px;font-family:monospace;font-size:.85rem;color:var(--muted)">Loading exam...</div>';
-  modal.style.display='flex';
   try {
     const [summSnap,dataSnap]=await Promise.all([
       db.ref('practiceHistory/'+stuSession.uid+'/'+key).once('value'),
@@ -12332,13 +12330,23 @@ async function practiceOpenReview(key){
     ]);
     const summary=summSnap.val();
     const examData=dataSnap.val();
-    if(!summary){ document.getElementById('pxRevContent').innerHTML='<div style="font-family:monospace;padding:24px;color:var(--wl)">Exam not found.</div>'; return; }
+    if(!summary){ showToast('Exam not found.','error'); return; }
     _pxRevKey=key; _pxRevSummary=summary; _pxRevData=examData;
+    // Unfinished exams go straight back to the exam — never reveal answers via a review
+    if(summary.status !== 'complete'){
+      if(!examData || !(examData.questions||[]).length){ showToast("This exam can't be resumed (its questions weren't saved).",'warn'); return; }
+      practiceResumeFromModal();
+      return;
+    }
+    // Finished exam → show the review
+    const modal=document.getElementById('practiceReviewModal');
+    if(!modal) return;
+    document.getElementById('pxRevContent').innerHTML='<div style="text-align:center;padding:48px;font-family:monospace;font-size:.85rem;color:var(--muted)">Loading exam...</div>';
+    modal.style.display='flex';
     practiceRenderReview(summary,examData);
   } catch(e){
     console.error('practiceOpenReview',e);
-    const denied=(e&&(e.code==='PERMISSION_DENIED'||/permission/i.test(e.message||'')));
-    document.getElementById('pxRevContent').innerHTML='<div style="font-family:monospace;padding:24px;color:var(--wl)">'+(denied?'Could not load this exam — please sign out and back in, then try again.':'This exam could not be loaded. It may have been created before exam saving was enabled; newer exams will open normally.')+'</div>';
+    showToast('Could not load this exam. If it was created before exam saving was enabled, newer exams will open normally.','error');
   }
 }
 
