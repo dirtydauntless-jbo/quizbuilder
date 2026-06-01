@@ -744,9 +744,64 @@ setTimeout(function(){
   <div class="tab-bar">
     <button class="tab-btn active" onclick="instSwitchTab('classrooms')">Classrooms</button>
     <button class="tab-btn" onclick="instSwitchTab('quizzes')">Create a Quiz</button>
+    <button class="tab-btn" onclick="instSwitchTab('assign')">📝 Assign Practice Exam</button>
     <button class="tab-btn" id="instTabSim" onclick="instSwitchTab('sim')">📐 Measurement Simulator</button>
     <button class="tab-btn hidden" id="adminTabBtn" onclick="instSwitchTab('admin')">⚙ Admin</button>
     <button class="tab-btn hidden" id="masterDashTabBtn" onclick="instSwitchTab('masterdash')">📊 Master Dashboard</button>
+  </div>
+
+  <!-- ASSIGN PRACTICE EXAM TAB -->
+  <div id="inst-tab-assign" class="tab-pane" style="padding:22px 24px;display:none">
+    <div style="max-width:860px">
+      <div class="section-head" style="margin:0 0 4px">📝 Assign a Practice Exam</div>
+      <div style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-bottom:18px">Generate a practice exam for any registered student. When they finish, you'll see their score and exactly where they're weak.</div>
+
+      <!-- Step 1: pick student -->
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
+        <div style="font-family:monospace;font-size:.74rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">1 · Student</div>
+        <input id="assignSearch" oninput="assignSearchStudents()" placeholder="Search by name or email…" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.95rem;box-sizing:border-box">
+        <div id="assignSearchResults" style="margin-top:8px"></div>
+        <div id="assignSelected" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Step 2: choose exam -->
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
+        <div style="font-family:monospace;font-size:.74rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">2 · Exam</div>
+        <div style="display:flex;gap:0;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;max-width:420px">
+          <button id="asgModeOfficial" onclick="assignSetMode('official')" style="flex:1;padding:10px;border:none;cursor:pointer;font-family:monospace;font-size:.8rem;font-weight:700;letter-spacing:1px;background:#0891b2;color:#fff">OFFICIAL EXAM</button>
+          <button id="asgModeTopic" onclick="assignSetMode('topic')" style="flex:1;padding:10px;border:none;cursor:pointer;font-family:monospace;font-size:.8rem;font-weight:700;letter-spacing:1px;background:var(--panel2);color:var(--muted)">CUSTOM TOPICS</button>
+        </div>
+        <div id="asgOfficialPanel" style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="asgSubj" data-subj="general" onclick="assignSelectSubject('general')" style="flex:1;min-width:150px;padding:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);cursor:pointer;text-align:left"><div style="font-weight:700">📋 General</div><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">60 questions</div></button>
+          <button class="asgSubj" data-subj="airframe" onclick="assignSelectSubject('airframe')" style="flex:1;min-width:150px;padding:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);cursor:pointer;text-align:left"><div style="font-weight:700">✈ Airframe</div><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">100 questions</div></button>
+          <button class="asgSubj" data-subj="powerplant" onclick="assignSelectSubject('powerplant')" style="flex:1;min-width:150px;padding:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);cursor:pointer;text-align:left"><div style="font-weight:700">⚙ Powerplant</div><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">100 questions</div></button>
+        </div>
+        <div id="asgTopicPanel" style="display:none">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><label style="font-family:monospace;font-size:.8rem;color:var(--muted)">Questions:</label><input id="asgCount" type="number" min="1" max="100" value="20" style="width:70px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text)"></div>
+          <div id="asgTopicPicker" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);padding:10px"></div>
+        </div>
+      </div>
+
+      <button onclick="assignSubmit()" class="btn btn-primary" style="font-size:.9rem;padding:12px 22px;letter-spacing:1px">ASSIGN EXAM →</button>
+      <span id="assignStatus" style="margin-left:12px;font-family:monospace;font-size:.82rem"></span>
+
+      <!-- Assigned exams + results -->
+      <div style="margin-top:30px">
+        <div class="section-head" style="font-size:1.1rem;margin:0 0 10px">Assigned Exams</div>
+        <div id="assignList"><div style="font-family:monospace;font-size:.8rem;color:var(--muted)">Loading…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assigned-exam result review modal -->
+  <div id="assignResultModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:900;overflow-y:auto;align-items:flex-start;justify-content:center" onclick="if(event.target===this)document.getElementById('assignResultModal').style.display='none'">
+    <div style="background:var(--bg);width:100%;max-width:760px;min-height:100%;padding:20px" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div id="asgResTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--text)"></div>
+        <button onclick="document.getElementById('assignResultModal').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
+      </div>
+      <div id="asgResContent"></div>
+    </div>
   </div>
 
   <!-- CLASSROOMS TAB -->
@@ -1257,6 +1312,7 @@ setTimeout(function(){
           <div class="section-head" style="margin:0 0 4px">🧪 FAA Written Practice Exams</div>
           <div style="font-family:monospace;font-size:.75rem;color:var(--muted)">Randomized FAA A&amp;P questions — new questions every time.</div>
         </div>
+        <div id="pxAssignedSection"></div>
         <!-- Mode tabs -->
         <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
           <button id="pxModeOfficial" onclick="practiceSetMode('official')" style="flex:1;padding:12px;border:none;cursor:pointer;font-family:monospace;font-size:.85rem;font-weight:700;letter-spacing:1px;background:#0891b2;color:#fff;transition:all .2s">OFFICIAL EXAM</button>
@@ -6353,7 +6409,7 @@ function instSwitchTab(tab){
 function instSwitchTabRaw(tab){
   // Persist tab so refresh restores it
   if(instUser?.uid) try{ localStorage.setItem('instLastTab_'+instUser.uid, tab); }catch(e){}
-  ['classrooms','classroom-detail','quizzes','dashboard','performance','sim','admin','masterdash'].forEach(t=>{
+  ['classrooms','classroom-detail','quizzes','dashboard','performance','sim','admin','masterdash','assign'].forEach(t=>{
     const el = document.getElementById('inst-tab-'+t);
     if(el) el.style.display = (t===tab) ? 'block' : 'none';
   });
@@ -6371,6 +6427,102 @@ function instSwitchTabRaw(tab){
   if(tab === 'admin') adminSubTab(_adminCurrentSubTab || 'instructors');
   if(tab === 'sim') instSimInit();
   if(tab === 'masterdash') masterDashLoad();
+  if(tab === 'assign') assignInitTab();
+}
+
+// ── Assign Practice Exam (instructor) ────────────────────────────────────────
+let _asgStudent=null, _asgMode='official', _asgSubject=null, _asgProfiles=null;
+function assignInitTab(){
+  _asgStudent=null; _asgMode='official'; _asgSubject=null; _asgProfiles=null;
+  const s=document.getElementById('assignSearch'); if(s) s.value='';
+  document.getElementById('assignSearchResults').innerHTML='';
+  document.getElementById('assignSelected').innerHTML='';
+  document.getElementById('assignStatus').textContent='';
+  assignSetMode('official');
+  ['general','airframe','powerplant'].forEach(x=>{const b=document.querySelector('.asgSubj[data-subj="'+x+'"]');if(b){b.style.background='var(--panel2)';b.style.borderColor='var(--border)';b.style.color='var(--text)';}});
+  assignRenderTopicPicker();
+  assignLoadList();
+}
+async function assignSearchStudents(){
+  const q=(document.getElementById('assignSearch').value||'').trim().toLowerCase();
+  const box=document.getElementById('assignSearchResults');
+  if(q.length<2){ box.innerHTML=''; return; }
+  if(!_asgProfiles){ box.innerHTML='<div style="font-family:monospace;font-size:.75rem;color:var(--muted)">Loading students…</div>'; _asgProfiles=await dbGet('studentProfiles').catch(()=>({}))||{}; }
+  const m=Object.entries(_asgProfiles).filter(([,p])=>p&&((p.name||'').toLowerCase().includes(q)||(p.email||'').toLowerCase().includes(q))).slice(0,15);
+  box.innerHTML=m.length?m.map(([uid,p])=>'<div onclick="assignSelectStudent(\''+uid+'\')" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:5px;cursor:pointer;background:var(--panel2)"><b>'+esc(p.name||'(no name)')+'</b> &nbsp;<span style="color:var(--muted);font-family:monospace;font-size:.75rem">'+esc(p.email||'')+'</span></div>').join(''):'<div style="font-family:monospace;font-size:.75rem;color:var(--muted)">No matches.</div>';
+}
+function assignSelectStudent(uid){
+  const p=(_asgProfiles||{})[uid]||{};
+  _asgStudent={uid,name:p.name||'',email:p.email||''};
+  document.getElementById('assignSearchResults').innerHTML='';
+  document.getElementById('assignSearch').value='';
+  document.getElementById('assignSelected').innerHTML='<div style="padding:9px 12px;border:1px solid var(--cl);border-radius:var(--r);background:rgba(58,170,102,.1)">Selected: <b>'+esc(_asgStudent.name||'(no name)')+'</b> <span style="color:var(--muted);font-family:monospace;font-size:.75rem">'+esc(_asgStudent.email)+'</span> <button onclick="_asgStudent=null;document.getElementById(\'assignSelected\').innerHTML=\'\'" style="margin-left:8px;background:none;border:none;color:var(--wl);cursor:pointer">✕ clear</button></div>';
+}
+function assignSetMode(mode){
+  _asgMode=mode;
+  document.getElementById('asgOfficialPanel').style.display=mode==='official'?'flex':'none';
+  document.getElementById('asgTopicPanel').style.display=mode==='topic'?'block':'none';
+  const o=document.getElementById('asgModeOfficial'),t=document.getElementById('asgModeTopic');
+  if(o){o.style.background=mode==='official'?'#0891b2':'var(--panel2)';o.style.color=mode==='official'?'#fff':'var(--muted)';}
+  if(t){t.style.background=mode==='topic'?'#0891b2':'var(--panel2)';t.style.color=mode==='topic'?'#fff':'var(--muted)';}
+}
+function assignSelectSubject(subj){
+  _asgSubject=subj;
+  ['general','airframe','powerplant'].forEach(x=>{const b=document.querySelector('.asgSubj[data-subj="'+x+'"]');if(b){const a=x===subj;b.style.background=a?'#0891b2':'var(--panel2)';b.style.borderColor=a?'#0891b2':'var(--border)';b.style.color=a?'#fff':'var(--text)';}});
+}
+function assignRenderTopicPicker(){
+  const el=document.getElementById('asgTopicPicker'); if(!el||typeof OFFICIAL_TOPICS==='undefined') return;
+  const subs=[['general','📋 General'],['airframe','✈ Airframe'],['powerplant','⚙ Powerplant']];
+  el.innerHTML=subs.map(([k,lbl])=>'<div style="margin-bottom:10px"><div style="font-family:monospace;font-size:.72rem;letter-spacing:1px;color:var(--muted);margin-bottom:5px">'+lbl+'</div>'+((OFFICIAL_TOPICS[k]||[]).map(t=>'<label style="display:block;font-size:.85rem;padding:3px 0;cursor:pointer"><input type="checkbox" class="asgTopic" value="'+esc(t)+'" style="margin-right:7px">'+esc(t)+'</label>').join(''))+'</div>').join('');
+}
+async function assignSubmit(){
+  const st=document.getElementById('assignStatus');
+  if(!_asgStudent){ st.style.color='var(--wl)'; st.textContent='Pick a student first.'; return; }
+  const payload={assignedBy:instUser.uid, byName:(instProfile&&instProfile.name)||instUser.email||'Instructor', studentName:_asgStudent.name||'', createdAt:Date.now(), status:'assigned'};
+  if(_asgMode==='official'){
+    if(!_asgSubject){ st.style.color='var(--wl)'; st.textContent='Pick a subject.'; return; }
+    payload.mode='official'; payload.subject=_asgSubject; payload.count=OFFICIAL_EXAMS[_asgSubject].count; payload.label=OFFICIAL_EXAMS[_asgSubject].label;
+  } else {
+    const topics=[...document.querySelectorAll('.asgTopic:checked')].map(c=>c.value);
+    if(!topics.length){ st.style.color='var(--wl)'; st.textContent='Pick at least one topic.'; return; }
+    const count=Math.max(1,Math.min(100,parseInt(document.getElementById('asgCount').value)||topics.length));
+    payload.mode='topic'; payload.topics=topics; payload.count=count; payload.label=topics.length===1?topics[0]:topics.length+' Topics';
+  }
+  st.style.color='var(--muted)'; st.textContent='Assigning…';
+  try{
+    await dbPush('assignedExams/'+_asgStudent.uid, payload);
+    st.style.color='var(--cl)'; st.textContent='✓ Assigned to '+(_asgStudent.name||'student')+'.';
+    _asgStudent=null; document.getElementById('assignSelected').innerHTML='';
+    document.querySelectorAll('.asgTopic:checked').forEach(c=>c.checked=false);
+    assignLoadList();
+  }catch(e){ st.style.color='var(--wl)'; st.textContent='Failed: '+(e.message||e); }
+}
+async function assignLoadList(){
+  const el=document.getElementById('assignList'); if(!el) return;
+  let all={}; try{ all=await dbGet('assignedExams')||{}; }catch(e){ el.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.8rem">Could not load assignments.</div>'; return; }
+  const rows=[];
+  for(const [stuUid,exams] of Object.entries(all)){ for(const [aid,a] of Object.entries(exams||{})){ if(a&&a.assignedBy===instUser.uid) rows.push({stuUid,aid,a}); } }
+  rows.sort((x,y)=>(y.a.createdAt||0)-(x.a.createdAt||0));
+  if(!rows.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted)">No exams assigned yet.</div>'; return; }
+  el.innerHTML=rows.map(({stuUid,aid,a})=>{
+    const exam=a.mode==='official'?(({general:'General',airframe:'Airframe',powerplant:'Powerplant'})[a.subject]||a.subject)+' Official':(a.label||'Custom');
+    const done=a.status==='complete';
+    const score=done?(a.score+'/'+a.total+' · '+a.pct+'%'):(a.status==='in_progress'?'in progress':'not started');
+    const col=done?(a.pct>=70?'var(--cl)':'var(--wl)'):'var(--muted)';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:11px 14px;margin-bottom:7px"><div><div style="font-weight:700;font-size:.9rem">'+esc(a.studentName||'(student)')+' — '+exam+'</div><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">'+(a.createdAt?fmtDate(a.createdAt):'')+'</div></div><div style="display:flex;align-items:center;gap:12px"><span style="font-family:monospace;font-size:.82rem;font-weight:700;color:'+col+'">'+score+'</span>'+(done?'<button onclick="assignViewResult(\''+stuUid+'\',\''+aid+'\')" class="btn" style="font-size:.78rem">View breakdown</button>':'')+'</div></div>';
+  }).join('');
+}
+async function assignViewResult(stuUid,aid){
+  const a=await dbGet('assignedExams/'+stuUid+'/'+aid).catch(()=>null);
+  if(!a||!a.data){ alert('Result data not available.'); return; }
+  const questions=a.data.questions||[], answers=a.data.answers||{};
+  document.getElementById('asgResTitle').textContent=(a.studentName||'Student')+' — '+(a.pct||0)+'%';
+  const pass=(a.pct||0)>=70;
+  const passBar='<div style="background:'+(pass?'rgba(34,197,94,.1)':'rgba(204,68,68,.1)')+';border:1px solid '+(pass?'rgba(34,197,94,.3)':'rgba(204,68,68,.3)')+';border-radius:var(--r);padding:11px 15px;margin-bottom:14px;font-family:monospace;font-size:.86rem;color:'+(pass?'var(--cl)':'var(--wl)')+'">'+(a.score||0)+'/'+(a.total||questions.length)+' — '+(a.pct||0)+'% · '+(pass?'PASSING':'NOT PASSING (FAA requires 70%)')+'</div>';
+  const plan=(typeof pxStudyPlanHTML==='function')?pxStudyPlanHTML(questions,answers):'';
+  const qhtml='<div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px">Question-by-question</div>'+questions.map((q,i)=>{const sel=answers[i];const ok=sel===q.correct;const ans=sel!==undefined;return buildRevQuestionCard(q,i,sel,ok,ans);}).join('');
+  document.getElementById('asgResContent').innerHTML=passBar+plan+qhtml;
+  document.getElementById('assignResultModal').style.display='flex';
 }
 
 function backToClassrooms(){
@@ -11622,19 +11774,20 @@ const OFFICIAL_TOPICS = {
   airframe:   ['Aircraft Electrical Systems','Aircraft Fuel Systems','Aircraft Instrument Systems','Airframe Inspection','Communications and Navigation Systems','Environmental Systems','Fire Protection','Flight Controls','Hydraulic and Pneumatic Systems','Ice and Rain Control Systems','Landing Gear','Metallic Structures','Nonmetallic Structures','Rotorcraft'],
   powerplant: ['Engine Electrical Systems','Engine Exhaust and Reverser Systems','Engine Fire Protection Systems','Engine Fuel and Fuel Metering Systems','Engine Inspection','Engine Instrument Systems','Engine Lubrication Systems','Ignition and Starting Systems','Propellers','Reciprocating Engines','Reciprocating Engine Induction and Cooling','Turbine Engine Air Systems','Turbine Engines']
 };
-let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _pxAnswers={};
+let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _pxAnswers={}, _pxAssignId=null;
 let _pxCurrentQ=0, _pxCorrectCount=0, _pxAnsweredCount=0, _pxTopicStats={};
 let _pxExamKey=null;
 let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null, _pxRevFilter='all';
 
 function practiceInitTab(){
-  _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null;
+  _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxAssignId=null;
   practiceRenderTopicPicker();
   practiceSetMode('official');
   ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,i)=>{
     const el=document.getElementById(id); if(el) el.classList.toggle('hidden',i!==0);
   });
   const errEl=document.getElementById('pxError'); if(errEl) errEl.textContent='';
+  pxRenderAssigned();
   practiceLoadHistory();
 }
 
@@ -11741,6 +11894,13 @@ async function practiceGenerate(){
     count=_pxCount;
     label=topics.length===1?topics[0]:`${topics.length} Topics`;
   }
+  _pxAssignId=null;
+  await pxRunExam(topics, count, label);
+}
+
+// Shared exam runner — used by both self-generated and instructor-assigned exams.
+async function pxRunExam(topics, count, label){
+  const errEl=document.getElementById('pxError');
   document.getElementById('practiceSetup').classList.add('hidden');
   document.getElementById('practiceLoading').classList.remove('hidden');
   const msgEl=document.getElementById('pxLoadingMsg');
@@ -11758,17 +11918,16 @@ async function practiceGenerate(){
     if(stuSession?.uid){
       const histRef=db.ref('practiceHistory/'+stuSession.uid).push();
       _pxExamKey=histRef.key;
-      // Await both writes so we KNOW the exam (and its questions) are saved before the student starts.
-      // If this fails, the exam can't be resumed later — surface it instead of failing silently.
       try {
         await Promise.all([
-          histRef.set({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',total:_pxQuestions.length,score:0,pct:0,answeredCount:0,topicStats:{},status:'incomplete'}),
+          histRef.set({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',total:_pxQuestions.length,score:0,pct:0,answeredCount:0,topicStats:{},status:'incomplete',...(_pxAssignId?{assignId:_pxAssignId}:{})}),
           db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey).set({questions:_pxQuestions,answers:{}})
         ]);
       } catch(saveErr){
         console.error('practice exam save failed (resume will not work):', saveErr);
-        _pxExamKey=null; // don't pretend it's being saved
+        _pxExamKey=null;
       }
+      if(_pxAssignId) db.ref('assignedExams/'+stuSession.uid+'/'+_pxAssignId).update({status:'in_progress',examKey:_pxExamKey}).catch(()=>{});
     }
     practiceRenderExam(label);
   } catch(e){
@@ -11776,6 +11935,47 @@ async function practiceGenerate(){
     document.getElementById('practiceSetup').classList.remove('hidden');
     if(errEl) errEl.textContent=e.message||'Failed to generate. Please try again.';
   }
+}
+
+// Student starts an instructor-assigned exam
+async function practiceStartAssigned(assignId){
+  if(!stuSession?.uid) return;
+  const a=await dbGet('assignedExams/'+stuSession.uid+'/'+assignId).catch(()=>null);
+  if(!a){ alert('Could not load this assigned exam.'); return; }
+  _pxAssignId=assignId;
+  let topics, count, label;
+  if(a.mode==='official' && a.subject){
+    _pxMode='official'; _pxOfficialSubject=a.subject;
+    topics=OFFICIAL_TOPICS[a.subject]; count=OFFICIAL_EXAMS[a.subject].count;
+    label=(OFFICIAL_EXAMS[a.subject].label)+' — Assigned';
+  } else {
+    _pxMode='topic'; _pxOfficialSubject=null;
+    topics=a.topics||[]; count=a.count||topics.length||5;
+    label=(a.label||(topics.length+' Topics'))+' — Assigned';
+  }
+  await pxRunExam(topics, count, label);
+}
+
+// Render the "Assigned by your instructor" section on the practice setup screen
+async function pxRenderAssigned(){
+  const el=document.getElementById('pxAssignedSection');
+  if(!el || !stuSession?.uid){ if(el) el.innerHTML=''; return; }
+  let all={};
+  try { all=await dbGet('assignedExams/'+stuSession.uid)||{}; } catch(e){ el.innerHTML=''; return; }
+  const pending=Object.entries(all).filter(([,a])=>a && a.status!=='complete')
+    .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
+  if(!pending.length){ el.innerHTML=''; return; }
+  el.innerHTML='<div style="background:rgba(240,165,0,.08);border:1px solid var(--accent);border-radius:var(--r);padding:14px 16px;margin-bottom:16px">'+
+    '<div style="font-family:monospace;font-size:.74rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin-bottom:10px">📋 Assigned by your instructor</div>'+
+    pending.map(([id,a])=>{
+      const desc=a.mode==='official'?(({general:'General',airframe:'Airframe',powerplant:'Powerplant'})[a.subject]||a.subject)+' — Official Exam':(a.label||((a.topics||[]).length+' topics'));
+      const n=a.mode==='official'?(OFFICIAL_EXAMS[a.subject]?.count||''):(a.count||'');
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)">'+
+        '<div><div style="font-weight:700;font-size:.92rem">'+desc+(n?' · '+n+' questions':'')+'</div>'+
+        '<div style="font-family:monospace;font-size:.7rem;color:var(--muted)">from '+(a.byName||'your instructor')+(a.status==='in_progress'?' · in progress':'')+'</div></div>'+
+        '<button onclick="practiceStartAssigned(\''+id+'\')" class="btn btn-primary" style="font-size:.8rem;white-space:nowrap">Start →</button>'+
+      '</div>';
+    }).join('')+'</div>';
 }
 
 function practiceRenderExam(label){
@@ -11871,6 +12071,13 @@ function practiceFinish(){
   if(titleEl){ titleEl.textContent=`${correct}/${total} — ${pct}%`; titleEl.style.color=pct>=70?'var(--cl)':'var(--wl)'; }
   if(stuSession?.uid && _pxExamKey){
     db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:correct,pct,topicStats:_pxTopicStats,answeredCount:total,status:'complete'}).catch(e=>console.warn('finish save failed:',e&&e.message||e));
+    // If this was an instructor-assigned exam, write the full results back so the instructor can review
+    if(_pxAssignId){
+      db.ref('assignedExams/'+stuSession.uid+'/'+_pxAssignId).update({
+        status:'complete', completedAt:Date.now(), score:correct, pct, total, answeredCount:total,
+        topicStats:_pxTopicStats, studentName:stuSession.name||'', data:{questions:_pxQuestions, answers:_pxAnswers}
+      }).catch(e=>console.warn('assigned result save failed:',e&&e.message||e));
+    }
   }
   const bd=document.getElementById('pxResultsBreakdown');
   if(!bd) return;
@@ -12134,6 +12341,7 @@ async function practiceResumeFromModal(){
   _pxQuestions=examData.questions||[];
   _pxAnswers=examData.answers||{};
   _pxExamKey=key;
+  _pxAssignId=summary.assignId||null; // so finishing a resumed assigned exam still reports to the instructor
   _pxMode=summary.mode||'official';
   _pxOfficialSubject=summary.subject!=='mixed'?summary.subject:null;
   // Rebuild running stats from stored answers
