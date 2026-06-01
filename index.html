@@ -11830,13 +11830,8 @@ function practiceSelectAnswer(letter){
   const idx = _pxCurrentQ;
   const q = _pxQuestions[idx];
   if(!q) return;
+  if(_pxAnswers[idx] !== undefined) return; // already answered — ignore extra taps
   _pxAnswers[idx] = letter;
-  const choiceKeys = Object.keys(q.choices);
-  // Lock all buttons immediately
-  choiceKeys.forEach(l => {
-    const btn = document.getElementById('pxBtn'+l);
-    if(btn){ btn.onclick = null; btn.style.cursor = 'default'; }
-  });
   const ok = letter === q.correct;
   _pxAnsweredCount++;
   if(ok) _pxCorrectCount++;
@@ -11851,35 +11846,11 @@ function practiceSelectAnswer(letter){
     db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:_pxCorrectCount,pct:sp,answeredCount:_pxAnsweredCount,topicStats:_pxTopicStats}).catch(e=>console.warn('progress save failed:',e&&e.message||e));
     db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey+'/answers').set(_pxAnswers).catch(e=>console.warn('answer save failed:',e&&e.message||e));
   }
-  // Color the choice buttons
-  choiceKeys.forEach(l => {
-    const btn = document.getElementById('pxBtn'+l);
-    if(!btn) return;
-    if(l === q.correct){
-      btn.style.background='rgba(34,197,94,.15)'; btn.style.borderColor='var(--cl)'; btn.style.color='var(--cl)'; btn.style.fontWeight='700';
-    } else if(l === letter && !ok){
-      btn.style.background='rgba(204,68,68,.12)'; btn.style.borderColor='var(--wl)'; btn.style.color='var(--wl)';
-    } else {
-      btn.style.opacity='.38';
-    }
-  });
-  // Show instant feedback with explanation
-  const fbEl = document.getElementById('pxFeedback');
-  if(fbEl){
-    const ref = q.handbook ? `📚 ${q.handbook}${q.topic ? ' &nbsp;·&nbsp; '+q.topic : ''}` : '';
-    fbEl.style.display = 'block';
-    fbEl.style.borderColor = ok ? 'rgba(34,197,94,.35)' : 'rgba(204,68,68,.35)';
-    fbEl.style.background = ok ? 'rgba(34,197,94,.06)' : 'rgba(204,68,68,.06)';
-    fbEl.innerHTML =
-      `<div style="font-family:monospace;font-size:.78rem;font-weight:700;margin-bottom:${q.explanation?'9':'0'}px;color:${ok?'var(--cl)':'var(--wl)'}">` +
-        (ok ? '✓ CORRECT' : `✗ INCORRECT &nbsp;— Correct answer: ${q.correct}. &nbsp;${q.choices[q.correct]||''}`) +
-      `</div>` +
-      (q.explanation ? `<div style="font-size:.86rem;line-height:1.6;color:var(--fg)">${q.explanation}</div>` : '') +
-      (ref ? `<div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:9px;border-top:1px solid var(--border);padding-top:7px">${ref}</div>` : '');
-  }
-  practiceUpdateProgress();
-  const nextBtn = document.getElementById('pxNextBtn');
-  if(nextBtn) nextBtn.style.display = 'block';
+  // Briefly highlight the chosen answer, then auto-advance. No feedback/explanation during the exam.
+  const btn = document.getElementById('pxBtn'+letter);
+  if(btn){ btn.style.background='rgba(8,145,178,.18)'; btn.style.borderColor='#0891b2'; }
+  Object.keys(q.choices).forEach(l=>{ const b=document.getElementById('pxBtn'+l); if(b) b.onclick=null; });
+  setTimeout(practiceAdvance, 160);
 }
 
 function practiceAdvance(){
@@ -11910,7 +11881,7 @@ function practiceFinish(){
     :`<div style="background:rgba(204,68,68,.1);border:1px solid rgba(204,68,68,.3);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;font-family:monospace;font-size:.85rem;color:var(--wl)">✗ NOT PASSING — FAA requires 70%</div>`;
   const focusBox=pxStudyPlanHTML(_pxQuestions,_pxAnswers);
   const topicTable=topicRows.length>1?`<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:16px"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Topic Breakdown</div>${topicRows.map(([t,d])=>{const p=Math.round((d.correct/d.total)*100);const col=p>=70?'var(--cl)':p>=50?'#f59e0b':'var(--wl)';return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)33"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t}</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted);white-space:nowrap">${d.correct}/${d.total}</div><div style="width:34px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:${col}">${p}%</div><div style="width:66px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:${p}%;height:100%;background:${col};border-radius:3px"></div></div></div>`;}).join('')}</div>`:'';
-  const reviewHtml=`<div><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Answer Review</div>${_pxQuestions.map((q,i)=>{const sel=_pxAnswers[i],ok=sel===q.correct;return `<div style="background:var(--panel);border:1px solid ${ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'};border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q${i+1}${q.topic?' · '+q.topic:''}</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:${ok?'var(--cl)':'var(--wl)'}">${ok?'✓ CORRECT':'✗ INCORRECT'}</div></div><div style="font-weight:700;margin-bottom:9px;font-size:.88rem;line-height:1.4">${q.question}</div><div style="display:flex;flex-direction:column;gap:4px">${['A','B','C','D'].map(l=>{const ic=l===q.correct,is=l===sel;let bg='var(--panel2)',col='var(--text)',fw='normal';if(ic){bg='rgba(34,197,94,.15)';col='var(--cl)';fw='700';}else if(is&&!ok){bg='rgba(204,68,68,.12)';col='var(--wl)';}return `<div style="padding:6px 10px;border-radius:var(--r);background:${bg};color:${col};font-family:monospace;font-size:.79rem;font-weight:${fw}"><span style="font-weight:700;margin-right:7px">${l}.</span>${q.choices[l]}${ic?' ✓':(is&&!ok?' ✗':'')}</div>`;}).join('')}</div>${q.explanation?`<div style="margin-top:9px;padding:9px 11px;background:rgba(8,145,178,.07);border:1px solid rgba(8,145,178,.2);border-radius:var(--r);font-size:.79rem;line-height:1.55;color:var(--fg)">${q.explanation}</div>`:''}${q.handbook?`<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 ${q.handbook}${q.topic?' · '+q.topic:''}</div>`:''}</div>`;}).join('')}</div>`;
+  const reviewHtml='<div><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Answer Review</div>'+_pxQuestions.map((q,i)=>{const sel=_pxAnswers[i];const ok=sel===q.correct;const answered=sel!==undefined;return buildRevQuestionCard(q,i,sel,ok,answered);}).join('')+'</div>';
   bd.innerHTML=passBar+focusBox+topicTable+reviewHtml;
 }
 
@@ -12137,7 +12108,17 @@ function pxRenderRevQuestions(){
 function buildRevQuestionCard(q,i,sel,ok,answered){
   const figImg=q.figureNum?'<div style="margin-bottom:9px;text-align:center"><img src="/public/figures/figure-'+q.figureNum+'.jpg" alt="Figure '+q.figureNum+'" style="max-width:100%;border:1px solid var(--border);border-radius:var(--r)" onerror="this.parentNode.innerHTML=\'<div style=&quot;padding:11px 14px;border:1px dashed var(--border);border-radius:var(--r);font-family:monospace;font-size:.78rem;color:var(--muted);text-align:center&quot;>⚠ Figure '+q.figureNum+' image unavailable</div>\'"></div>':'';
   const choices=Object.keys(q.choices||{}).map(l=>{const ic=l===q.correct,is=l===sel;let bg='var(--panel2)',col='var(--text)',fw='normal';if(ic){bg='rgba(34,197,94,.15)';col='var(--cl)';fw='700';}else if(is&&!ok){bg='rgba(204,68,68,.12)';col='var(--wl)';}return '<div style="padding:6px 10px;border-radius:var(--r);background:'+bg+';color:'+col+';font-family:monospace;font-size:.79rem;font-weight:'+fw+'"><span style="font-weight:700;margin-right:7px">'+l+'.</span>'+q.choices[l]+(ic?' ✓':(is&&!ok?' ✗':''))+'</div>';}).join('');
-  return '<div style="background:var(--panel);border:1px solid '+(answered?(ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'):'var(--border)')+';border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q'+(i+1)+(q.topic?' · '+q.topic:'')+'</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:'+(answered?(ok?'var(--cl)':'var(--wl)'):'var(--muted)')+'">'+(!answered?'NOT ANSWERED':ok?'✓ CORRECT':'✗ INCORRECT')+'</div></div>'+figImg+'<div style="font-weight:700;margin-bottom:9px;font-size:.87rem;line-height:1.4">'+q.question+'</div><div style="display:flex;flex-direction:column;gap:4px">'+choices+'</div>'+(q.explanation?'<div style="margin-top:9px;padding:9px 11px;background:rgba(8,145,178,.07);border:1px solid rgba(8,145,178,.2);border-radius:var(--r);font-size:.79rem;line-height:1.55;color:var(--text)">'+q.explanation+'</div>':'')+(q.handbook?'<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 '+q.handbook+(q.topic?' · '+q.topic:'')+'</div>':'')+'</div>';
+  // Explanation: auto-show for incorrect/unanswered; click-to-reveal for correct
+  const expStyle='margin-top:9px;padding:9px 11px;background:rgba(8,145,178,.07);border:1px solid rgba(8,145,178,.2);border-radius:var(--r);font-size:.79rem;line-height:1.55;color:var(--text)';
+  let expBlock='';
+  if(q.explanation){
+    if(ok){
+      expBlock='<button onclick="var e=this.nextElementSibling;var h=e.style.display===\'none\';e.style.display=h?\'block\':\'none\';this.textContent=(h?\'▾ Hide\':\'▸ Show\')+\' explanation\'" style="margin-top:9px;background:none;border:1px solid var(--border);border-radius:var(--r);color:#22b8d8;font-family:monospace;font-size:.74rem;cursor:pointer;padding:5px 11px">▸ Show explanation</button><div style="display:none;'+expStyle+'">'+q.explanation+'</div>';
+    } else {
+      expBlock='<div style="'+expStyle+'">'+q.explanation+'</div>';
+    }
+  }
+  return '<div style="background:var(--panel);border:1px solid '+(answered?(ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'):'var(--border)')+';border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q'+(i+1)+(q.topic?' · '+q.topic:'')+'</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:'+(answered?(ok?'var(--cl)':'var(--wl)'):'var(--muted)')+'">'+(!answered?'NOT ANSWERED':ok?'✓ CORRECT':'✗ INCORRECT')+'</div></div>'+figImg+'<div style="font-weight:700;margin-bottom:9px;font-size:.87rem;line-height:1.4">'+q.question+'</div><div style="display:flex;flex-direction:column;gap:4px">'+choices+'</div>'+expBlock+(q.handbook?'<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 '+q.handbook+(q.topic?' · '+q.topic:'')+'</div>':'')+'</div>';
 }
 
 function practiceCloseReview(){
