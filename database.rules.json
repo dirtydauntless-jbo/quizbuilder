@@ -63,7 +63,7 @@
       }
     },
     "studentProfiles": {
-      ".read": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".write": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
@@ -95,7 +95,8 @@
       ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
-        ".write": "auth != null && (auth.uid === $uid || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+        ".write": "auth != null && (auth.uid === $uid || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        ".validate": "newData.child('uid').val() === auth.uid || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true"
       }
     },
     "quizOverrides": {
@@ -172,6 +173,13 @@
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "assignedExams": {
+      ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
       }
     }
   }

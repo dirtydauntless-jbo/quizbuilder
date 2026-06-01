@@ -3603,12 +3603,34 @@ async function opSimInit(){
       if(enabled){ el.innerHTML = html; el.classList.remove('hidden'); }
       else { el.classList.add('hidden'); el.innerHTML = ''; }
     });
-    // Static sign-up buttons (redundant with the scrolling banner)
-    ['opSimLandingBtn','opSimStuBtn'].forEach(id=>{
-      const el = document.getElementById(id);
-      if(el) el.classList.toggle('hidden', !enabled);
-    });
+    await opSimUpdateButtons();
   }catch(e){ /* non-critical */ }
+}
+
+// The static button doubles as a reminder + cancel once the user is signed up
+async function opSimUpdateButtons(){
+  const enabled = !!(_opSimConfig && _opSimConfig.enabled);
+  const uid = stuSession?.uid || instUser?.uid || null;
+  let signedUp = false;
+  if(enabled && uid){ try{ signedUp = !!(await dbGet('opSimSignups/'+safeKey(uid))); }catch(e){} }
+  ['opSimLandingBtn','opSimStuBtn'].forEach(id=>{
+    const b = document.getElementById(id); if(!b) return;
+    b.classList.toggle('hidden', !enabled);
+    if(!enabled) return;
+    if(signedUp){
+      b.textContent = "✓ You're signed up — tap to cancel";
+      b.style.background = 'transparent';
+      b.style.border = '1px solid var(--accent)';
+      b.style.color = 'var(--accent)';
+      b.onclick = opSimCancelSignup;
+    } else {
+      b.textContent = "✈ Sign Up for the O&P Simulator";
+      b.style.background = 'var(--accent)';
+      b.style.border = 'none';
+      b.style.color = '#000';
+      b.onclick = opSimOpenSignup;
+    }
+  });
 }
 
 // Open sign-up modal — requires a login
@@ -3640,6 +3662,17 @@ function opSimOpenSignup(){
   openModal('opSimModal');
 }
 
+async function opSimCancelSignup(){
+  const uid = stuSession?.uid || instUser?.uid;
+  if(!uid) return;
+  if(!confirm('Remove your name from the O&P Simulator sign-up list?')) return;
+  try {
+    await dbSet('opSimSignups/'+safeKey(uid), null);
+    showToast("You've been removed from the sign-up list.",'warn');
+    opSimUpdateButtons();
+  } catch(e){ showToast('Could not cancel — please try again.','error'); }
+}
+
 function opSimClearErr(){
   document.getElementById('opSimErr').classList.add('hidden');
 }
@@ -3660,6 +3693,7 @@ async function opSimSubmitSignup(){
     await dbSet(`opSimSignups/${key}`, entry);
     closeModal('opSimModal');
     showToast(`You're signed up, ${name}! See you there.`,'success');
+    opSimUpdateButtons();
   }catch(e){
     errEl.textContent = 'Sign-up failed. Please try again.';
     errEl.classList.remove('hidden');
@@ -19164,7 +19198,7 @@ async function loadInstrumentGradebook(classId, sessionNum){
 
 </script>
 <div style="text-align:center;font-family:monospace;font-size:.72rem;color:var(--muted);padding:18px 0 12px;border-top:1px solid var(--border);margin-top:24px;background:var(--panel2)">
-  © 2026 DirtyDauntless LLC. All rights reserved.
+  Created by Jaime Lee &nbsp;·&nbsp; © 2026 DirtyDauntless LLC. All rights reserved.
 </div>
 </body>
 </html>
