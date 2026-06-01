@@ -3570,6 +3570,9 @@ function masterDashToggle(id){
 // ══════════════════════════════════════════════════════════════════════════
 
 let _opSimConfig = null; // cached config from Firebase
+let _opSimSignedUp = false; // is the current viewer already signed up
+// O&P sign-up is for students (and master admin, to preview) — not regular instructors
+function _opSimRegularInstructor(){ return !!(instUser && !_isMasterAdmin && !stuSession); }
 
 // Build the scrolling banner inner HTML from config
 function _opSimBannerHTML(cfg){
@@ -3595,12 +3598,12 @@ async function opSimInit(){
   try{
     const cfg = await dbGet('config/opSim').catch(()=>null);
     _opSimConfig = cfg || {};
-    const enabled = !!_opSimConfig.enabled;
-    const html = enabled ? _opSimBannerHTML(_opSimConfig) : '';
+    const show = !!_opSimConfig.enabled && !_opSimRegularInstructor();
+    const html = show ? _opSimBannerHTML(_opSimConfig) : '';
     ['opSimLandingBanner','opSimStuBanner'].forEach(id=>{
       const el = document.getElementById(id);
       if(!el) return;
-      if(enabled){ el.innerHTML = html; el.classList.remove('hidden'); }
+      if(show){ el.innerHTML = html; el.classList.remove('hidden'); }
       else { el.classList.add('hidden'); el.innerHTML = ''; }
     });
     await opSimUpdateButtons();
@@ -3609,26 +3612,30 @@ async function opSimInit(){
 
 // The static button doubles as a reminder + cancel once the user is signed up
 async function opSimUpdateButtons(){
-  const enabled = !!(_opSimConfig && _opSimConfig.enabled);
+  const enabled = !!(_opSimConfig && _opSimConfig.enabled) && !_opSimRegularInstructor();
   const uid = stuSession?.uid || instUser?.uid || null;
-  let signedUp = false;
-  if(enabled && uid){ try{ signedUp = !!(await dbGet('opSimSignups/'+safeKey(uid))); }catch(e){} }
+  _opSimSignedUp = false;
+  if(enabled && uid){ try{ _opSimSignedUp = !!(await dbGet('opSimSignups/'+safeKey(uid))); }catch(e){} }
   ['opSimLandingBtn','opSimStuBtn'].forEach(id=>{
     const b = document.getElementById(id); if(!b) return;
     b.classList.toggle('hidden', !enabled);
     if(!enabled) return;
-    if(signedUp){
+    if(_opSimSignedUp){
       b.textContent = "✓ You're signed up — tap to cancel";
       b.style.background = 'transparent';
       b.style.border = '1px solid var(--accent)';
       b.style.color = 'var(--accent)';
       b.onclick = opSimCancelSignup;
+      b.onmouseover = function(){ this.style.borderColor='var(--wl)'; this.style.color='var(--wl)'; };
+      b.onmouseout  = function(){ this.style.borderColor='var(--accent)'; this.style.color='var(--accent)'; };
     } else {
       b.textContent = "✈ Sign Up for the O&P Simulator";
       b.style.background = 'var(--accent)';
       b.style.border = 'none';
       b.style.color = '#000';
       b.onclick = opSimOpenSignup;
+      b.onmouseover = null;
+      b.onmouseout = null;
     }
   });
 }
@@ -3639,8 +3646,16 @@ function opSimOpenSignup(){
     showToast('Please sign in to sign up for the O&P Simulator.','warn');
     return;
   }
+  if(_opSimRegularInstructor()){
+    showToast("Instructors don't need to sign up for the O&P Simulator.",'warn');
+    return;
+  }
   if(!_opSimConfig || !_opSimConfig.enabled){
     showToast('Sign-ups are not currently open.','warn');
+    return;
+  }
+  if(_opSimSignedUp){
+    showToast("You're already signed up — use the Sign-Up button to cancel if needed.",'success');
     return;
   }
   // Pre-fill name if we have it
@@ -3782,7 +3797,7 @@ async function _opSimLoadAdminPanel(){
 
   // Load sign-ups
   const signups = await dbGet('opSimSignups').catch(()=>null) || {};
-  const rows = Object.values(signups).sort((a,b)=>(a.signedUpAt||'').localeCompare(b.signedUpAt||''));
+  const rows = Object.entries(signups).map(([key,v])=>({key,...(v||{})})).sort((a,b)=>(a.signedUpAt||'').localeCompare(b.signedUpAt||''));
   if(!rows.length){
     listEl.innerHTML = '<div class="empty-state" style="font-size:.8rem">No sign-ups yet.</div>';
     return;
@@ -3795,7 +3810,8 @@ async function _opSimLoadAdminPanel(){
           <th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted);font-size:.68rem;text-transform:uppercase">#</th>
           <th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted);font-size:.68rem;text-transform:uppercase">Name</th>
           <th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted);font-size:.68rem;text-transform:uppercase">Block</th>
-          <th style="text-align:left;padding:6px 0;color:var(--muted);font-size:.68rem;text-transform:uppercase">Signed Up</th>
+          <th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted);font-size:.68rem;text-transform:uppercase">Signed Up</th>
+          <th style="padding:6px 0;width:1%"></th>
         </tr>
       </thead>
       <tbody>
@@ -3804,10 +3820,23 @@ async function _opSimLoadAdminPanel(){
             <td style="padding:7px 10px 7px 0;color:var(--muted)">${i+1}</td>
             <td style="padding:7px 10px 7px 0;font-weight:600">${esc(r.name||'—')}</td>
             <td style="padding:7px 10px 7px 0"><span style="background:rgba(124,58,237,.15);color:#a78bfa;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:700">Block ${esc(r.block||'?')}</span></td>
-            <td style="padding:7px 0;color:var(--muted);font-size:.7rem">${r.signedUpAt ? new Date(r.signedUpAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+            <td style="padding:7px 10px 7px 0;color:var(--muted);font-size:.7rem">${r.signedUpAt ? new Date(r.signedUpAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+            <td style="padding:7px 0;text-align:right"><button onclick="opSimAdminRemoveSignup('${esc(r.key)}')" title="Remove this student" style="background:none;border:1px solid var(--wl);color:var(--wl);border-radius:4px;font-size:.68rem;padding:3px 9px;cursor:pointer">Remove</button></td>
           </tr>`).join('')}
       </tbody>
     </table>`;
+}
+
+// Master admin removes a single student's sign-up
+async function opSimAdminRemoveSignup(key){
+  if(!confirm('Remove this student from the O&P sign-up list?')) return;
+  try{
+    await dbSet('opSimSignups/'+key, null);
+    await _opSimLoadAdminPanel();
+    const m=document.getElementById('opSimAdminMsg'); if(m){ m.style.color='#16a34a'; m.textContent='✓ Sign-up removed.'; }
+  }catch(e){
+    const m=document.getElementById('opSimAdminMsg'); if(m){ m.style.color='#dc2626'; m.textContent='Error removing sign-up.'; }
+  }
 }
 
 // Called when master dash O&P panel is opened
