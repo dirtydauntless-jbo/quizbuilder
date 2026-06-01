@@ -12035,6 +12035,7 @@ async function pxRunExam(topics, count, label){
         _pxExamKey=null;
       }
       if(_pxAssignId) db.ref('assignedExams/'+stuSession.uid+'/'+_pxAssignId).update({status:'in_progress',examKey:_pxExamKey}).catch(()=>{});
+      practiceLoadHistory(); // keep Past Attempts current so the new (in-progress) exam shows when they return to setup
     }
     practiceRenderExam(label);
   } catch(e){
@@ -12097,7 +12098,10 @@ function practiceRenderExam(label){
 function practiceUpdateProgress(){
   const total = _pxQuestions.length;
   const qNum = Math.min(_pxCurrentQ + 1, total);
-  const pct = _pxAnsweredCount === 0 ? 100 : Math.round(_pxCorrectCount / _pxAnsweredCount * 100);
+  // Grade view: start at 100% and drop by one slot per missed question (e.g. -1% per miss on a 100-q exam).
+  // Converges to the true score once every question is answered.
+  const missed = Math.max(0, _pxAnsweredCount - _pxCorrectCount);
+  const pct = total ? Math.round((total - missed) / total * 100) : 100;
   const col = pct >= 70 ? 'var(--cl)' : pct >= 50 ? '#f59e0b' : 'var(--wl)';
   const labelEl = document.getElementById('pxProgressLabel');
   const scoreEl = document.getElementById('pxScoreLabel');
