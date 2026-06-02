@@ -1349,6 +1349,17 @@ setTimeout(function(){
         </div>
         <button onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
         <div id="pxError" style="color:var(--wl);font-family:monospace;font-size:.8rem;margin-top:8px;text-align:center;min-height:18px"></div>
+        <!-- Comprehensive performance breakdown -->
+        <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">📊 Performance Breakdown</div>
+          <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:10px">See your weakest topics across <b>all</b> your completed exams in a subject.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <button class="pxf-btn" id="pxcb-general" onclick="pxComprehensive('general')">📋 General</button>
+            <button class="pxf-btn" id="pxcb-airframe" onclick="pxComprehensive('airframe')">✈ Airframe</button>
+            <button class="pxf-btn" id="pxcb-powerplant" onclick="pxComprehensive('powerplant')">⚙ Powerplant</button>
+          </div>
+          <div id="pxComprehensiveOut"></div>
+        </div>
         <!-- History -->
         <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
           <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Past Attempts</div>
@@ -12554,6 +12565,57 @@ async function practiceLoadHistory(){
       '<th>#</th><th>Date</th><th>Pool</th><th>Result</th><th>Size</th><th>Not&nbsp;Ans.</th><th>Incorrect</th><th>Correct</th><th>Problem&nbsp;Areas</th><th></th>'+
       '</tr></thead><tbody>'+rows.map(r=>buildPxHistoryRow(r)).join('')+'</tbody></table></div>';
   } catch(e){ console.error('practiceLoadHistory',e); }
+}
+
+// Comprehensive breakdown: aggregate topic performance across ALL completed exams in a subject
+async function pxComprehensive(subject){
+  if(!stuSession?.uid) return;
+  ['general','airframe','powerplant'].forEach(s=>{ const b=document.getElementById('pxcb-'+s); if(b) b.classList.toggle('active', s===subject); });
+  const out=document.getElementById('pxComprehensiveOut');
+  if(!out) return;
+  out.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">Loading…</div>';
+  let data;
+  try { data=await dbGet('practiceHistory/'+stuSession.uid); }
+  catch(e){ out.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.78rem">Could not load history.</div>'; return; }
+  const subjLabel={general:'General',airframe:'Airframe',powerplant:'Powerplant'}[subject]||subject;
+  const exams=Object.values(data||{}).filter(r=>r && r.status==='complete' && r.subject===subject);
+  if(!exams.length){ out.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">No completed '+subjLabel+' exams yet. Finish a '+subjLabel+' practice exam to build your breakdown.</div>'; return; }
+  // Aggregate topic stats + overall
+  const agg={}; let totCorrect=0, totQ=0;
+  exams.forEach(r=>{
+    const ts=r.topicStats||{};
+    Object.entries(ts).forEach(([t,v])=>{
+      if(!v||typeof v.total!=='number') return;
+      if(!agg[t]) agg[t]={correct:0,total:0};
+      agg[t].correct += (v.correct||0); agg[t].total += v.total;
+    });
+    if(typeof r.score==='number' && typeof r.total==='number'){ totCorrect+=r.score; totQ+=r.total; }
+  });
+  if(totQ===0){ Object.values(agg).forEach(v=>{ totCorrect+=v.correct; totQ+=v.total; }); }
+  const rows=Object.entries(agg).filter(([,v])=>v.total>0)
+    .map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)}))
+    .sort((a,b)=>a.pct-b.pct);
+  const overallPct=totQ?Math.round(totCorrect/totQ*100):0;
+  const oc=overallPct>=70?'var(--cl)':overallPct>=50?'#f59e0b':'var(--wl)';
+  const weak=rows.filter(r=>r.pct<70).slice(0,3);
+  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">'+
+      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.2rem;letter-spacing:1px;color:var(--accent)">'+subjLabel+' — Comprehensive</div>'+
+      '<div style="font-family:monospace;font-size:.85rem;font-weight:700;color:'+oc+'">'+overallPct+'% &nbsp;('+totCorrect+'/'+totQ+')</div>'+
+    '</div>'+
+    '<div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across '+exams.length+' completed '+subjLabel+' exam'+(exams.length===1?'':'s')+'</div>'+
+  '</div>';
+  if(weak.length){
+    html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px">'+
+      '<div style="font-family:monospace;font-size:.72rem;letter-spacing:1px;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Work on these most</div>'+
+      weak.map((r,i)=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:'+(i<weak.length-1?'4px':'0')+'">'+_qEsc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+
+    '</div>';
+  }
+  html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px">'+
+    '<div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px">All Topics (weakest first)</div>'+
+    rows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.t)+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+
+  '</div>';
+  out.innerHTML=html;
 }
 
 // Top N topics where the student scored below 70% (worst first)
