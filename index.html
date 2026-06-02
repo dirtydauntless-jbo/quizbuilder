@@ -12056,6 +12056,10 @@ let _pxCurrentQ=0, _pxCorrectCount=0, _pxAnsweredCount=0, _pxTopicStats={};
 let _pxExamKey=null;
 let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null, _pxRevFilter='all';
 let _betaWrittenExam=true; // Beta mode: shows the (Beta) tag + lets students flag answers for review. On unless config disables it.
+// Rate limiting for flag-for-review submissions (server-enforced via questionReviewThrottle; mirrored here for instant UX)
+const PX_FLAG_MIN_INTERVAL=8000; // min ms between submissions (matches the server throttle gap)
+const PX_FLAG_MAX_PER_EXAM=25;   // safety cap per exam
+let _pxLastFlagTs=0, _pxFlagCount=0;
 
 // Load the Beta-mode flag and reflect it in the (Beta) tab tag
 async function betaInit(){
@@ -12202,7 +12206,7 @@ async function pxRunExam(topics, count, label){
     if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
     _pxQuestions=data.questions;
     await pxApplyOverrides(_pxQuestions); // apply any admin answer corrections before grading/saving
-    _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null;
+    _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxFlagCount=0;
     if(stuSession?.uid){
       const histRef=db.ref('practiceHistory/'+stuSession.uid).push();
       _pxExamKey=histRef.key;
@@ -12326,27 +12330,48 @@ async function pxSubmitReview(i){
   if(!stuSession?.uid){ showToast('Please sign in to submit a question for review.','error'); return; }
   const btn = document.getElementById('pxFlagBtn'+i);
   if(btn && btn.dataset.sent==='1') return;
+  // Client-side rate limit (instant feedback). The real limit is enforced by Firebase rules.
+  if(Date.now()-_pxLastFlagTs < PX_FLAG_MIN_INTERVAL){
+    showToast('Please wait a few seconds between review submissions.','error');
+    return;
+  }
+  if(_pxFlagCount >= PX_FLAG_MAX_PER_EXAM){
+    showToast("You've reached the review-submission limit for this exam. Thanks for the feedback!",'error');
+    return;
+  }
   if(btn){ btn.disabled=true; btn.style.cursor='default'; }
+  const SV = firebase.database.ServerValue.TIMESTAMP;
+  const newKey = db.ref('questionReviews').push().key;
+  const payload = {
+    ts: SV,
+    studentUid: stuSession.uid,
+    studentName: stuSession.name || '',
+    subject: q.subject || '',
+    topic: q.topic || '',
+    qid: (q.id != null ? String(q.id) : ''),
+    source: q.source || '',
+    question: q.question || '',
+    choices: q.choices || {},
+    currentCorrect: q.correct || '',
+    studentAnswer: _pxAnswers[i] || '',
+    status: 'pending'
+  };
   try {
-    await db.ref('questionReviews').push({
-      ts: Date.now(),
-      studentUid: stuSession.uid,
-      studentName: stuSession.name || '',
-      subject: q.subject || '',
-      topic: q.topic || '',
-      qid: (q.id != null ? String(q.id) : ''),
-      source: q.source || '',
-      question: q.question || '',
-      choices: q.choices || {},
-      currentCorrect: q.correct || '',
-      studentAnswer: _pxAnswers[i] || '',
-      status: 'pending'
+    // Atomic: write the review AND bump the throttle stamp together. If submissions come
+    // too fast the throttle rule rejects the whole update, so a review can't slip through.
+    await db.ref().update({
+      ['questionReviews/'+newKey]: payload,
+      ['questionReviewThrottle/'+stuSession.uid]: SV
     });
+    _pxLastFlagTs = Date.now();
+    _pxFlagCount++;
     if(btn){ btn.dataset.sent='1'; btn.innerHTML='✓ Sent for review — thanks!'; btn.style.color='var(--cl)'; btn.style.borderColor='var(--cl)'; }
     showToast('Question sent to admin for review. Thank you!','success');
   } catch(e){
     if(btn){ btn.disabled=false; btn.style.cursor='pointer'; }
-    showToast('Could not submit: '+(e&&e.message||e),'error');
+    const msg=String(e&&e.message||e);
+    if(/permission|denied/i.test(msg)) showToast("You're submitting too quickly — please wait a few seconds and try again.",'error');
+    else showToast('Could not submit: '+msg,'error');
   }
 }
 
@@ -12723,7 +12748,7 @@ async function practiceResumeFromModal(){
   _pxMode=summary.mode||'official';
   _pxOfficialSubject=summary.subject!=='mixed'?summary.subject:null;
   // Rebuild running stats from stored answers
-  _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={};
+  _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxFlagCount=0;
   Object.entries(_pxAnswers).forEach(([idxStr,letter])=>{
     const idx=parseInt(idxStr);
     const q=_pxQuestions[idx];
