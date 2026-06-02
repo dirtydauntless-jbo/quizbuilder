@@ -3581,22 +3581,18 @@ function masterDashToggle(id){
 
 // ── Flagged-question review (Beta) ──────────────────────────────────────────
 function _qEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+let _qReviewFilter='pending'; // 'pending' = needs review · 'all' = full submission log
+function qReviewSetFilter(f){ _qReviewFilter=f; _qReviewLoad(); }
+function _qWhen(ts){ return ts?new Date(ts).toLocaleString([], {month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):''; }
 
-async function _qReviewLoad(){
-  if(!_isMasterAdmin) return;
-  _betaAdminLoad();
-  const el=document.getElementById('qReviewList');
-  const body=document.getElementById('md-qreview-body');
-  if(!el) return;
-  if(body){ body.style.maxHeight='2000px'; body.style.overflowY='auto'; } // don't clip a long list
-  el.innerHTML='<div class="empty-state" style="font-size:.8rem">Loading…</div>';
-  let data;
-  try { data=await dbGet('questionReviews'); }
-  catch(e){ el.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.78rem">Error loading: '+_qEsc(e&&e.message||e)+'</div>'; return; }
-  const entries=Object.entries(data||{}).filter(([k,v])=>v && v.status==='pending').sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
-  if(entries.length===0){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No questions flagged for review. 🎉</div>'; return; }
-  el.innerHTML=entries.map(([key,r])=>{
-    const choices=r.choices||{};
+// Render one submission. Pending = actionable (pick answer / dismiss); resolved/dismissed = read-only log entry.
+function _qReviewCard(key, r){
+  const choices=r.choices||{};
+  const meta=[r.subject,r.topic,(r.qid?'id '+r.qid:''),(r.qid?'':'(AI-generated — no auto-apply)')].filter(Boolean).join(' · ');
+  const head='<div style="font-family:monospace;font-size:.64rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">'+_qEsc(meta)+'</div>'+
+    '<div style="font-family:monospace;font-size:.68rem;color:var(--accent);margin-bottom:8px">👤 '+_qEsc(r.studentName||'Unknown student')+(r.ts?' &nbsp;·&nbsp; 🕒 '+_qEsc(_qWhen(r.ts)):'')+'</div>'+
+    '<div style="font-weight:700;font-size:.9rem;line-height:1.4;margin-bottom:10px">'+_qEsc(r.question)+'</div>';
+  if(r.status==='pending'){
     const opts=Object.keys(choices).map(l=>{
       const isCur=l===r.currentCorrect, isStu=l===r.studentAnswer;
       const tag=(isCur?' <span style="color:var(--accent);font-size:.7rem">(current answer)</span>':'')+(isStu?' <span style="color:var(--muted);font-size:.7rem">(student picked)</span>':'');
@@ -3604,17 +3600,48 @@ async function _qReviewLoad(){
         'style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:9px 12px;border:1px solid '+(isCur?'var(--accent)':'var(--border)')+';border-radius:6px;background:var(--panel);color:var(--text);cursor:pointer;font-family:monospace;font-size:.8rem;line-height:1.4">'+
         '<b>'+l+'.</b> '+_qEsc(choices[l])+tag+'</button>';
     }).join('');
-    const meta=[r.subject,r.topic,(r.qid?'id '+r.qid:''),(r.qid?'':'(AI-generated — no auto-apply)')].filter(Boolean).join(' · ');
-    const when=r.ts?new Date(r.ts).toLocaleString([], {month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):'';
-    return '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;background:var(--panel2)">'+
-      '<div style="font-family:monospace;font-size:.64rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">'+_qEsc(meta)+'</div>'+
-      '<div style="font-family:monospace;font-size:.68rem;color:var(--accent);margin-bottom:8px">👤 '+_qEsc(r.studentName||'Unknown student')+(when?' &nbsp;·&nbsp; 🕒 '+_qEsc(when):'')+'</div>'+
-      '<div style="font-weight:700;font-size:.9rem;line-height:1.4;margin-bottom:10px">'+_qEsc(r.question)+'</div>'+
-      '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-bottom:8px">Tap the correct answer — it applies to all future exams:</div>'+
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;background:var(--panel2)">'+head+
+      '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-bottom:8px">Tap the correct answer — it applies to all future exams &amp; credits past students:</div>'+
       opts+
       '<div style="text-align:right;margin-top:6px"><button onclick="qReviewDismiss(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:monospace;font-size:.7rem;padding:5px 10px;cursor:pointer">Dismiss (no change)</button></div>'+
     '</div>';
-  }).join('');
+  }
+  // read-only log entry
+  const isResolved=r.status==='resolved';
+  const badge='<span style="font-family:monospace;font-size:.62rem;font-weight:700;text-transform:uppercase;padding:2px 8px;border-radius:10px;'+
+    (isResolved?'background:rgba(34,197,94,.15);color:var(--cl)':'background:var(--panel);color:var(--muted);border:1px solid var(--border)')+'">'+(isResolved?'✓ Resolved':'Dismissed')+'</span>';
+  const resInfo=isResolved
+    ? '<div style="font-family:monospace;font-size:.68rem;color:var(--cl);margin-top:6px">Answer set to <b>'+_qEsc(r.adminCorrect||'?')+'</b>'+(r.resolvedAt?' on '+_qEsc(_qWhen(r.resolvedAt)):'')+(r.studentAnswer?' &nbsp;·&nbsp; student had picked '+_qEsc(r.studentAnswer):'')+'</div>'
+    : '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:6px">No change made'+(r.resolvedAt?' · '+_qEsc(_qWhen(r.resolvedAt)):'')+'</div>';
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:13px 14px;margin-bottom:10px;background:var(--panel);opacity:.92">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div style="flex:1">'+head+'</div>'+badge+'</div>'+resInfo+'</div>';
+}
+
+async function _qReviewLoad(){
+  if(!_isMasterAdmin) return;
+  _betaAdminLoad();
+  const el=document.getElementById('qReviewList');
+  const body=document.getElementById('md-qreview-body');
+  if(!el) return;
+  if(body){ body.style.maxHeight='3000px'; body.style.overflowY='auto'; } // don't clip a long list
+  el.innerHTML='<div class="empty-state" style="font-size:.8rem">Loading…</div>';
+  let data;
+  try { data=await dbGet('questionReviews'); }
+  catch(e){ el.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.78rem">Error loading: '+_qEsc(e&&e.message||e)+'</div>'; return; }
+  const all=Object.entries(data||{}).filter(([k,v])=>!!v).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+  const nPending=all.filter(([,v])=>v.status==='pending').length;
+  // Filter toggle + tally
+  const fbtn=(f,label)=>'<button class="pxf-btn'+(_qReviewFilter===f?' active':'')+'" onclick="qReviewSetFilter(\''+f+'\')">'+label+'</button>';
+  const bar='<div style="display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap">'+
+    fbtn('pending','Needs Review ('+nPending+')')+fbtn('all','All Submissions ('+all.length+')')+'</div>';
+  const shown=_qReviewFilter==='pending'?all.filter(([,v])=>v.status==='pending'):all;
+  let listHtml;
+  if(shown.length===0){
+    listHtml='<div class="empty-state" style="font-size:.8rem">'+(_qReviewFilter==='pending'?'No questions awaiting review. 🎉':'No submissions yet.')+'</div>';
+  } else {
+    listHtml=shown.map(([key,r])=>_qReviewCard(key,r)).join('');
+  }
+  el.innerHTML=bar+listHtml;
 }
 
 async function qReviewResolve(key, letter){
