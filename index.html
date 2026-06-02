@@ -1281,7 +1281,7 @@ setTimeout(function(){
     </button>
     <button id="stuTabPractice" onclick="stuSwitchTab('practice')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:monospace;font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
-      🧪 FAA WRITTEN PRACTICE EXAMS <span style="color:var(--accent);font-weight:700;letter-spacing:0">(Beta)</span>
+      🧪 FAA WRITTEN PRACTICE EXAMS <span id="betaTag" style="color:var(--accent);font-weight:700;letter-spacing:0">(Beta)</span>
     </button>
     <button id="stuTabACS" onclick="stuSwitchTab('acs')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:monospace;font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
@@ -3353,7 +3353,13 @@ async function masterDashLoad(){
     `, true)}
 
     ${panel('md-qreview','Flagged Questions (Beta Review)','⚑',`
-      <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:10px">Questions students flagged as having a wrong answer. Tap the answer the FAA wants — it's applied to all future exams instantly.</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:monospace;font-size:.82rem">
+          <input type="checkbox" id="betaEnabled" style="width:16px;height:16px;cursor:pointer" onchange="betaAdminToggle()"/>
+          Beta Mode active — shows the “(Beta)” tag &amp; lets students flag answers
+        </label>
+      </div>
+      <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:10px">Questions students flagged as having a wrong answer. Tap the answer the FAA wants — it's applied to all future exams instantly, and students who already picked that answer are credited retroactively.</div>
       <div style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" onclick="_qReviewLoad()">↻ Refresh</button></div>
       <div id="qReviewList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, true)}
@@ -3578,6 +3584,7 @@ function _qEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;
 
 async function _qReviewLoad(){
   if(!_isMasterAdmin) return;
+  _betaAdminLoad();
   const el=document.getElementById('qReviewList');
   const body=document.getElementById('md-qreview-body');
   if(!el) return;
@@ -3598,9 +3605,10 @@ async function _qReviewLoad(){
         '<b>'+l+'.</b> '+_qEsc(choices[l])+tag+'</button>';
     }).join('');
     const meta=[r.subject,r.topic,(r.qid?'id '+r.qid:''),(r.qid?'':'(AI-generated — no auto-apply)')].filter(Boolean).join(' · ');
-    const when=r.ts?new Date(r.ts).toLocaleDateString():'';
+    const when=r.ts?new Date(r.ts).toLocaleString([], {month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):'';
     return '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;background:var(--panel2)">'+
-      '<div style="font-family:monospace;font-size:.64rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">'+_qEsc(meta)+' &nbsp;·&nbsp; flagged by '+_qEsc(r.studentName||'student')+(when?' &nbsp;·&nbsp; '+when:'')+'</div>'+
+      '<div style="font-family:monospace;font-size:.64rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">'+_qEsc(meta)+'</div>'+
+      '<div style="font-family:monospace;font-size:.68rem;color:var(--accent);margin-bottom:8px">👤 '+_qEsc(r.studentName||'Unknown student')+(when?' &nbsp;·&nbsp; 🕒 '+_qEsc(when):'')+'</div>'+
       '<div style="font-weight:700;font-size:.9rem;line-height:1.4;margin-bottom:10px">'+_qEsc(r.question)+'</div>'+
       '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-bottom:8px">Tap the correct answer — it applies to all future exams:</div>'+
       opts+
@@ -3620,9 +3628,77 @@ async function qReviewResolve(key, letter){
     if(r.subject && r.qid){ updates['answerOverrides/'+r.subject+'/'+r.qid]=letter; }
     await db.ref().update(updates);
     _pxOverridesCache=null; // invalidate cached overrides so the next exam picks this up
-    showToast(r.qid ? ('Saved — answer set to '+letter+' for future exams.') : ('Recorded as '+letter+' (AI question — regenerates automatically).'),'success');
+    // Retroactively credit students who already picked this (now-correct) answer
+    let retro={students:0,exams:0,credits:0};
+    if(r.subject && r.qid){ retro=await qReviewApplyRetroCredit(r.subject, r.qid, letter); }
+    let msg = r.qid ? ('Saved — answer set to '+letter+' for future exams.') : ('Recorded as '+letter+' (AI question — regenerates automatically).');
+    if(retro.students>0) msg += ' Retroactively credited '+retro.students+' student'+(retro.students===1?'':'s')+' across '+retro.exams+' exam'+(retro.exams===1?'':'s')+'.';
+    showToast(msg,'success');
     _qReviewLoad();
   } catch(e){ showToast('Save failed: '+(e&&e.message||e),'error'); }
+}
+
+// When an answer is corrected, scan every student's past exams: any who picked the now-correct
+// answer on this exact question gets the point added (score/pct/topicStats). We only ADD credit —
+// students who picked the old answer are never penalized. Idempotent (safe to run more than once).
+async function qReviewApplyRetroCredit(subject, qid, letter){
+  const result={students:0, exams:0, credits:0};
+  if(!subject || !qid) return result;
+  let allData, allHist;
+  try { [allData, allHist]=await Promise.all([dbGet('practiceExamData'), dbGet('practiceHistory')]); }
+  catch(e){ console.warn('retro-credit read failed:', e&&e.message||e); return result; }
+  if(!allData) return result;
+  const badKey=/[.#$\[\]/]/; // Firebase-illegal characters in a path segment
+  const updates={};
+  const students=new Set();
+  for(const uid of Object.keys(allData)){
+    const exams=allData[uid];
+    if(!exams || typeof exams!=='object') continue;
+    for(const examKey of Object.keys(exams)){
+      const ed=exams[examKey];
+      const qs=ed && ed.questions;
+      const ans=(ed && ed.answers) || {};
+      if(!Array.isArray(qs)) continue;
+      let creditDelta=0; const topicCredits={};
+      qs.forEach((q,i)=>{
+        if(!q || q.subject!==subject || String(q.id)!==String(qid)) return;
+        if(q.correct!==letter){
+          updates['practiceExamData/'+uid+'/'+examKey+'/questions/'+i+'/correct']=letter;
+          if(ans[i]===letter){ creditDelta++; const t=q.topic||'General'; topicCredits[t]=(topicCredits[t]||0)+1; }
+        }
+      });
+      if(creditDelta>0){
+        const h=(allHist && allHist[uid] && allHist[uid][examKey]) || {};
+        const total=(typeof h.total==='number'?h.total:qs.length);
+        const newScore=((typeof h.score==='number'?h.score:0)+creditDelta);
+        updates['practiceHistory/'+uid+'/'+examKey+'/score']=newScore;
+        if(h.status==='complete') updates['practiceHistory/'+uid+'/'+examKey+'/pct']=(total?Math.round(newScore/total*100):0);
+        const ts=h.topicStats || {};
+        Object.keys(topicCredits).forEach(t=>{
+          if(badKey.test(t)) return; // skip stat bump for topics with illegal path chars (score still updated)
+          const cur=(ts[t] && typeof ts[t].correct==='number') ? ts[t].correct : 0;
+          updates['practiceHistory/'+uid+'/'+examKey+'/topicStats/'+t+'/correct']=cur+topicCredits[t];
+        });
+        result.exams++; result.credits+=creditDelta; students.add(uid);
+      }
+    }
+  }
+  if(Object.keys(updates).length){ await db.ref().update(updates); }
+  result.students=students.size;
+  return result;
+}
+
+// Beta-mode toggle (master admin) — controls the (Beta) tag + student flag button
+async function betaAdminToggle(){
+  const el=document.getElementById('betaEnabled');
+  const on=el?el.checked:true;
+  try { await dbSet('config/betaWrittenExam/enabled', !!on); _betaWrittenExam=!!on; _betaApplyTag(); showToast('Beta mode '+(on?'enabled':'disabled')+'.','success'); }
+  catch(e){ showToast('Failed: '+(e&&e.message||e),'error'); }
+}
+async function _betaAdminLoad(){
+  const cfg=await dbGet('config/betaWrittenExam').catch(()=>null);
+  const en=document.getElementById('betaEnabled');
+  if(en) en.checked = !(cfg && cfg.enabled===false);
 }
 
 async function qReviewDismiss(key){
@@ -11689,6 +11765,7 @@ function showStuApp(){
   initStudentApp();
   opSimInit().catch(()=>{});
   announceBannerInit().catch(()=>{});
+  betaInit().catch(()=>{});
 }
 
 function show(id){
@@ -11951,6 +12028,15 @@ let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _p
 let _pxCurrentQ=0, _pxCorrectCount=0, _pxAnsweredCount=0, _pxTopicStats={};
 let _pxExamKey=null;
 let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null, _pxRevFilter='all';
+let _betaWrittenExam=true; // Beta mode: shows the (Beta) tag + lets students flag answers for review. On unless config disables it.
+
+// Load the Beta-mode flag and reflect it in the (Beta) tab tag
+async function betaInit(){
+  try { const cfg=await dbGet('config/betaWrittenExam').catch(()=>null); _betaWrittenExam = !(cfg && cfg.enabled===false); }
+  catch(e){ _betaWrittenExam = true; }
+  _betaApplyTag();
+}
+function _betaApplyTag(){ const t=document.getElementById('betaTag'); if(t) t.style.display=_betaWrittenExam?'':'none'; }
 
 function practiceInitTab(){
   _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxAssignId=null;
@@ -11962,6 +12048,7 @@ function practiceInitTab(){
   const errEl=document.getElementById('pxError'); if(errEl) errEl.textContent='';
   pxRenderAssigned();
   practiceLoadHistory();
+  betaInit();
 }
 
 function practiceSetMode(mode){
@@ -12195,7 +12282,7 @@ function pxPrevRecapHTML(i){
     else if(isSel){ color='var(--wl)'; label=' — Your answer (incorrect)'; }
     return '<div style="font-size:.82rem;color:'+color+';font-weight:'+fw+';padding:2px 0"><span style="font-weight:700;margin-right:6px">'+l+'.</span>'+q.choices[l]+label+'</div>';
   }).join('');
-  const flagBtn = '<div style="margin-top:10px;text-align:right">'+
+  const flagBtn = !_betaWrittenExam ? '' : '<div style="margin-top:10px;text-align:right">'+
     '<button id="pxFlagBtn'+i+'" onclick="pxSubmitReview('+i+')" title="Think this answer is wrong? Send it to the admin for review." '+
     'style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:monospace;font-size:.68rem;padding:5px 11px;cursor:pointer;transition:all .15s" '+
     'onmouseover="if(this.dataset.sent!==\'1\'){this.style.borderColor=\'var(--accent)\';this.style.color=\'var(--accent)\'}" '+

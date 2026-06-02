@@ -8,6 +8,9 @@
       "announcementBanner": {
         ".read": true
       },
+      "betaWrittenExam": {
+        ".read": true
+      },
       "instructorAccessCode": {
         ".read": "auth != null"
       },
@@ -165,7 +168,7 @@
       ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
-        ".write": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".indexOn": ["date"]
       }
     },
@@ -173,7 +176,7 @@
       ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)"
       }
     },
     "assignedExams": {
