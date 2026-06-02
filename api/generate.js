@@ -99,9 +99,11 @@ function getFaaQuestions(topic, n) {
     choices:     pool[i].choices,
     correct:     pool[i].correct,
     topic,
+    subject,
     handbook,
     explanation: pool[i].explanation || '',
     source:      'faa',
+    ...(pool[i].id != null ? { id: String(pool[i].id) } : {}),
     ...(pool[i].figureNum ? { figureNum: pool[i].figureNum } : {}),
   }));
 }

@@ -181,6 +181,17 @@
         ".read": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".write": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
       }
+    },
+    "questionReviews": {
+      ".read": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      "$rid": {
+        ".write": "auth != null && (!data.exists() ? newData.child('studentUid').val() === auth.uid : (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true))",
+        ".validate": "newData.hasChildren(['studentUid','question','status'])"
+      }
+    },
+    "answerOverrides": {
+      ".read": true,
+      ".write": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
     }
   }
 }
