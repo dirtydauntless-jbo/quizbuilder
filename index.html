@@ -18046,7 +18046,7 @@ function caliperSvgZoom(d, value, showGuide, locked, side, calRevealed=false){
     const p1 = `${wholeIn}"`;
     const p2 = tenths   > 0.00001 ? `+.${Math.round(tenths*10).toString()}00` : null;
     const p3 = qtrRem   > 0.00001 ? `+.0${Math.round(qtrRem*1000).toString().padStart(2,'0')}` : null;
-    const p4 = verThou  > 0.00001 ? `+.00${d.vernier}` : null;
+    const p4 = verThou  > 0.00001 ? `+.${String(d.vernier).padStart(3,'0')}` : null;
     const formula = [p1,p2,p3,p4].filter(Boolean).join(' ') + ' = ' + readStr;
     s += `<text x="12" y="${H-24}" font-size="20" font-family="monospace" font-weight="bold" fill="#f0c040">${formula}</text>`;
   }
@@ -18282,7 +18282,7 @@ function micDecompose(value, range){
   const thimbleFrac = (local % 0.025) / 0.025;
   const thimbleDiv  = (local % 0.025) / 0.001;
   const vernierDiv  = Math.round((local % 0.001) / 0.0001) % 10;  // wrap 10→0
-  return { base, local, thimbleFrac, thimbleDiv, vernierDiv };
+  return { base, local, thimbleFrac, thimbleDiv, vernierDiv, value };
 }
 
 function micBuildRangeBtns(side){
@@ -18314,6 +18314,7 @@ function micRenderSide(side){
   if(!svg) return;
   const d = micDecompose(s.value, s.range);
   d.showGuide = s.showGuide !== false;  // default true
+  d.revealed = !!s.micRevealed;         // show the reading breakdown when answer revealed
 
   // Zoom panel SVG (viewBox 920x280) — unified instrument layout
   let zh = '';
@@ -18547,6 +18548,27 @@ function micSvgZoom(d, side='inst'){
   s += `<text x="22" y="12" text-anchor="start" font-family="Arial" font-size="10" fill="#999">SLEEVE / VERNIER</text>`;
   s += `<text x="${FACE_L+6}" y="12" text-anchor="start" font-family="Arial" font-size="10" fill="#999">THIMBLE</text>`;
 
+  // ── READING + FORMULA (only when revealed) ───────────────────────
+  // sleeve 0.100s + sleeve 0.025s + thimble 0.001s + vernier 0.0001s
+  if(d.revealed){
+    const val = (typeof d.value==='number') ? d.value : (d.base + d.local);
+    const tt = Math.round(val*10000);            // total in ten-thousandths (avoids float drift)
+    let rem = tt - d.base*10000;
+    const sleeveNumTT = Math.floor(rem/1000)*1000; rem -= sleeveNumTT;   // .100" steps
+    const sleeveSubTT = Math.floor(rem/250)*250;   rem -= sleeveSubTT;   // .025" steps
+    const thouTT      = Math.floor(rem/10)*10;     rem -= thouTT;        // .001" steps
+    const vernTT      = rem;                                              // .0001" steps (0–9)
+    const pt = (v,dec)=>'+.'+(v/10000).toFixed(dec).split('.')[1];
+    const parts = [ d.base+'"' ];
+    if(sleeveNumTT>0) parts.push(pt(sleeveNumTT,3));
+    if(sleeveSubTT>0) parts.push(pt(sleeveSubTT,3));
+    if(thouTT>0)      parts.push(pt(thouTT,3));
+    if(vernTT>0)      parts.push(pt(vernTT,4));
+    const formula = parts.join(' ') + ' = ' + val.toFixed(4) + '"';
+    s += `<rect x="8" y="${H-32}" width="${W-16}" height="28" rx="5" fill="rgba(8,16,30,0.93)" stroke="#f0c040" stroke-width="2"/>`;
+    s += `<text x="18" y="${H-12}" font-size="18" font-family="monospace" font-weight="bold" fill="#f0c040">${formula}</text>`;
+  }
+
   // Border
   s += `<rect x="1" y="1" width="${W-2}" height="${H-2}" fill="none" stroke="#aaa" stroke-width="1.5"/>`;
   return s;
@@ -18689,16 +18711,19 @@ function simReveal(side){
   const btn=document.getElementById(`${prefix}SimRevealBtn`);
   const rd=document.getElementById(`${prefix}MicReadout`);
   const rv=document.getElementById(`${prefix}SimRevealVal`);
-  const isHidden = rd ? rd.classList.contains('hidden') : true;
+  const isHidden = rd ? rd.classList.contains('hidden') : !s.micRevealed;
   if(isHidden){
+    s.micRevealed = true;
     if(rd){ rd.textContent=s.value.toFixed(4)+'"'; rd.classList.remove('hidden'); }
     if(rv){ rv.textContent=s.value.toFixed(4)+'"'; rv.classList.remove('hidden'); }
     if(btn){ btn.textContent='🙈 Hide Answer'; }
   } else {
+    s.micRevealed = false;
     if(rd){ rd.classList.add('hidden'); }
     if(rv){ rv.classList.add('hidden'); }
     if(btn){ btn.textContent='👁 Reveal Answer'; }
   }
+  micRenderSide(side); // redraw so the breakdown formula shows/hides on the instrument
 }
 
 async function simSubmit(side){
