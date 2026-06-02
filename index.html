@@ -12567,6 +12567,7 @@ async function practiceLoadHistory(){
   } catch(e){ console.error('practiceLoadHistory',e); }
 }
 
+let _pxCompLast=null; // last-rendered comprehensive breakdown, for Print/PDF
 // Comprehensive breakdown: aggregate topic performance across ALL completed exams in a subject
 async function pxComprehensive(subject){
   if(!stuSession?.uid) return;
@@ -12598,7 +12599,9 @@ async function pxComprehensive(subject){
   const overallPct=totQ?Math.round(totCorrect/totQ*100):0;
   const oc=overallPct>=70?'var(--cl)':overallPct>=50?'#f59e0b':'var(--wl)';
   const weak=rows.filter(r=>r.pct<70).slice(0,3);
-  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'+
+  _pxCompLast={subject,subjLabel,examCount:exams.length,overallPct,totCorrect,totQ,rows,weak}; // for Print/PDF
+  let html='<div style="text-align:right;margin-bottom:10px"><button onclick="pxComprehensivePrint()" class="btn btn-ghost btn-sm" style="font-size:.78rem">🖨 Print / Save as PDF</button></div>'+
+    '<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">'+
       '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.2rem;letter-spacing:1px;color:var(--accent)">'+subjLabel+' — Comprehensive</div>'+
       '<div style="font-family:monospace;font-size:.85rem;font-weight:700;color:'+oc+'">'+overallPct+'% &nbsp;('+totCorrect+'/'+totQ+')</div>'+
@@ -12616,6 +12619,25 @@ async function pxComprehensive(subject){
     rows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.t)+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+
   '</div>';
   out.innerHTML=html;
+}
+
+// Print / Save-as-PDF of the comprehensive breakdown (students can email it to an instructor)
+function pxComprehensivePrint(){
+  const c=_pxCompLast;
+  if(!c){ showToast('Open a subject breakdown first.','error'); return; }
+  const esc=s=>String(s==null?'':s).replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+  const cls=(stuSession?.classroomName)||(stuSession?.classrooms && stuSession.classrooms[0]?.classroomName)||'';
+  const stuHtml = stuSession ? `<div style="font-size:12px;color:#333;margin-bottom:10px">Student: <b>${esc(stuSession.name||'')}</b>${stuSession.email?' &nbsp;·&nbsp; '+esc(stuSession.email):''}${cls?' &nbsp;·&nbsp; Class: '+esc(cls):''}</div>` : '';
+  const dateStr=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+' at '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const oc=c.overallPct>=70?'#166534':c.overallPct>=50?'#b45309':'#991b1b';
+  const weakHtml=c.weak.length?`<h2 style="font-size:14px;margin:18px 0 6px">Work on These Most</h2>${c.weak.map(r=>`<div style="font-weight:bold;font-size:13px;margin-bottom:3px;color:${r.pct>=50?'#b45309':'#991b1b'}">${esc(r.t)} — ${r.correct}/${r.total} (${r.pct}%)</div>`).join('')}`:'';
+  const tableHtml=`<h2 style="font-size:14px;margin:18px 0 6px">All Topics (weakest first)</h2><table style="width:100%;border-collapse:collapse;font-size:12px">${c.rows.map(r=>`<tr><td style="padding:3px 0;border-bottom:1px solid #eee">${esc(r.t)}</td><td style="text-align:right;padding:3px 8px;color:#555;border-bottom:1px solid #eee">${r.correct}/${r.total}</td><td style="text-align:right;width:48px;font-weight:bold;border-bottom:1px solid #eee;color:${r.pct>=70?'#166534':r.pct>=50?'#b45309':'#991b1b'}">${r.pct}%</td></tr>`).join('')}</table>`;
+  const win=window.open('','_blank');
+  if(!win){ showToast('Allow pop-ups to print, then try again.','error'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><title>${esc(c.subjLabel)} — Comprehensive Performance</title><style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:32px;max-width:800px}h1{font-size:18px;margin-bottom:2px}h2{border-bottom:2px solid #0891b2;padding-bottom:3px}@media print{body{margin:16px}}</style></head><body><h1>${esc(c.subjLabel)} — Comprehensive Performance</h1>${stuHtml}<div style="font-family:monospace;font-size:11px;color:#555;margin-bottom:4px">${dateStr}</div><div style="font-size:15px;font-weight:bold;margin-bottom:4px;color:${oc}">Overall: ${c.overallPct}% (${c.totCorrect}/${c.totQ})</div><div style="font-family:monospace;font-size:11px;color:#555;margin-bottom:14px">Based on ${c.examCount} completed ${esc(c.subjLabel)} exam${c.examCount===1?'':'s'}</div>${weakHtml}${tableHtml}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>win.print(),400);
 }
 
 // Top N topics where the student scored below 70% (worst first)
