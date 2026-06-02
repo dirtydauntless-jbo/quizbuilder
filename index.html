@@ -12092,16 +12092,19 @@ async function pxRunExam(topics, count, label){
     if(stuSession?.uid){
       const histRef=db.ref('practiceHistory/'+stuSession.uid).push();
       _pxExamKey=histRef.key;
+      // Write the attempt record FIRST (awaited) so the attempt is never lost, even if the
+      // larger exam-data write fails. Exam data (for resume/review) is then best-effort.
       try {
-        await Promise.all([
-          histRef.set({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',total:_pxQuestions.length,score:0,pct:0,answeredCount:0,topicStats:{},status:'incomplete',...(_pxAssignId?{assignId:_pxAssignId}:{})}),
-          db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey).set({questions:_pxQuestions,answers:{}})
-        ]);
-      } catch(saveErr){
-        console.error('practice exam save failed (resume will not work):', saveErr);
+        await histRef.set({date:Date.now(),label,mode:_pxMode,subject:_pxOfficialSubject||'mixed',total:_pxQuestions.length,score:0,pct:0,answeredCount:0,topicStats:{},status:'incomplete',...(_pxAssignId?{assignId:_pxAssignId}:{})});
+      } catch(histErr){
+        console.error('attempt record save failed:', histErr);
         _pxExamKey=null;
+        if(typeof showToast==='function') showToast('Could not save this attempt: '+(histErr&&histErr.message||histErr),'error');
       }
-      if(_pxAssignId) db.ref('assignedExams/'+stuSession.uid+'/'+_pxAssignId).update({status:'in_progress',examKey:_pxExamKey}).catch(()=>{});
+      if(_pxExamKey){
+        db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey).set({questions:_pxQuestions,answers:{}}).catch(e=>console.warn('exam data save failed (resume/review limited):',e&&e.message||e));
+        if(_pxAssignId) db.ref('assignedExams/'+stuSession.uid+'/'+_pxAssignId).update({status:'in_progress',examKey:_pxExamKey}).catch(()=>{});
+      }
       practiceLoadHistory(); // keep Past Attempts current so the new (in-progress) exam shows when they return to setup
     }
     practiceRenderExam(label);
@@ -12346,10 +12349,14 @@ function practiceFinish(){
 async function practiceLoadHistory(){
   if(!stuSession?.uid) return;
   try {
-    const snap=await db.ref('practiceHistory/'+stuSession.uid).orderByChild('date').limitToLast(50).once('value');
-    const rows=[];
-    snap.forEach(c=>rows.push({...c.val(),_key:c.key}));
-    // orderByChild returns oldest→newest; number chronologically, then show newest first
+    // Read the whole node and sort client-side so EVERY attempt shows (finished or not),
+    // independent of any index/ordering quirk on the `date` child.
+    const snap=await db.ref('practiceHistory/'+stuSession.uid).once('value');
+    let rows=[];
+    snap.forEach(c=>{ const v=c.val()||{}; rows.push({...v,_key:c.key,_sort:(typeof v.date==='number'?v.date:0)}); });
+    rows.sort((a,b)=>a._sort-b._sort); // oldest→newest
+    if(rows.length>100) rows=rows.slice(-100); // cap display at the 100 most recent
+    // number chronologically (oldest=1), then show newest first
     rows.forEach((r,i)=>{ r._num=i+1; });
     rows.reverse();
     const el=document.getElementById('pxHistoryList');
