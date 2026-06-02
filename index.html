@@ -3359,7 +3359,7 @@ async function masterDashLoad(){
           Beta Mode active — shows the “(Beta)” tag &amp; lets students flag answers
         </label>
       </div>
-      <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:10px">Questions students flagged as having a wrong answer. Tap the answer the FAA wants — it's applied to all future exams instantly, and students who already picked that answer are credited retroactively.</div>
+      <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:10px">Questions students flagged as having a wrong answer. Select the answer the FAA wants, then Confirm — it becomes the correct answer for all future exams, and every past exam is regraded against the new answer (new-answer pickers gain a point, old-answer pickers lose theirs).</div>
       <div style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" onclick="_qReviewLoad()">↻ Refresh</button></div>
       <div id="qReviewList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, true)}
@@ -3582,6 +3582,7 @@ function masterDashToggle(id){
 // ── Flagged-question review (Beta) ──────────────────────────────────────────
 function _qEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 let _qReviewFilter='pending'; // 'pending' = needs review · 'all' = full submission log
+let _qReviewSel={}; // per-card selected letter awaiting confirmation (keyed by review key)
 function qReviewSetFilter(f){ _qReviewFilter=f; _qReviewLoad(); }
 function _qWhen(ts){ return ts?new Date(ts).toLocaleString([], {month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):''; }
 
@@ -3596,14 +3597,18 @@ function _qReviewCard(key, r){
     const opts=Object.keys(choices).map(l=>{
       const isCur=l===r.currentCorrect, isStu=l===r.studentAnswer;
       const tag=(isCur?' <span style="color:var(--accent);font-size:.7rem">(current answer)</span>':'')+(isStu?' <span style="color:var(--muted);font-size:.7rem">(student picked)</span>':'');
-      return '<button onclick="qReviewResolve(\''+key+'\',\''+l+'\')" '+
+      return '<button class="qr-opt" data-letter="'+l+'" id="qropt-'+key+'-'+l+'" onclick="qReviewSelect(\''+key+'\',\''+l+'\')" '+
         'style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:9px 12px;border:1px solid '+(isCur?'var(--accent)':'var(--border)')+';border-radius:6px;background:var(--panel);color:var(--text);cursor:pointer;font-family:monospace;font-size:.8rem;line-height:1.4">'+
         '<b>'+l+'.</b> '+_qEsc(choices[l])+tag+'</button>';
     }).join('');
-    return '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;background:var(--panel2)">'+head+
-      '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-bottom:8px">Tap the correct answer — it applies to all future exams &amp; credits past students:</div>'+
+    return '<div id="qrcard-'+key+'" style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;background:var(--panel2)">'+head+
+      '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-bottom:8px"><b>Step 1</b> — select the correct answer:</div>'+
       opts+
-      '<div style="text-align:right;margin-top:6px"><button onclick="qReviewDismiss(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:monospace;font-size:.7rem;padding:5px 10px;cursor:pointer">Dismiss (no change)</button></div>'+
+      '<div id="qrmsg-'+key+'" style="font-family:monospace;font-size:.7rem;color:var(--muted);margin:9px 0 8px"><b>Step 2</b> — no answer selected yet.</div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap">'+
+        '<button onclick="qReviewDismiss(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:monospace;font-size:.7rem;padding:7px 12px;cursor:pointer">Dismiss (no change)</button>'+
+        '<button id="qrconfirm-'+key+'" onclick="qReviewConfirm(\''+key+'\')" disabled style="border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--muted);font-family:monospace;font-size:.72rem;font-weight:700;padding:7px 14px;cursor:not-allowed;opacity:.6">Confirm correct answer</button>'+
+      '</div>'+
     '</div>';
   }
   // read-only log entry
@@ -3644,6 +3649,31 @@ async function _qReviewLoad(){
   el.innerHTML=bar+listHtml;
 }
 
+// Step 1: highlight the chosen answer and arm the Confirm button (no write yet).
+function qReviewSelect(key, letter){
+  _qReviewSel[key]=letter;
+  const card=document.getElementById('qrcard-'+key);
+  if(card) card.querySelectorAll('.qr-opt').forEach(b=>{
+    const sel=b.dataset.letter===letter;
+    b.style.borderColor=sel?'var(--cl)':'var(--border)';
+    b.style.background=sel?'rgba(34,197,94,.14)':'var(--panel)';
+    b.style.boxShadow=sel?'inset 0 0 0 1px var(--cl)':'none';
+  });
+  const msg=document.getElementById('qrmsg-'+key);
+  if(msg){ msg.innerHTML='<b>Step 2</b> — selected <b style="color:var(--cl)">'+_qEsc(letter)+'</b>. Click Confirm to make it the correct answer for all practice exams.'; msg.style.color='var(--text)'; }
+  const cb=document.getElementById('qrconfirm-'+key);
+  if(cb){ cb.disabled=false; cb.style.cursor='pointer'; cb.style.opacity='1'; cb.style.background='var(--cl)'; cb.style.borderColor='var(--cl)'; cb.style.color='#04240f'; cb.textContent='✓ Confirm: set '+letter+' as correct'; }
+}
+
+// Step 2: confirm the selected answer.
+function qReviewConfirm(key){
+  const letter=_qReviewSel[key];
+  if(!letter){ showToast('Select the correct answer first.','error'); return; }
+  const cb=document.getElementById('qrconfirm-'+key);
+  if(cb){ cb.disabled=true; cb.style.cursor='default'; cb.textContent='Saving…'; }
+  qReviewResolve(key, letter);
+}
+
 async function qReviewResolve(key, letter){
   const r=await dbGet('questionReviews/'+key).catch(()=>null);
   if(!r){ showToast('Could not load that review.','error'); return; }
@@ -3655,25 +3685,37 @@ async function qReviewResolve(key, letter){
     if(r.subject && r.qid){ updates['answerOverrides/'+r.subject+'/'+r.qid]=letter; }
     await db.ref().update(updates);
     _pxOverridesCache=null; // invalidate cached overrides so the next exam picks this up
-    // Retroactively credit students who already picked this (now-correct) answer
-    let retro={students:0,exams:0,credits:0};
-    if(r.subject && r.qid){ retro=await qReviewApplyRetroCredit(r.subject, r.qid, letter); }
-    let msg = r.qid ? ('Saved — answer set to '+letter+' for future exams.') : ('Recorded as '+letter+' (AI question — regenerates automatically).');
-    if(retro.students>0) msg += ' Retroactively credited '+retro.students+' student'+(retro.students===1?'':'s')+' across '+retro.exams+' exam'+(retro.exams===1?'':'s')+'.';
+    delete _qReviewSel[key];
+    // Full regrade of past exams against the new answer (credit new-answer pickers, remove from old-answer pickers)
+    let rg={students:0,exams:0,gained:0,lost:0};
+    if(r.subject && r.qid){ rg=await qReviewApplyRegrade(r.subject, r.qid, letter); }
+    // Confirm the override actually took effect for practice exams
+    let confirmed=false;
+    if(r.subject && r.qid){ const ov=await dbGet('answerOverrides/'+r.subject+'/'+r.qid).catch(()=>null); confirmed=(ov===letter); }
+    let msg = r.qid
+      ? ((confirmed?'✓ Confirmed — ':'')+'answer '+letter+' is now correct for all practice exams ('+r.subject+' id '+r.qid+').')
+      : ('Recorded as '+letter+' (AI question — regenerates automatically; no stored exams to regrade).');
+    if(rg.exams>0){
+      const parts=[];
+      if(rg.gained>0) parts.push('+'+rg.gained+' credited');
+      if(rg.lost>0) parts.push('−'+rg.lost+' removed');
+      msg += ' Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+' across '+rg.students+' student'+(rg.students===1?'':'s')+(parts.length?' ('+parts.join(', ')+').':'.');
+    }
     showToast(msg,'success');
     _qReviewLoad();
-  } catch(e){ showToast('Save failed: '+(e&&e.message||e),'error'); }
+  } catch(e){ showToast('Save failed: '+(e&&e.message||e),'error'); _qReviewLoad(); }
 }
 
-// When an answer is corrected, scan every student's past exams: any who picked the now-correct
-// answer on this exact question gets the point added (score/pct/topicStats). We only ADD credit —
-// students who picked the old answer are never penalized. Idempotent (safe to run more than once).
-async function qReviewApplyRetroCredit(subject, qid, letter){
-  const result={students:0, exams:0, credits:0};
+// Full regrade: for every stored exam containing this question, re-score it against the NEW answer.
+// Per occurrence the score delta = (picked===newLetter ? 1:0) − (picked===oldStoredCorrect ? 1:0),
+// so new-answer pickers gain a point and old-answer pickers lose theirs. Idempotent (once the stored
+// `correct` equals the new letter there's nothing left to change). Updates score, pct, and topicStats.
+async function qReviewApplyRegrade(subject, qid, letter){
+  const result={students:0, exams:0, gained:0, lost:0};
   if(!subject || !qid) return result;
   let allData, allHist;
   try { [allData, allHist]=await Promise.all([dbGet('practiceExamData'), dbGet('practiceHistory')]); }
-  catch(e){ console.warn('retro-credit read failed:', e&&e.message||e); return result; }
+  catch(e){ console.warn('regrade read failed:', e&&e.message||e); return result; }
   if(!allData) return result;
   const badKey=/[.#$\[\]/]/; // Firebase-illegal characters in a path segment
   const updates={};
@@ -3686,27 +3728,34 @@ async function qReviewApplyRetroCredit(subject, qid, letter){
       const qs=ed && ed.questions;
       const ans=(ed && ed.answers) || {};
       if(!Array.isArray(qs)) continue;
-      let creditDelta=0; const topicCredits={};
+      let scoreDelta=0; const topicDelta={};
       qs.forEach((q,i)=>{
         if(!q || q.subject!==subject || String(q.id)!==String(qid)) return;
-        if(q.correct!==letter){
-          updates['practiceExamData/'+uid+'/'+examKey+'/questions/'+i+'/correct']=letter;
-          if(ans[i]===letter){ creditDelta++; const t=q.topic||'General'; topicCredits[t]=(topicCredits[t]||0)+1; }
-        }
+        const oldCorrect=q.correct;
+        if(oldCorrect===letter) return; // already on the new key — nothing to change
+        updates['practiceExamData/'+uid+'/'+examKey+'/questions/'+i+'/correct']=letter;
+        const picked=ans[i];
+        const was=(picked!==undefined && picked===oldCorrect)?1:0;
+        const now=(picked!==undefined && picked===letter)?1:0;
+        const d=now-was;
+        if(d!==0){ scoreDelta+=d; const t=q.topic||'General'; topicDelta[t]=(topicDelta[t]||0)+d; }
       });
-      if(creditDelta>0){
+      if(scoreDelta!==0){
         const h=(allHist && allHist[uid] && allHist[uid][examKey]) || {};
         const total=(typeof h.total==='number'?h.total:qs.length);
-        const newScore=((typeof h.score==='number'?h.score:0)+creditDelta);
+        let newScore=((typeof h.score==='number'?h.score:0)+scoreDelta);
+        if(newScore<0) newScore=0; if(newScore>total) newScore=total;
         updates['practiceHistory/'+uid+'/'+examKey+'/score']=newScore;
         if(h.status==='complete') updates['practiceHistory/'+uid+'/'+examKey+'/pct']=(total?Math.round(newScore/total*100):0);
         const ts=h.topicStats || {};
-        Object.keys(topicCredits).forEach(t=>{
-          if(badKey.test(t)) return; // skip stat bump for topics with illegal path chars (score still updated)
-          const cur=(ts[t] && typeof ts[t].correct==='number') ? ts[t].correct : 0;
-          updates['practiceHistory/'+uid+'/'+examKey+'/topicStats/'+t+'/correct']=cur+topicCredits[t];
+        Object.keys(topicDelta).forEach(t=>{
+          if(badKey.test(t)) return; // skip stat adjust for topics with illegal path chars (score still updated)
+          let cur=(ts[t] && typeof ts[t].correct==='number') ? ts[t].correct : 0;
+          let nc=cur+topicDelta[t]; if(nc<0) nc=0;
+          updates['practiceHistory/'+uid+'/'+examKey+'/topicStats/'+t+'/correct']=nc;
         });
-        result.exams++; result.credits+=creditDelta; students.add(uid);
+        result.exams++; students.add(uid);
+        if(scoreDelta>0) result.gained+=scoreDelta; else result.lost+=(-scoreDelta);
       }
     }
   }
