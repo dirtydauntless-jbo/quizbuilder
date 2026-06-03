@@ -51,6 +51,11 @@ for (const [subj, topics] of Object.entries(SUBJECT_TOPICS)) {
   for (const t of topics) TOPIC_SUBJECT[t] = subj;
 }
 
+// Calculation-heavy topics: use ONLY the verified FAA bank (never AI-generated), so we never
+// ship a question whose "correct" choice has an arithmetic error. The bank has plenty here
+// (Mathematics 96, Physics 96, Weight and Balance 43).
+const FAA_ONLY_TOPICS = new Set(['Mathematics', 'Physics', 'Weight and Balance']);
+
 // ── Shared utils ──────────────────────────────────────────────────────────────
 async function callClaude(prompt, maxTokens = 4096) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -182,8 +187,9 @@ async function buildTopicQuestions(topic, total, content) {
   const bankPool = bank[subject]?.[topic];
   const bankSize = Array.isArray(bankPool) ? bankPool.length : 0;
 
-  // Randomly choose FAA ratio between 20–60%, but cap at what's available
-  const targetFaaPct = 0.20 + Math.random() * 0.40;  // 20%–60%
+  // Calculation-heavy topics → verified bank only (no AI arithmetic errors).
+  // Everything else → random 20–60% FAA, rest AI, capped at what's available.
+  const targetFaaPct = FAA_ONLY_TOPICS.has(topic) ? 1 : (0.20 + Math.random() * 0.40);
   const faaCount = Math.min(Math.round(total * targetFaaPct), bankSize, total);
   const aiCount = total - faaCount;
 
