@@ -3399,6 +3399,12 @@ async function masterDashLoad(){
       <div id="allStarsRebuildMsg" style="font-family:monospace;font-size:.75rem;margin-top:8px;color:var(--muted)"></div>
     `, true)}
 
+    ${panel('md-users','User Directory — All Students & Instructors','👥',`
+      <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:10px">Every registered user — whether or not they're in a classroom. Search by name or email, then rename.</div>
+      <input id="usersSearch" oninput="_usersRender()" placeholder="Search by name or email…" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-size:.9rem;box-sizing:border-box;margin-bottom:10px">
+      <div id="usersDirList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
+    `, true)}
+
     ${panel('md-announce','Announcement Banner','📣',`
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:monospace;font-size:.82rem">
@@ -3528,6 +3534,7 @@ async function masterDashLoad(){
   _opSimLoadAdminPanel();
   _qReviewLoad();
   _announceAdminLoad();
+  _usersLoad();
   allStarsRebuild(); // keep the All-Stars board synced from every student's completed exams
 
   // ── Populate sub-panels ───────────────────────────────────────────────────
@@ -3612,7 +3619,68 @@ function masterDashToggle(id){
   if(arrow) arrow.textContent=isOpen?'▼':'▲';
   if(!isOpen && id==='md-opsim') _opSimLoadAdminPanel();
   if(!isOpen && id==='md-qreview') _qReviewLoad();
+  if(!isOpen && id==='md-users') _usersLoad();
   if(!isOpen && id==='md-announce') _announceAdminLoad();
+}
+
+// ── User Directory (master admin) — all students & instructors, rename anyone ──
+let _usersDir=null;
+async function _usersLoad(){
+  if(!_isMasterAdmin) return;
+  const el=document.getElementById('usersDirList'); if(!el) return;
+  el.innerHTML='<div class="empty-state" style="font-size:.8rem">Loading…</div>';
+  try {
+    const [stu, inst]=await Promise.all([dbGet('studentProfiles'), dbGet('instructors')]);
+    _usersDir={ students:stu||{}, instructors:inst||{} };
+  } catch(e){ el.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.78rem">Error: '+_qEsc(e&&e.message||e)+'</div>'; return; }
+  _usersRender();
+}
+function _usersRender(){
+  const el=document.getElementById('usersDirList'); if(!el||!_usersDir) return;
+  const q=(document.getElementById('usersSearch')?.value||'').trim().toLowerCase();
+  const rows=[];
+  Object.entries(_usersDir.students).forEach(([uid,v])=>{ if(v && typeof v==='object') rows.push({role:'student',uid,name:v.name||'',email:v.email||''}); });
+  Object.entries(_usersDir.instructors).forEach(([uid,v])=>{ if(v && typeof v==='object') rows.push({role:'instructor',uid,name:v.name||v.displayName||'',email:v.email||''}); });
+  const filtered=rows.filter(r=> !q || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q));
+  filtered.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+  if(!filtered.length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No users match.</div>'; return; }
+  el.innerHTML='<div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-bottom:6px">'+filtered.length+' user'+(filtered.length===1?'':'s')+(filtered.length>300?' (showing first 300)':'')+'</div>'+
+    filtered.slice(0,300).map(r=>{
+      const tag = r.role==='instructor'
+        ? '<span style="font-family:monospace;font-size:.58rem;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:9px;background:rgba(37,99,235,.15);color:var(--blue);white-space:nowrap">Instructor</span>'
+        : '<span style="font-family:monospace;font-size:.58rem;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:9px;background:rgba(34,197,94,.12);color:var(--cl);white-space:nowrap">Student</span>';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border)">'+
+        tag+
+        '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'(no name)')+'</div>'+
+        '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.email||'—')+'</div></div>'+
+        '<button onclick="usersRename(\''+r.role+'\',\''+r.uid+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:monospace;font-size:.7rem;padding:6px 11px;cursor:pointer;white-space:nowrap">✏️ Rename</button>'+
+      '</div>';
+    }).join('');
+}
+async function usersRename(role, uid){
+  if(!_isMasterAdmin || !_usersDir) return;
+  const dir = role==='instructor' ? _usersDir.instructors : _usersDir.students;
+  const rec = dir && dir[uid];
+  const cur = rec ? (rec.name||rec.displayName||'') : '';
+  const nn = prompt('Rename '+role+' — enter new name:', cur);
+  if(nn===null) return;
+  const trimmed=nn.trim();
+  if(!trimmed || trimmed===cur) return;
+  try {
+    if(role==='instructor'){
+      await dbSet('instructors/'+uid+'/name', trimmed);
+      if(rec) rec.name=trimmed;
+    } else {
+      await dbSet('studentProfiles/'+uid+'/name', trimmed);
+      if(rec) rec.name=trimmed;
+      // propagate to classroom rosters + access log so the new name shows everywhere
+      const classes = rec && rec.classrooms;
+      if(classes && typeof classes==='object'){ Object.keys(classes).forEach(cid=>{ dbSet('classroomStudents/'+cid+'/'+uid+'/name', trimmed).catch(()=>{}); }); }
+      if(typeof _syncAccessLogStudentName==='function') _syncAccessLogStudentName(uid, trimmed);
+    }
+    showToast('Renamed to '+trimmed,'success');
+    _usersRender();
+  } catch(e){ showToast('Rename failed: '+(e&&e.message||e),'error'); }
 }
 
 // ── Flagged-question review (Beta) ──────────────────────────────────────────
