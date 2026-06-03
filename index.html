@@ -1351,7 +1351,7 @@ setTimeout(function(){
         </div>
         <!-- Topic panel -->
         <div id="pxTopicPanel" class="hidden" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
-          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Topics — select any combination</div>
+          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Build a Custom Exam — Pick Your Topics</div>
           <div id="pxTopicPicker"></div>
         </div>
         <!-- Count panel (topic mode only) -->
@@ -12455,10 +12455,16 @@ function practiceRenderTopicPicker(){
   ];
   // Section dropdown — only the chosen section's topics show, so there's no long scroll.
   // All sections stay in the DOM (just hidden) so multi-section selections are preserved.
-  const dropdown='<select id="pxSectionSelect" onchange="pxShowSection(this.value)" '+
-    'style="width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.95rem;font-family:inherit;box-sizing:border-box;cursor:pointer;margin-bottom:6px">'+
-    sections.map(s=>`<option value="${s.key}">${s.label}</option>`).join('')+'</select>'+
-    '<div id="pxSelCount" style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:2px">No topics selected</div>';
+  const dropdown=
+    '<div style="background:rgba(8,145,178,.10);border:1.5px solid var(--accent);border-radius:var(--r);padding:13px 13px 11px;margin-bottom:14px">'+
+      '<label for="pxSectionSelect" style="display:block;font-family:monospace;font-size:.74rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:7px">Step 1 — Choose a subject area 👇</label>'+
+      '<select id="pxSectionSelect" onchange="pxShowSection(this.value)" '+
+        'style="width:100%;padding:14px 14px;border:2px solid var(--accent);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:1.05rem;font-weight:700;font-family:inherit;box-sizing:border-box;cursor:pointer">'+
+        sections.map(s=>`<option value="${s.key}">${s.label}  ▼  (tap to change)</option>`).join('')+
+      '</select>'+
+      '<div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-top:8px">Step 2 — check the topics below, then choose a size</div>'+
+      '<div id="pxSelCount" style="font-family:monospace;font-size:.74rem;color:var(--muted);margin-top:4px">No topics selected</div>'+
+    '</div>';
   const groups=sections.map((sec,idx)=>`
     <div id="pxTopicSec_${sec.key}" style="margin-top:14px;${idx===0?'':'display:none'}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${sec.color}55">
