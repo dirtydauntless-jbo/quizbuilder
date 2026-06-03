@@ -114,18 +114,22 @@ function getFaaQuestions(topic, n) {
 }
 
 // ── AI-generate questions for a topic (3-choice to match FAA format) ─────────
+// Generated in small batches (≤8 per Claude call) so every question stays tightly on the
+// SELECTED topic and its 8083 section — a single large request overflows the token budget and
+// makes the model "pad" with off-topic general material to reach the count.
+const AI_BATCH = 8;
 async function generateForTopic(topic, qCount, content) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
   const sourceText = content[subject]?.[topic] || '';
   const contextSection = sourceText
-    ? `\n\nReference text from ${handbook}:\n\n${sourceText.slice(0, 4000)}`
+    ? `\n\nBase every question ONLY on this reference text from ${handbook} (the "${topic}" section):\n\n${sourceText.slice(0, 6000)}`
     : '';
 
-  const prompt = `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
+  const buildPrompt = (n) => `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
 
-Generate ${qCount} multiple choice practice question${qCount > 1 ? 's' : ''} about: ${topic}${contextSection}
+Generate ${n} multiple choice practice question${n > 1 ? 's' : ''} STRICTLY about the single topic: "${topic}" (${subject} subject). Every question must be specifically about ${topic} — do NOT write questions about any other ${subject} topic.${contextSection}
 
 Rules:
 - Each question has exactly 3 choices: A, B, C (this matches the real FAA AMT test format)
@@ -143,10 +147,27 @@ Rules:
 
 Format: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"..."}]`;
 
+  // Split into batches of ≤AI_BATCH, all for the same topic, run in parallel.
+  const batches = [];
+  for (let remaining = qCount; remaining > 0; remaining -= AI_BATCH) {
+    batches.push(Math.min(AI_BATCH, remaining));
+  }
   try {
-    const text = await callClaude(prompt);
-    const arr = parseJSON(text);
-    return Array.isArray(arr) ? arr.map(q => ({ ...q, topic, handbook, source: 'ai' })) : [];
+    const results = await Promise.all(batches.map(n =>
+      callClaude(buildPrompt(n)).then(t => parseJSON(t)).catch(() => [])
+    ));
+    const seen = new Set();
+    const out = [];
+    for (const arr of results) {
+      if (!Array.isArray(arr)) continue;
+      for (const q of arr) {
+        if (q && q.question && !seen.has(q.question)) {
+          seen.add(q.question);
+          out.push({ ...q, topic, handbook, source: 'ai' });
+        }
+      }
+    }
+    return out.slice(0, qCount);
   } catch { return []; }
 }
 
