@@ -3416,6 +3416,20 @@ async function masterDashLoad(){
       <div id="usersDirList_md"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, true)}
 
+    ${panel('md-regrade','Regrade a Corrected Question','🔧',`
+      <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5">After a question's correct answer is fixed in the bank, run this to regrade <b>past exams</b> against the new answer (credits students who picked it, removes the point from those who picked the old one — both directions). Future exams already use the corrected answer.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+        <div><label style="font-family:monospace;font-size:.68rem;color:var(--muted);display:block;margin-bottom:3px">Subject</label>
+          <select id="rgSubject" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-family:monospace;font-size:.85rem"><option value="general">general</option><option value="airframe">airframe</option><option value="powerplant">powerplant</option></select></div>
+        <div><label style="font-family:monospace;font-size:.68rem;color:var(--muted);display:block;margin-bottom:3px">Question ID</label>
+          <input id="rgQid" placeholder="e.g. 516" style="width:90px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-family:monospace;font-size:.85rem"></div>
+        <div><label style="font-family:monospace;font-size:.68rem;color:var(--muted);display:block;margin-bottom:3px">Correct</label>
+          <select id="rgLetter" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-family:monospace;font-size:.85rem"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+        <button class="btn btn-primary btn-sm" onclick="adminRegradeQuestion()">Run regrade</button>
+      </div>
+      <div id="rgMsg" style="font-family:monospace;font-size:.75rem;color:var(--muted)"></div>
+    `, true)}
+
     ${panel('md-announce','Announcement Banner','📣',`
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:monospace;font-size:.82rem">
@@ -13135,6 +13149,22 @@ async function allStarsRebuild(){
     if(typeof renderAllStars==='function') renderAllStars();
     if(typeof refreshMyAllStarBadge==='function') refreshMyAllStarBadge();
   } catch(e){ if(msg){ msg.style.color='var(--wl)'; msg.textContent='Write failed: '+(e&&e.message||e); } }
+}
+
+// Master-admin: retroactively regrade past exams for one question after its answer was corrected
+async function adminRegradeQuestion(){
+  if(!_isMasterAdmin){ showToast('Master admin only.','error'); return; }
+  const subj=(document.getElementById('rgSubject')||{}).value;
+  const qid=((document.getElementById('rgQid')||{}).value||'').trim();
+  const letter=(document.getElementById('rgLetter')||{}).value;
+  const msg=document.getElementById('rgMsg');
+  if(!qid){ if(msg){msg.style.color='var(--wl)';msg.textContent='Enter a question ID.';} return; }
+  if(!confirm('Regrade ALL past exams for '+subj+' id '+qid+' against correct answer '+letter+'?')) return;
+  if(msg){ msg.style.color='var(--muted)'; msg.textContent='Regrading…'; }
+  try {
+    const rg=await qReviewApplyRegrade(subj, qid, letter);
+    if(msg){ msg.style.color='#16a34a'; msg.textContent='✓ Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+' across '+rg.students+' student'+(rg.students===1?'':'s')+' (+'+rg.gained+' credited, −'+rg.lost+' removed).'; }
+  } catch(e){ if(msg){ msg.style.color='var(--wl)'; msg.textContent='Failed: '+(e&&e.message||e); } }
 }
 
 // Top N topics where the student scored below 70% (worst first)
