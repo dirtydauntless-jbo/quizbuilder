@@ -3697,6 +3697,8 @@ async function qReviewSaveEdit(key){
     const rg=await qReviewApplyRegrade(r.subject, r.qid, correct); // regrade past exams against the (possibly new) correct answer
     let msg='✓ Saved — question updated for all future exams.';
     if(rg.exams>0){ const parts=[]; if(rg.gained>0)parts.push('+'+rg.gained+' credited'); if(rg.lost>0)parts.push('−'+rg.lost+' removed'); msg+=' Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+(parts.length?' ('+parts.join(', ')+').':'.'); }
+    const dup=await _qReviewApplyToDuplicates(r.subject, r.qid, key, {status:'resolved', adminCorrect:correct});
+    if(dup>0) msg += ' Auto-resolved '+dup+' duplicate flag'+(dup===1?'':'s')+' of this question.';
     showToast(msg,'success');
     _qReviewLoad();
   } catch(e){ showToast('Save failed: '+(e&&e.message||e),'error'); }
@@ -3754,6 +3756,25 @@ function qReviewConfirm(key){
   qReviewResolve(key, letter);
 }
 
+// Apply the same outcome to OTHER pending flags of the same question (same subject+id),
+// so duplicate flags from different students don't have to be reviewed again.
+async function _qReviewApplyToDuplicates(subject, qid, exceptKey, fields){
+  if(!subject || qid==null || qid==='') return 0;
+  const all=await dbGet('questionReviews').catch(()=>null);
+  if(!all) return 0;
+  const updates={}; let n=0;
+  Object.entries(all).forEach(([k,v])=>{
+    if(!v || k===exceptKey || v.status!=='pending') return;
+    if(v.subject!==subject || String(v.qid)!==String(qid)) return;
+    Object.entries(fields).forEach(([f,val])=>{ updates['questionReviews/'+k+'/'+f]=val; });
+    updates['questionReviews/'+k+'/resolvedAt']=Date.now();
+    updates['questionReviews/'+k+'/autoResolved']=true;
+    n++;
+  });
+  if(n>0) await db.ref().update(updates);
+  return n;
+}
+
 async function qReviewResolve(key, letter){
   const r=await dbGet('questionReviews/'+key).catch(()=>null);
   if(!r){ showToast('Could not load that review.','error'); return; }
@@ -3781,6 +3802,9 @@ async function qReviewResolve(key, letter){
       if(rg.lost>0) parts.push('−'+rg.lost+' removed');
       msg += ' Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+' across '+rg.students+' student'+(rg.students===1?'':'s')+(parts.length?' ('+parts.join(', ')+').':'.');
     }
+    // Auto-resolve any other pending flags of this same question
+    const dup=await _qReviewApplyToDuplicates(r.subject, r.qid, key, {status:'resolved', adminCorrect:letter});
+    if(dup>0) msg += ' Auto-resolved '+dup+' duplicate flag'+(dup===1?'':'s')+' of this question.';
     showToast(msg,'success');
     _qReviewLoad();
   } catch(e){ showToast('Save failed: '+(e&&e.message||e),'error'); _qReviewLoad(); }
@@ -3859,7 +3883,16 @@ async function _betaAdminLoad(){
 
 async function qReviewDismiss(key){
   if(!confirm('Dismiss this flag without changing the answer?')) return;
-  try { await db.ref('questionReviews/'+key).update({status:'dismissed',resolvedAt:Date.now()}); showToast('Dismissed.','success'); _qReviewLoad(); }
+  try {
+    const r=await dbGet('questionReviews/'+key).catch(()=>null);
+    await db.ref('questionReviews/'+key).update({status:'dismissed',resolvedAt:Date.now()});
+    let msg='Dismissed.';
+    if(r && r.subject && r.qid){
+      const dup=await _qReviewApplyToDuplicates(r.subject, r.qid, key, {status:'dismissed'});
+      if(dup>0) msg+=' Also dismissed '+dup+' duplicate flag'+(dup===1?'':'s')+' of this question.';
+    }
+    showToast(msg,'success'); _qReviewLoad();
+  }
   catch(e){ showToast('Failed: '+(e&&e.message||e),'error'); }
 }
 
