@@ -3393,6 +3393,12 @@ async function masterDashLoad(){
       <div id="qReviewList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, true)}
 
+    ${panel('md-leaderboard','All-Stars Leaderboard','🏆',`
+      <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:10px;line-height:1.5">The leaderboard fills in automatically as students open the practice tab. If older students who already took exams aren't showing, click below to rebuild it now from every student's completed exams (also refreshes names and points).</div>
+      <button class="btn btn-primary btn-sm" onclick="allStarsRebuild()">🔄 Rebuild Leaderboard Now</button>
+      <div id="allStarsRebuildMsg" style="font-family:monospace;font-size:.75rem;margin-top:8px;color:var(--muted)"></div>
+    `, true)}
+
     ${panel('md-announce','Announcement Banner','📣',`
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:monospace;font-size:.82rem">
@@ -12831,32 +12837,38 @@ async function updateAllStarStats(){
   const completed=all.filter(r=>r.status==='complete');
   const takenCount=all.length, completedCount=completed.length;
   if(completedCount===0){ try{ await db.ref('allStars/'+stuSession.uid).remove(); }catch(e){} return; }
-  let pctSum=0, spqSum=0, spqN=0;
+  // Points accumulate per completed exam (start at 0, no cap):
+  //   10 pts per correct answer × speed multiplier (up to 1.5× for fast) × accuracy multiplier.
+  let pctSum=0, spqSum=0, spqN=0, points=0;
   completed.forEach(r=>{
-    pctSum += (typeof r.pct==='number'?r.pct:0);
-    if(typeof r.durationSec==='number' && r.durationSec>0 && r.total>0){
-      const spq=r.durationSec/r.total;
-      if(spq>0 && spq<=300){ spqSum+=spq; spqN++; }   // ignore implausible (resumed/abandoned) times
+    const pct=(typeof r.pct==='number'?r.pct:0);
+    const total=(typeof r.total==='number'?r.total:0);
+    const correct=(typeof r.score==='number'?r.score:0);
+    pctSum += pct;
+    let spqUsed=null;
+    if(typeof r.durationSec==='number' && r.durationSec>0 && total>0){
+      const spq=r.durationSec/total;
+      if(spq>0 && spq<=300){ spqSum+=spq; spqN++; spqUsed=spq; }  // ignore implausible (resumed/abandoned) times
     }
+    let speedMult=1;
+    if(spqUsed!=null){ const sc=Math.max(0,Math.min(1,(90-spqUsed)/(90-15))); speedMult=1+sc*0.5; } // 15s/q→1.5×, ≥90s/q→1×
+    const accMult = pct>=90?1.5 : pct>=80?1.25 : pct>=70?1.1 : 1.0;
+    points += Math.round(correct * 10 * speedMult * accMult);
   });
+  points = Math.min(points, 100000000);
   const avgPct=pctSum/completedCount;
-  const completionRatio=takenCount?completedCount/takenCount:0;
   const avgSpq=spqN?spqSum/spqN:null;
-  let speed=50; // neutral if no timing data
-  if(avgSpq!=null) speed=Math.max(0,Math.min(100,(90-avgSpq)/(90-15)*100)); // 15s/q→100, 90s/q→0
-  const volume=Math.min(completedCount,20)/20*100;
-  const score=avgPct*0.55 + speed*0.20 + completionRatio*100*0.10 + volume*0.15;
   const payload={ name:(stuSession.name||'Student'), completed:completedCount, taken:takenCount,
     avgPct:Math.round(avgPct), avgSpq:(avgSpq!=null?Math.round(avgSpq):null),
-    score:Math.round(score*10)/10, updatedAt:Date.now() };
+    points:points, updatedAt:Date.now() };
   try { await db.ref('allStars/'+stuSession.uid).set(payload); } catch(e){ console.warn('all-star write failed:',e&&e.message||e); }
 }
 
 function _allStarRanked(data){
   return Object.entries(data||{})
     .map(([uid,v])=>({uid,...v}))
-    .filter(v=>v && typeof v.score==='number' && v.completed>0)
-    .sort((a,b)=> (b.score-a.score) || (b.avgPct-a.avgPct) || ((a.avgSpq==null?1e9:a.avgSpq)-(b.avgSpq==null?1e9:b.avgSpq)));
+    .filter(v=>v && typeof v.points==='number' && v.completed>0)
+    .sort((a,b)=> (b.points-a.points) || ((b.avgPct||0)-(a.avgPct||0)) || ((a.avgSpq==null?1e9:a.avgSpq)-(b.avgSpq==null?1e9:b.avgSpq)));
 }
 
 // Set the badge beside the student's name in the top-right (none if not in top 10)
@@ -12883,19 +12895,74 @@ async function renderAllStars(){
   let data; try { data=await dbGet('allStars'); } catch(e){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">Could not load rankings.</div>'; return; }
   const ranked=_allStarRanked(data);
   const top=ranked.slice(0,10);
-  let myRank=0; top.forEach((r,i)=>{ if(r.uid===stuSession?.uid) myRank=i+1; });
-  applyMyAllStarBadge(myRank);
-  if(!top.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No rankings yet — finish a practice exam to get on the board! 🏆</div>'; return; }
-  el.innerHTML=top.map((r,i)=>{
+  // current student's overall rank among ALL ranked students (not just top 10)
+  let myRankFull=0; ranked.forEach((r,i)=>{ if(r.uid===stuSession?.uid) myRankFull=i+1; });
+  applyMyAllStarBadge(myRankFull && myRankFull<=10 ? myRankFull : 0);
+  if(!top.length){ el.innerHTML='<div style="font-size:.92rem;color:var(--muted);text-align:center;padding:18px 0">No rankings yet — finish a practice exam to earn points and get on the board! 🏆</div>'; return; }
+  const rowHtml=top.map((r,i)=>{
     const rank=i+1, me=r.uid===stuSession?.uid;
     const stats=r.completed+' exam'+(r.completed===1?'':'s')+' · '+r.avgPct+'% avg'+(r.avgSpq?' · '+_fmtSpq(r.avgSpq):'');
-    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid var(--border);'+(me?'background:rgba(124,58,237,.10);border-radius:8px':'')+'">'+
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-bottom:1px solid var(--border);'+(me?'background:rgba(124,58,237,.12);border-radius:8px':'')+'">'+
       _allStarBadgeSpan(rank)+
-      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+(me?' <span style="color:var(--accent);font-size:.68rem">(you)</span>':'')+'</div>'+
-      '<div style="font-family:monospace;font-size:.68rem;color:var(--muted)">'+stats+'</div></div>'+
-      '<div style="font-family:monospace;font-size:1rem;font-weight:800;color:'+_allStarColor(rank)+';min-width:40px;text-align:right">'+Math.round(r.score)+'</div>'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:1.02rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+(me?' <span style="color:var(--accent);font-size:.78rem;font-weight:700">(you)</span>':'')+'</div>'+
+      '<div style="font-family:monospace;font-size:.76rem;color:var(--muted);margin-top:2px">'+stats+'</div></div>'+
+      '<div style="text-align:right;min-width:64px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;line-height:1;font-weight:800;color:'+_allStarColor(rank)+'">'+Math.round(r.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.6rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
     '</div>';
   }).join('');
+  // "Your standing" block when the student isn't shown in the top 10
+  let standing='';
+  if(stuSession?.uid && myRankFull>10){
+    const mine=ranked[myRankFull-1];
+    standing='<div style="margin-top:12px;padding:12px 14px;border:1.5px dashed var(--accent);border-radius:10px;background:rgba(8,145,178,.06);display:flex;align-items:center;gap:12px">'+
+      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:var(--accent);min-width:54px">#'+myRankFull+'</div>'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:1rem">'+_qEsc(mine.name||'You')+' <span style="color:var(--accent);font-size:.78rem">(you)</span></div>'+
+      '<div style="font-family:monospace;font-size:.76rem;color:var(--muted);margin-top:2px">'+mine.completed+' exam'+(mine.completed===1?'':'s')+' · '+mine.avgPct+'% avg · rank '+myRankFull+' of '+ranked.length+'</div></div>'+
+      '<div style="text-align:right;min-width:64px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;line-height:1;font-weight:800;color:var(--accent)">'+Math.round(mine.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.6rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
+    '</div>'+
+    '<div style="font-size:.8rem;color:var(--muted);text-align:center;margin-top:8px">'+(myRankFull-10)+' spot'+((myRankFull-10)===1?'':'s')+' from the top 10 — keep practicing! 💪</div>';
+  }
+  el.innerHTML=rowHtml+standing;
+}
+
+// Master-admin: rebuild the whole leaderboard from every student's completed exams.
+// Needed because each student normally only writes their OWN entry (on practice-tab visit),
+// so students who haven't returned since the feature shipped won't appear until backfilled.
+async function allStarsRebuild(){
+  if(!_isMasterAdmin){ showToast('Master admin only.','error'); return; }
+  const msg=document.getElementById('allStarsRebuildMsg');
+  if(msg){ msg.style.color='var(--muted)'; msg.textContent='Rebuilding…'; }
+  let hist, profs;
+  try { [hist, profs] = await Promise.all([dbGet('practiceHistory'), dbGet('studentProfiles')]); }
+  catch(e){ if(msg){ msg.style.color='var(--wl)'; msg.textContent='Read failed: '+(e&&e.message||e); } return; }
+  if(!hist){ if(msg){ msg.style.color='var(--wl)'; msg.textContent='No practice history found.'; } return; }
+  const updates={}; let n=0;
+  for(const uid of Object.keys(hist)){
+    const exams=Object.values(hist[uid]||{}).filter(Boolean);
+    const completed=exams.filter(r=>r.status==='complete');
+    if(!completed.length){ updates['allStars/'+uid]=null; continue; }
+    let pctSum=0, spqSum=0, spqN=0, points=0;
+    completed.forEach(r=>{
+      const pct=(typeof r.pct==='number'?r.pct:0), total=(typeof r.total==='number'?r.total:0), correct=(typeof r.score==='number'?r.score:0);
+      pctSum+=pct;
+      let spqUsed=null;
+      if(typeof r.durationSec==='number'&&r.durationSec>0&&total>0){ const spq=r.durationSec/total; if(spq>0&&spq<=300){spqSum+=spq;spqN++;spqUsed=spq;} }
+      let speedMult=1; if(spqUsed!=null){ const sc=Math.max(0,Math.min(1,(90-spqUsed)/(90-15))); speedMult=1+sc*0.5; }
+      const accMult=pct>=90?1.5:pct>=80?1.25:pct>=70?1.1:1.0;
+      points+=Math.round(correct*10*speedMult*accMult);
+    });
+    points=Math.min(points,100000000);
+    const prof=profs&&profs[uid];
+    const name=(prof&&(prof.name||prof.displayName||prof.email))||'Student';
+    updates['allStars/'+uid]={ name:String(name).slice(0,60), completed:completed.length, taken:exams.length,
+      avgPct:Math.round(pctSum/completed.length), avgSpq:(spqN?Math.round(spqSum/spqN):null), points:points, updatedAt:Date.now() };
+    n++;
+  }
+  try {
+    await db.ref().update(updates);
+    if(msg){ msg.style.color='#16a34a'; msg.textContent='✓ Rebuilt — '+n+' student'+(n===1?'':'s')+' ranked.'; }
+    if(typeof renderAllStars==='function') renderAllStars();
+    if(typeof refreshMyAllStarBadge==='function') refreshMyAllStarBadge();
+  } catch(e){ if(msg){ msg.style.color='var(--wl)'; msg.textContent='Write failed: '+(e&&e.message||e); } }
 }
 
 // Top N topics where the student scored below 70% (worst first)
