@@ -1364,8 +1364,8 @@ setTimeout(function(){
             <button onclick="practiceSetCount(30)" id="pxCount30" class="btn" style="flex:1">30</button>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
-            <button onclick="practiceSetCountMode('all')" id="pxCountAll" class="btn" style="text-align:left;padding:11px 14px;line-height:1.3">📚 All Questions for Selected Topics<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted)">Every stored question for the topics you picked — no limit</span></button>
-            <button onclick="practiceSetCountMode('focused')" id="pxCountFocused" class="btn" style="text-align:left;padding:11px 14px;line-height:1.3">🎯 Focused FAA Written Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted)">Full length (60 General / 100 Airframe / 100 Powerplant) · 50% FAA + 50% AI · on your topics</span></button>
+            <button onclick="practiceSetCountMode('all')" id="pxCountAll" class="btn" style="text-align:left;padding:11px 14px;line-height:1.3;white-space:normal;height:auto">📚 All Questions for Selected Topics<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Every stored question for the topics you picked — no limit</span></button>
+            <button onclick="practiceSetCountMode('focused')" id="pxCountFocused" class="btn" style="text-align:left;padding:11px 14px;line-height:1.3;white-space:normal;height:auto">🎯 Focused FAA Written Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Full length (60 General / 100 Airframe / 100 Powerplant) · 50% FAA + 50% AI · on your topics</span></button>
           </div>
         </div>
         <button onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
@@ -12453,8 +12453,14 @@ function practiceRenderTopicPicker(){
     {label:'✈ Airframe',color:'var(--blue)',topics:typeof QB_AIRFRAME!=='undefined'?Object.keys(QB_AIRFRAME):[],key:'airframe'},
     {label:'⚙ Powerplant',color:'#cc4444',topics:typeof QB_POWERPLANT!=='undefined'?Object.keys(QB_POWERPLANT):[],key:'powerplant'}
   ];
-  container.innerHTML=sections.map(sec=>`
-    <div style="margin-bottom:16px">
+  // Section dropdown — only the chosen section's topics show, so there's no long scroll.
+  // All sections stay in the DOM (just hidden) so multi-section selections are preserved.
+  const dropdown='<select id="pxSectionSelect" onchange="pxShowSection(this.value)" '+
+    'style="width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.95rem;font-family:inherit;box-sizing:border-box;cursor:pointer;margin-bottom:6px">'+
+    sections.map(s=>`<option value="${s.key}">${s.label}</option>`).join('')+'</select>'+
+    '<div id="pxSelCount" style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:2px">No topics selected</div>';
+  const groups=sections.map((sec,idx)=>`
+    <div id="pxTopicSec_${sec.key}" style="margin-top:14px;${idx===0?'':'display:none'}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${sec.color}55">
         <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:3px;color:${sec.color}">${sec.label}</div>
         <button onclick="practiceToggleSection('${sec.key}')" id="pxSelAll_${sec.key}"
@@ -12470,6 +12476,27 @@ function practiceRenderTopicPicker(){
           </label>`).join('')}
       </div>
     </div>`).join('');
+  container.innerHTML=dropdown+groups;
+}
+
+// Show only the picked section's topics (others stay in the DOM, hidden, so selections persist)
+function pxShowSection(key){
+  ['general','airframe','powerplant'].forEach(k=>{
+    const el=document.getElementById('pxTopicSec_'+k);
+    if(el) el.style.display = (k===key) ? 'block' : 'none';
+  });
+}
+
+// Total topics selected across ALL sections (some may be hidden) — shown near the dropdown
+function _pxUpdateSelCount(){
+  const el=document.getElementById('pxSelCount'); if(!el) return;
+  const n=document.querySelectorAll('#pxTopicPicker input[type=checkbox]:checked').length;
+  const bySec={};
+  document.querySelectorAll('#pxTopicPicker input[type=checkbox]:checked').forEach(cb=>{ const s=cb.dataset.section; bySec[s]=(bySec[s]||0)+1; });
+  if(!n){ el.textContent='No topics selected'; el.style.color='var(--muted)'; return; }
+  const parts=Object.entries(bySec).map(([s,c])=>c+' '+s);
+  el.innerHTML='<b style="color:var(--accent)">'+n+' topic'+(n===1?'':'s')+' selected</b> ('+parts.join(' · ')+')';
+  el.style.color='var(--text)';
 }
 
 function pxTopicToggle(cb){
@@ -12479,6 +12506,7 @@ function pxTopicToggle(cb){
   const all=[...document.querySelectorAll(`#pxTopicPicker input[data-section="${key}"]`)];
   const btn=document.getElementById('pxSelAll_'+key);
   if(btn) btn.textContent=all.every(c=>c.checked)?'DESELECT ALL':'SELECT ALL';
+  _pxUpdateSelCount();
 }
 
 function practiceToggleSection(key){
@@ -12487,6 +12515,7 @@ function practiceToggleSection(key){
   all.forEach(cb=>{ cb.checked=toCheck; const l=cb.closest('.topic-check'); if(l) l.classList.toggle('selected',toCheck); });
   const btn=document.getElementById('pxSelAll_'+key);
   if(btn) btn.textContent=toCheck?'DESELECT ALL':'SELECT ALL';
+  _pxUpdateSelCount();
 }
 
 function practiceSetCount(n){
