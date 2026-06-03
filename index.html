@@ -1346,6 +1346,10 @@ setTimeout(function(){
             <button onclick="practiceSetCount(20)" id="pxCount20" class="btn" style="flex:1">20</button>
             <button onclick="practiceSetCount(30)" id="pxCount30" class="btn" style="flex:1">30</button>
           </div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+            <button onclick="practiceSetCountMode('all')" id="pxCountAll" class="btn" style="text-align:left;padding:11px 14px;line-height:1.3">📚 All Questions for Selected Topics<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted)">Every stored question for the topics you picked — no limit</span></button>
+            <button onclick="practiceSetCountMode('focused')" id="pxCountFocused" class="btn" style="text-align:left;padding:11px 14px;line-height:1.3">🎯 Focused FAA Written Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted)">Full length (60 General / 100 Airframe / 100 Powerplant) · 50% FAA + 50% AI · on your topics</span></button>
+          </div>
         </div>
         <button onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
         <div id="pxError" style="color:var(--wl);font-family:monospace;font-size:.8rem;margin-top:8px;text-align:center;min-height:18px"></div>
@@ -12214,6 +12218,7 @@ const OFFICIAL_TOPICS = {
   powerplant: ['Engine Electrical Systems','Engine Exhaust and Reverser Systems','Engine Fire Protection Systems','Engine Fuel and Fuel Metering Systems','Engine Inspection','Engine Instrument Systems','Engine Lubrication Systems','Ignition and Starting Systems','Propellers','Reciprocating Engines','Reciprocating Engine Induction and Cooling','Turbine Engine Air Systems','Turbine Engines']
 };
 let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _pxAnswers={}, _pxAssignId=null;
+let _pxCountMode='number'; // 'number' | 'all' | 'focused' — topic-mode exam sizing
 let _pxCurrentQ=0, _pxCorrectCount=0, _pxAnsweredCount=0, _pxTopicStats={};
 let _pxExamKey=null;
 let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null, _pxRevFilter='all';
@@ -12234,6 +12239,7 @@ function _betaApplyTag(){ const t=document.getElementById('betaTag'); if(t) t.st
 function practiceInitTab(){
   _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxAssignId=null;
   practiceRenderTopicPicker();
+  practiceSetCount(5); // reset topic-mode sizing to the default
   practiceSetMode('official');
   ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,i)=>{
     const el=document.getElementById(id); if(el) el.classList.toggle('hidden',i!==0);
@@ -12322,13 +12328,26 @@ function practiceToggleSection(key){
 }
 
 function practiceSetCount(n){
-  _pxCount = n;
-  [5,10,15,20].forEach(c => {
+  _pxCount = n; _pxCountMode = 'number';
+  [5,10,20,30].forEach(c => {
     const btn = document.getElementById('pxCount' + c);
     if(!btn) return;
-    btn.style.background = c === n ? '#0891b2' : '';
-    btn.style.color = c === n ? '#fff' : '';
-    btn.style.borderColor = c === n ? '#0891b2' : '';
+    const on = c === n;
+    btn.style.background = on ? '#0891b2' : '';
+    btn.style.color = on ? '#fff' : '';
+    btn.style.borderColor = on ? '#0891b2' : '';
+  });
+  ['pxCountAll','pxCountFocused'].forEach(id=>{ const b=document.getElementById(id); if(b){ b.style.background=''; b.style.color=''; b.style.borderColor=''; } });
+}
+
+// Topic-mode exam sizing: 'all' (every stored question) or 'focused' (full-length FAA-style)
+function practiceSetCountMode(mode){
+  _pxCountMode = mode;
+  [5,10,20,30].forEach(c=>{ const b=document.getElementById('pxCount'+c); if(b){ b.style.background=''; b.style.color=''; b.style.borderColor=''; } });
+  [['all','pxCountAll'],['focused','pxCountFocused']].forEach(([m,id])=>{
+    const b=document.getElementById(id); if(!b) return;
+    const on=m===mode;
+    b.style.background=on?'#0891b2':''; b.style.color=on?'#fff':''; b.style.borderColor=on?'#0891b2':'';
   });
 }
 
@@ -12342,27 +12361,45 @@ async function practiceGenerate(){
     count=OFFICIAL_EXAMS[_pxOfficialSubject].count;
     label=OFFICIAL_EXAMS[_pxOfficialSubject].label+' — Official Practice';
   } else {
-    topics=[...document.querySelectorAll('#pxTopicPicker input[type=checkbox]:checked')].map(cb=>cb.dataset.topic);
+    const checked=[...document.querySelectorAll('#pxTopicPicker input[type=checkbox]:checked')];
+    topics=checked.map(cb=>cb.dataset.topic);
     if(!topics.length){ if(errEl) errEl.textContent='Please select at least one topic.'; return; }
+    const topicLabel = topics.length===1?topics[0]:`${topics.length} Topics`;
+    _pxAssignId=null;
+    if(_pxCountMode==='all'){
+      await pxRunExam(topics, 0, topicLabel+' — All Questions', {mode:'all'});
+      return;
+    }
+    if(_pxCountMode==='focused'){
+      const sections=new Set(checked.map(cb=>cb.dataset.section));
+      const total = (sections.has('airframe')||sections.has('powerplant')) ? 100 : 60;
+      await pxRunExam(topics, total, topicLabel+' — Focused FAA Exam ('+total+'q)', {faaRatio:0.5});
+      return;
+    }
     count=_pxCount;
-    label=topics.length===1?topics[0]:`${topics.length} Topics`;
+    label=topicLabel;
   }
   _pxAssignId=null;
   await pxRunExam(topics, count, label);
 }
 
 // Shared exam runner — used by both self-generated and instructor-assigned exams.
-async function pxRunExam(topics, count, label){
+// opts: {mode:'all'} = every stored question for the topics · {faaRatio:0.5} = focused 50/50 split
+async function pxRunExam(topics, count, label, opts){
+  opts = opts || {};
   const errEl=document.getElementById('pxError');
   document.getElementById('practiceSetup').classList.add('hidden');
   document.getElementById('practiceLoading').classList.remove('hidden');
   const msgEl=document.getElementById('pxLoadingMsg');
-  if(msgEl) msgEl.textContent=`Generating ${count} question${count>1?'s':''} across ${topics.length} topic${topics.length>1?'s':''}...`;
+  if(msgEl){
+    if(opts.mode==='all') msgEl.textContent=`Pulling every stored question across ${topics.length} topic${topics.length>1?'s':''}...`;
+    else msgEl.textContent=`Generating ${count} question${count>1?'s':''} across ${topics.length} topic${topics.length>1?'s':''}...`;
+  }
   try {
     const res=await fetch('https://classroomamt.vercel.app/api/generate',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({topics,count})
+      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{})})
     });
     const data=await res.json();
     if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');

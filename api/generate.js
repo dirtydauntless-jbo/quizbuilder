@@ -179,7 +179,7 @@ ${JSON.stringify(questions)}`;
 }
 
 // ── Mix FAA + AI questions for one topic ──────────────────────────────────────
-async function buildTopicQuestions(topic, total, content) {
+async function buildTopicQuestions(topic, total, content, faaRatioOverride) {
   if (total < 1) return [];
 
   const bank = getFaaBank();
@@ -188,8 +188,10 @@ async function buildTopicQuestions(topic, total, content) {
   const bankSize = Array.isArray(bankPool) ? bankPool.length : 0;
 
   // Calculation-heavy topics → verified bank only (no AI arithmetic errors).
-  // Everything else → random 20–60% FAA, rest AI, capped at what's available.
-  const targetFaaPct = FAA_ONLY_TOPICS.has(topic) ? 1 : (0.20 + Math.random() * 0.40);
+  // A caller-supplied ratio (e.g. focused exam = 0.5) overrides the random default.
+  // Otherwise → random 20–60% FAA, rest AI, capped at what's available.
+  const targetFaaPct = FAA_ONLY_TOPICS.has(topic) ? 1
+    : (typeof faaRatioOverride === 'number' ? faaRatioOverride : (0.20 + Math.random() * 0.40));
   const faaCount = Math.min(Math.round(total * targetFaaPct), bankSize, total);
   const aiCount = total - faaCount;
 
@@ -209,9 +211,25 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { topics, count } = req.body || {};
+  const { topics, count, mode, faaRatio } = req.body || {};
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
 
+  // MODE: 'all' — return EVERY stored bank question for the selected topics (no AI, no cap).
+  if (mode === 'all') {
+    const seen = new Set();
+    const all = [];
+    for (const t of topics) {
+      for (const q of getFaaQuestions(t, 100000)) {
+        if (!seen.has(q.question)) { seen.add(q.question); all.push(q); }
+      }
+    }
+    if (!all.length) return res.status(502).json({ error: 'No stored questions found for the selected topics.' });
+    shuffle(all);
+    return res.status(200).json({ questions: all });
+  }
+
+  // Focused exam passes faaRatio (e.g. 0.5 = half verified FAA, half AI from the 8083).
+  const fr = (typeof faaRatio === 'number' && faaRatio >= 0 && faaRatio <= 1) ? faaRatio : undefined;
   const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
   const n = Math.min(topics.length, total);
   const selectedTopics = n < topics.length
@@ -226,7 +244,7 @@ module.exports = async function handler(req, res) {
   try {
     // Step 1: Build each topic's question mix in parallel
     const batches = await Promise.all(
-      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content))
+      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr))
     );
     let questions = batches.flat();
 
