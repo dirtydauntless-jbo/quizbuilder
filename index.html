@@ -13069,17 +13069,18 @@ async function refreshMyAllStarBadge(){
   applyMyAllStarBadge(myRank);
 }
 
-// Render the top-10 leaderboard on the practice tab
+// Render the top-10 leaderboard wherever it appears (practice tab + study tab)
+function _allStarContainers(){ return ['pxAllStars','studyAllStars'].map(id=>document.getElementById(id)).filter(Boolean); }
 async function renderAllStars(){
-  const el=document.getElementById('pxAllStars');
-  if(!el) return;
-  let data; try { data=await dbGet('allStars'); } catch(e){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">Could not load rankings.</div>'; return; }
+  const els=_allStarContainers();
+  if(!els.length) return;
+  let data; try { data=await dbGet('allStars'); } catch(e){ els.forEach(el=>el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">Could not load rankings.</div>'); return; }
   const ranked=_allStarRanked(data);
   const top=ranked.slice(0,10);
   // current student's overall rank among ALL ranked students (not just top 10)
   let myRankFull=0; ranked.forEach((r,i)=>{ if(r.uid===stuSession?.uid) myRankFull=i+1; });
   applyMyAllStarBadge(myRankFull && myRankFull<=10 ? myRankFull : 0);
-  if(!top.length){ el.innerHTML='<div style="font-size:.92rem;color:var(--muted);text-align:center;padding:18px 0">No rankings yet — finish a practice exam to earn points and get on the board! 🏆</div>'; return; }
+  if(!top.length){ els.forEach(el=>el.innerHTML='<div style="font-size:.92rem;color:var(--muted);text-align:center;padding:18px 0">No rankings yet — finish a practice exam to earn points and get on the board! 🏆</div>'); return; }
   const rowHtml=top.map((r,i)=>{
     const rank=i+1, me=r.uid===stuSession?.uid;
     return '<div style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-bottom:1px solid var(--border);'+(me?'background:rgba(124,58,237,.12);border-radius:8px':'')+'">'+
@@ -13100,7 +13101,7 @@ async function renderAllStars(){
     '</div>'+
     '<div style="font-size:.8rem;color:var(--muted);text-align:center;margin-top:8px">Rank '+myRankFull+' of '+ranked.length+' · '+(myRankFull-10)+' spot'+((myRankFull-10)===1?'':'s')+' from the top 10 — keep practicing! 💪</div>';
   }
-  el.innerHTML=rowHtml+standing;
+  els.forEach(el=>{ el.innerHTML=rowHtml+standing; });
 }
 
 // Master-admin: rebuild the whole leaderboard from every student's completed exams.
@@ -13986,9 +13987,17 @@ async function renderStudyHome(){
       ${buildBankCard('General', '📋', '#f0a500', QB, TOPICS, 'general')}
       ${buildBankCard('Airframe', '✈', '#4a9eff', QB_AIRFRAME, TOPICS_AIRFRAME, 'airframe')}
       ${buildBankCard('Powerplant', '⚙', '#cc4444', QB_POWERPLANT, TOPICS_POWERPLANT, 'powerplant')}
+
+      <!-- Classroom AMT All-Stars leaderboard -->
+      <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1.5px;color:#f0c040;line-height:1.1">🏆 Classroom AMT All-Stars</div>
+        <div style="font-size:.8rem;color:var(--muted);margin:5px 0 12px;line-height:1.4">Top 10 students ranked by accuracy, speed, and practice. Finish exams, score high, and move fast to climb the board.</div>
+        <div id="studyAllStars"><div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">Loading rankings…</div></div>
+      </div>
     </div>
 
   </div>`;
+  renderAllStars();
 }
 
 function toggleBankCard(bankId){
