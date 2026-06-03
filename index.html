@@ -738,11 +738,12 @@ setTimeout(function(){
   <div class="app-header">
     <div style="display:flex;align-items:baseline;gap:4px;cursor:pointer" onclick="instSwitchTab('classrooms')" title="Go to home">
       <div class="app-title">Classroom AMT</div>
-      <div class="app-subtitle">Instructor</div>
+      <div class="app-subtitle" id="instSubtitle">Instructor</div>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <span class="conn-badge conn-ok" id="instConn">● Live</span>
       <div class="user-pill">
+        <span id="instRoleTitle" style="display:none;margin-right:7px"></span>
         <span id="instUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="instShowMyProfile()" title="View my profile">--</span>
         <button class="btn btn-ghost btn-sm" onclick="confirmSignOut('instructor')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:6px;border-radius:3px">Sign Out</button>
       </div>
@@ -1119,8 +1120,17 @@ setTimeout(function(){
         <button class="btn btn-primary btn-sm" id="adminSubTab-instructors" onclick="adminSubTab('instructors')">👩‍🏫 Instructors</button>
         <button class="btn btn-ghost btn-sm" id="adminSubTab-classrooms" onclick="adminSubTab('classrooms')">🏫 Classrooms</button>
         <button class="btn btn-ghost btn-sm" id="adminSubTab-students" onclick="adminSubTab('students')">🎓 Students</button>
+        <button class="btn btn-ghost btn-sm" id="adminSubTab-users" onclick="adminSubTab('users')">👥 All Users</button>
         <button class="btn btn-ghost btn-sm" id="adminSubTab-search" onclick="adminSubTab('search')">🔍 Search</button>
         <button class="btn btn-ghost btn-sm" id="adminSubTab-assign" onclick="adminSubTab('assign')">📋 Assign Quiz</button>
+      </div>
+
+      <!-- ALL USERS sub-panel -->
+      <div id="adminPanel-users" style="display:none">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:6px">All Students &amp; Instructors</div>
+        <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:12px">Every registered user — whether or not they're in a classroom. Search and rename. (Assigning admin rights is master-admin only.)</div>
+        <input id="usersSearch_adm" oninput="_usersRender('adm')" placeholder="Search by name or email…" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.95rem;box-sizing:border-box;margin-bottom:12px">
+        <div id="usersDirList_adm"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
       </div>
 
       <!-- INSTRUCTORS sub-panel -->
@@ -1263,9 +1273,10 @@ setTimeout(function(){
   <div class="app-header">
     <div style="display:flex;align-items:baseline;cursor:pointer;gap:4px" onclick="stuSwitchTab('study')" title="Go to home">
       <div class="app-title">Classroom AMT</div>
-      <div class="app-subtitle">Student</div>
+      <div class="app-subtitle" id="stuSubtitle">Student</div>
     </div>
     <div class="user-pill">
+      <span id="stuRoleTitle" style="display:none;margin-right:7px"></span>
       <span id="stuAllStarBadge" style="display:none;margin-right:7px"></span>
       <span id="stuUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="stuShowMyProfile()" title="View my profile">--</span>
       <button class="btn btn-ghost btn-sm i18n-signout" onclick="confirmSignOut('student')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:2px;border-radius:3px">Sign Out</button>
@@ -3400,9 +3411,9 @@ async function masterDashLoad(){
     `, true)}
 
     ${panel('md-users','User Directory — All Students & Instructors','👥',`
-      <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:10px">Every registered user — whether or not they're in a classroom. Search by name or email, then rename.</div>
-      <input id="usersSearch" oninput="_usersRender()" placeholder="Search by name or email…" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-size:.9rem;box-sizing:border-box;margin-bottom:10px">
-      <div id="usersDirList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
+      <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:10px">Every registered user — whether or not they're in a classroom. Search, rename, and assign admin rights.</div>
+      <input id="usersSearch_md" oninput="_usersRender('md')" placeholder="Search by name or email…" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-size:.9rem;box-sizing:border-box;margin-bottom:10px">
+      <div id="usersDirList_md"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, true)}
 
     ${panel('md-announce','Announcement Banner','📣',`
@@ -3534,7 +3545,7 @@ async function masterDashLoad(){
   _opSimLoadAdminPanel();
   _qReviewLoad();
   _announceAdminLoad();
-  _usersLoad();
+  _usersLoad('md');
   allStarsRebuild(); // keep the All-Stars board synced from every student's completed exams
 
   // ── Populate sub-panels ───────────────────────────────────────────────────
@@ -3623,21 +3634,27 @@ function masterDashToggle(id){
   if(!isOpen && id==='md-announce') _announceAdminLoad();
 }
 
-// ── User Directory (master admin) — all students & instructors, rename anyone ──
+// ── User Directory — all students & instructors (super admin); admin-rights mgmt (master admin) ──
+// Available in BOTH the Master Dashboard (prefix 'md') and the Admin Panel (prefix 'adm').
 let _usersDir=null;
-async function _usersLoad(){
-  if(!_isMasterAdmin) return;
-  const el=document.getElementById('usersDirList'); if(!el) return;
+async function _usersLoad(prefix){
+  prefix=prefix||'md';
+  if(!_isSuperAdmin) return;
+  const el=document.getElementById('usersDirList_'+prefix); if(!el) return;
   el.innerHTML='<div class="empty-state" style="font-size:.8rem">Loading…</div>';
   try {
-    const [stu, inst]=await Promise.all([dbGet('studentProfiles'), dbGet('instructors')]);
-    _usersDir={ students:stu||{}, instructors:inst||{} };
+    const [stu, inst, supers, masters]=await Promise.all([
+      dbGet('studentProfiles'), dbGet('instructors'),
+      dbGet('config/superAdmins').catch(()=>null), dbGet('config/masterAdmins').catch(()=>null)
+    ]);
+    _usersDir={ students:stu||{}, instructors:inst||{}, supers:supers||{}, masters:masters||{} };
   } catch(e){ el.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.78rem">Error: '+_qEsc(e&&e.message||e)+'</div>'; return; }
-  _usersRender();
+  _usersRender(prefix);
 }
-function _usersRender(){
-  const el=document.getElementById('usersDirList'); if(!el||!_usersDir) return;
-  const q=(document.getElementById('usersSearch')?.value||'').trim().toLowerCase();
+function _usersRender(prefix){
+  prefix=prefix||'md';
+  const el=document.getElementById('usersDirList_'+prefix); if(!el||!_usersDir) return;
+  const q=(document.getElementById('usersSearch_'+prefix)?.value||'').trim().toLowerCase();
   const rows=[];
   Object.entries(_usersDir.students).forEach(([uid,v])=>{ if(v && typeof v==='object') rows.push({role:'student',uid,name:v.name||'',email:v.email||''}); });
   Object.entries(_usersDir.instructors).forEach(([uid,v])=>{ if(v && typeof v==='object') rows.push({role:'instructor',uid,name:v.name||v.displayName||'',email:v.email||''}); });
@@ -3646,19 +3663,31 @@ function _usersRender(){
   if(!filtered.length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No users match.</div>'; return; }
   el.innerHTML='<div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-bottom:6px">'+filtered.length+' user'+(filtered.length===1?'':'s')+(filtered.length>300?' (showing first 300)':'')+'</div>'+
     filtered.slice(0,300).map(r=>{
-      const tag = r.role==='instructor'
+      const isMaster=_usersDir.masters[r.uid]===true, isSuper=_usersDir.supers[r.uid]===true || isMaster;
+      const roleTag = r.role==='instructor'
         ? '<span style="font-family:monospace;font-size:.58rem;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:9px;background:rgba(37,99,235,.15);color:var(--blue);white-space:nowrap">Instructor</span>'
         : '<span style="font-family:monospace;font-size:.58rem;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:9px;background:rgba(34,197,94,.12);color:var(--cl);white-space:nowrap">Student</span>';
-      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border)">'+
-        tag+
-        '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'(no name)')+'</div>'+
+      const adminTag = isMaster ? ' <span style="font-family:monospace;font-size:.56rem;font-weight:700;padding:2px 6px;border-radius:9px;background:#f0c040;color:#1a1205;white-space:nowrap">MASTER</span>'
+        : isSuper ? ' <span style="font-family:monospace;font-size:.56rem;font-weight:700;padding:2px 6px;border-radius:9px;background:#7c3aed;color:#fff;white-space:nowrap">ADMIN</span>' : '';
+      // Admin-rights controls — master admin only
+      let rightsBtns='';
+      if(_isMasterAdmin){
+        rightsBtns =
+          '<button onclick="usersSetRight(\''+prefix+'\',\''+r.uid+'\',\'super\','+(isSuper&&!isMaster?'false':'true')+')" title="Toggle Administrator" style="background:transparent;border:1px solid '+(isSuper?'#7c3aed':'var(--border)')+';border-radius:6px;color:'+(isSuper?'#a78bfa':'var(--muted)')+';font-family:monospace;font-size:.66rem;padding:5px 9px;cursor:pointer;white-space:nowrap">'+(isSuper&&!isMaster?'Remove Admin':'Make Admin')+'</button>'+
+          '<button onclick="usersSetRight(\''+prefix+'\',\''+r.uid+'\',\'master\','+(isMaster?'false':'true')+')" title="Toggle Master Administrator" style="background:transparent;border:1px solid '+(isMaster?'#f0c040':'var(--border)')+';border-radius:6px;color:'+(isMaster?'#f0c040':'var(--muted)')+';font-family:monospace;font-size:.66rem;padding:5px 9px;cursor:pointer;white-space:nowrap">'+(isMaster?'Remove Master':'Make Master')+'</button>';
+      }
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap">'+
+        roleTag+
+        '<div style="flex:1;min-width:120px"><div style="font-weight:700;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'(no name)')+adminTag+'</div>'+
         '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.email||'—')+'</div></div>'+
-        '<button onclick="usersRename(\''+r.role+'\',\''+r.uid+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:monospace;font-size:.7rem;padding:6px 11px;cursor:pointer;white-space:nowrap">✏️ Rename</button>'+
+        '<button onclick="usersRename(\''+prefix+'\',\''+r.role+'\',\''+r.uid+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:monospace;font-size:.7rem;padding:6px 11px;cursor:pointer;white-space:nowrap">✏️ Rename</button>'+
+        rightsBtns+
       '</div>';
     }).join('');
 }
-async function usersRename(role, uid){
-  if(!_isMasterAdmin || !_usersDir) return;
+function _usersRerenderAll(){ ['md','adm'].forEach(p=>{ if(document.getElementById('usersDirList_'+p)) _usersRender(p); }); }
+async function usersRename(prefix, role, uid){
+  if(!_isSuperAdmin || !_usersDir) return;
   const dir = role==='instructor' ? _usersDir.instructors : _usersDir.students;
   const rec = dir && dir[uid];
   const cur = rec ? (rec.name||rec.displayName||'') : '';
@@ -3673,14 +3702,28 @@ async function usersRename(role, uid){
     } else {
       await dbSet('studentProfiles/'+uid+'/name', trimmed);
       if(rec) rec.name=trimmed;
-      // propagate to classroom rosters + access log so the new name shows everywhere
       const classes = rec && rec.classrooms;
       if(classes && typeof classes==='object'){ Object.keys(classes).forEach(cid=>{ dbSet('classroomStudents/'+cid+'/'+uid+'/name', trimmed).catch(()=>{}); }); }
       if(typeof _syncAccessLogStudentName==='function') _syncAccessLogStudentName(uid, trimmed);
     }
     showToast('Renamed to '+trimmed,'success');
-    _usersRender();
+    _usersRerenderAll();
   } catch(e){ showToast('Rename failed: '+(e&&e.message||e),'error'); }
+}
+// Grant/revoke admin rights — master admin only
+async function usersSetRight(prefix, uid, level, grant){
+  if(!_isMasterAdmin || !_usersDir) return;
+  if(uid===instUser?.uid && !grant){ if(!confirm('This will remove YOUR OWN '+(level==='master'?'master admin':'admin')+' rights. Continue?')) return; }
+  const word = level==='master' ? 'Master Administrator' : 'Administrator';
+  if(!confirm((grant?'Grant ':'Remove ')+word+' rights'+(grant?' to':' from')+' this user?')) return;
+  try {
+    const node = level==='master' ? 'config/masterAdmins/' : 'config/superAdmins/';
+    await dbSet(node+uid, grant ? true : null);
+    const map = level==='master' ? _usersDir.masters : _usersDir.supers;
+    if(grant) map[uid]=true; else delete map[uid];
+    showToast(word+' rights '+(grant?'granted':'removed')+'.','success');
+    _usersRerenderAll();
+  } catch(e){ showToast('Failed: '+(e&&e.message||e),'error'); }
 }
 
 // ── Flagged-question review (Beta) ──────────────────────────────────────────
@@ -4821,13 +4864,38 @@ async function _checkSuperAdmin(){
   if(btn) btn.classList.toggle('hidden', !_isSuperAdmin);
   const masterBtn = document.getElementById('masterDashTabBtn');
   if(masterBtn) masterBtn.classList.toggle('hidden', !_isMasterAdmin);
+  applyRoleTitles('inst', _isMasterAdmin ? 'master' : (_isSuperAdmin ? 'super' : null));
   // Log access for master admin analytics
   if(instUser?.uid){ /* access already logged in onAuthStateChanged */ }
 }
 
+// Role title shown in the header subtitle + the pill tag (Administrator / Master Administrator)
+function _roleTitleTag(level){
+  if(level==='master') return '<span style="font-family:monospace;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 9px;border-radius:10px;background:#f0c040;color:#1a1205;white-space:nowrap">★ Master Admin</span>';
+  if(level==='super')  return '<span style="font-family:monospace;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 9px;border-radius:10px;background:#7c3aed;color:#fff;white-space:nowrap">Administrator</span>';
+  return '';
+}
+function applyRoleTitles(app, level){
+  const sub=document.getElementById(app+'Subtitle');
+  const tag=document.getElementById(app+'RoleTitle');
+  const def = app==='inst' ? 'Instructor' : 'Student';
+  if(sub) sub.textContent = level==='master' ? 'Master Administrator' : level==='super' ? 'Administrator' : def;
+  if(tag){ if(level){ tag.innerHTML=_roleTitleTag(level); tag.style.display='inline-flex'; } else { tag.innerHTML=''; tag.style.display='none'; } }
+}
+// Students can be admins too — check their own config flags and reflect the title
+async function _checkStudentAdmin(){
+  if(!stuSession?.uid){ applyRoleTitles('stu', null); return; }
+  let level=null;
+  try {
+    if(await dbGet('config/masterAdmins/'+stuSession.uid)) level='master';
+    else if(await dbGet('config/superAdmins/'+stuSession.uid)) level='super';
+  } catch(e){ level=null; }
+  applyRoleTitles('stu', level);
+}
+
 function adminSubTab(tab){
   _adminCurrentSubTab = tab;
-  ['instructors','classrooms','students','search','assign'].forEach(t => {
+  ['instructors','classrooms','students','users','search','assign'].forEach(t => {
     const panel = document.getElementById('adminPanel-'+t);
     const btn = document.getElementById('adminSubTab-'+t);
     if(panel) panel.style.display = t === tab ? 'block' : 'none';
@@ -4836,6 +4904,7 @@ function adminSubTab(tab){
   if(tab === 'instructors'){ adminLoadInstructors(); adminLoadPending(); }
   if(tab === 'classrooms') adminLoadClassrooms();
   if(tab === 'students') adminInitStudents();
+  if(tab === 'users') _usersLoad('adm');
   if(tab === 'assign') adminInitAssign();
   if(tab === 'search'){ setTimeout(()=>{ const el=document.getElementById('adminSearchInput'); if(el) el.focus(); },100); }
 }
@@ -12049,6 +12118,7 @@ function showStuApp(){
   announceBannerInit().catch(()=>{});
   betaInit().catch(()=>{});
   refreshMyAllStarBadge().catch(()=>{});
+  _checkStudentAdmin().catch(()=>{});
 }
 
 function show(id){
