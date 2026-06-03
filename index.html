@@ -563,6 +563,11 @@ a{color:var(--accent);text-decoration:none}
 .pxf-btn{font-family:monospace;font-size:.74rem;letter-spacing:.5px;padding:6px 13px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--muted);cursor:pointer;transition:all .12s}
 .pxf-btn:hover{color:var(--text)}
 .pxf-btn.active{background:rgba(8,145,178,.15);border-color:#0891b2;color:#22b8d8}
+/* Performance-breakdown subject cards */
+.px-subj-btn{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1px;padding:14px 8px;border:1.5px solid var(--border);border-radius:10px;background:var(--panel2);color:var(--text);cursor:pointer;transition:all .15s;text-align:center}
+.px-subj-btn:hover{border-color:var(--accent);background:rgba(8,145,178,.12);transform:translateY(-1px)}
+.px-subj-btn.active{border-color:var(--accent);background:var(--accent);color:#04240f}
+.px-subj-btn>div{font-size:.92rem;letter-spacing:1px}
 </style>
 </head>
 <body>
@@ -1261,6 +1266,7 @@ setTimeout(function(){
       <div class="app-subtitle">Student</div>
     </div>
     <div class="user-pill">
+      <span id="stuAllStarBadge" style="display:none;margin-right:7px"></span>
       <span id="stuUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="stuShowMyProfile()" title="View my profile">--</span>
       <button class="btn btn-ghost btn-sm i18n-signout" onclick="confirmSignOut('student')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:2px;border-radius:3px">Sign Out</button>
     </div>
@@ -1354,20 +1360,28 @@ setTimeout(function(){
         <button onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
         <div id="pxError" style="color:var(--wl);font-family:monospace;font-size:.8rem;margin-top:8px;text-align:center;min-height:18px"></div>
         <!-- Comprehensive performance breakdown -->
-        <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
-          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">📊 Performance Breakdown</div>
-          <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:10px">See your weakest topics across <b>all</b> your completed exams in a subject.</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-            <button class="pxf-btn" id="pxcb-general" onclick="pxComprehensive('general')">📋 General</button>
-            <button class="pxf-btn" id="pxcb-airframe" onclick="pxComprehensive('airframe')">✈ Airframe</button>
-            <button class="pxf-btn" id="pxcb-powerplant" onclick="pxComprehensive('powerplant')">⚙ Powerplant</button>
+        <div class="pxh-section" style="margin-top:24px">
+          <div style="background:linear-gradient(135deg,rgba(8,145,178,.12),rgba(124,58,237,.10));border:1.5px solid var(--accent);border-radius:12px;padding:18px 18px 16px">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1.5px;color:var(--accent);line-height:1.1">📊 Review Your Progress by Subject</div>
+            <div style="font-size:.85rem;color:var(--text);margin:6px 0 14px;line-height:1.4">Tap a subject below to see your <b>weakest topics across every exam you've taken</b> in it — so you know exactly what to study next. (You can also print it to PDF.)</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+              <button id="pxcb-general" onclick="pxComprehensive('general')" class="px-subj-btn">📋<div style="margin-top:5px">General</div></button>
+              <button id="pxcb-airframe" onclick="pxComprehensive('airframe')" class="px-subj-btn">✈<div style="margin-top:5px">Airframe</div></button>
+              <button id="pxcb-powerplant" onclick="pxComprehensive('powerplant')" class="px-subj-btn">⚙<div style="margin-top:5px">Powerplant</div></button>
+            </div>
+            <div id="pxComprehensiveOut" style="margin-top:14px"></div>
           </div>
-          <div id="pxComprehensiveOut"></div>
         </div>
         <!-- History -->
         <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
           <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Past Attempts</div>
           <div id="pxHistoryList"><div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No attempts yet</div></div>
+        </div>
+        <!-- Classroom AMT All-Stars leaderboard -->
+        <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1.5px;color:#f0c040;line-height:1.1">🏆 Classroom AMT All-Stars</div>
+          <div style="font-size:.8rem;color:var(--muted);margin:5px 0 12px;line-height:1.4">Top 10 students ranked by accuracy, speed, and practice. Finish exams, score high, and move fast to climb the board.</div>
+          <div id="pxAllStars"><div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">Loading rankings…</div></div>
         </div>
       </div>
       <!-- Loading -->
@@ -11959,6 +11973,7 @@ function showStuApp(){
   opSimInit().catch(()=>{});
   announceBannerInit().catch(()=>{});
   betaInit().catch(()=>{});
+  refreshMyAllStarBadge().catch(()=>{});
 }
 
 function show(id){
@@ -12219,6 +12234,7 @@ const OFFICIAL_TOPICS = {
 };
 let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _pxAnswers={}, _pxAssignId=null;
 let _pxCountMode='number'; // 'number' | 'all' | 'focused' — topic-mode exam sizing
+let _pxStartedAt=0; // ms timestamp the current exam (or resumed session) began, for completion-time tracking
 let _pxCurrentQ=0, _pxCorrectCount=0, _pxAnsweredCount=0, _pxTopicStats={};
 let _pxExamKey=null;
 let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null, _pxRevFilter='all';
@@ -12248,6 +12264,7 @@ function practiceInitTab(){
   pxRenderAssigned();
   practiceLoadHistory();
   betaInit();
+  updateAllStarStats().then(renderAllStars).catch(()=>{ renderAllStars(); });
 }
 
 function practiceSetMode(mode){
@@ -12424,6 +12441,7 @@ async function pxRunExam(topics, count, label, opts){
       }
       practiceLoadHistory(); // keep Past Attempts current so the new (in-progress) exam shows when they return to setup
     }
+    _pxStartedAt=Date.now(); // start the completion-time clock
     practiceRenderExam(label);
   } catch(e){
     document.getElementById('practiceLoading').classList.add('hidden');
@@ -12670,8 +12688,10 @@ function practiceFinish(){
   document.getElementById('practiceResults').classList.remove('hidden');
   const titleEl=document.getElementById('pxResultsTitle');
   if(titleEl){ titleEl.textContent=`${correct}/${total} — ${pct}%`; titleEl.style.color=pct>=70?'var(--cl)':'var(--wl)'; }
+  const durationSec = _pxStartedAt ? Math.max(1, Math.round((Date.now()-_pxStartedAt)/1000)) : null;
+  _pxStartedAt = 0;
   if(stuSession?.uid && _pxExamKey){
-    db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:correct,pct,topicStats:_pxTopicStats,answeredCount:total,status:'complete'}).catch(e=>console.warn('finish save failed:',e&&e.message||e));
+    db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:correct,pct,topicStats:_pxTopicStats,answeredCount:total,status:'complete',...(durationSec?{durationSec}:{})}).catch(e=>console.warn('finish save failed:',e&&e.message||e));
     // If this was an instructor-assigned exam, write the full results back so the instructor can review
     if(_pxAssignId){
       db.ref('assignedExams/'+stuSession.uid+'/'+_pxAssignId).update({
@@ -12679,6 +12699,8 @@ function practiceFinish(){
         topicStats:_pxTopicStats, studentName:stuSession.name||'', data:{questions:_pxQuestions, answers:_pxAnswers}
       }).catch(e=>console.warn('assigned result save failed:',e&&e.message||e));
     }
+    // Update All-Stars ranking + the badge by the student's name
+    updateAllStarStats().then(refreshMyAllStarBadge).catch(()=>{});
   }
   const bd=document.getElementById('pxResultsBreakdown');
   if(!bd) return;
@@ -12786,6 +12808,94 @@ function pxComprehensivePrint(){
   win.document.close();
   win.focus();
   setTimeout(()=>win.print(),400);
+}
+
+// ── Classroom AMT All-Stars leaderboard ─────────────────────────────────────
+// Students can't read each other's practiceHistory, so each writes their own aggregate
+// to allStars/$uid (publicly readable). Ranking = accuracy + speed + completion + volume.
+function _allStarColor(rank){ return rank===1?'#f0c040':rank===2?'#c4ccd4':rank===3?'#cd7f32':'#7c3aed'; }
+function _allStarBadgeSpan(rank){
+  if(!rank || rank>10) return '';
+  const col=_allStarColor(rank);
+  const medal=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'★';
+  const label=rank>3?(' '+rank):'';
+  return '<span title="Classroom AMT All-Star — Rank '+rank+'" style="display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;border-radius:11px;background:'+col+';color:#1a1205;font-weight:800;font-size:.72rem;font-family:monospace;padding:0 7px;box-shadow:0 0 0 1px rgba(0,0,0,.2)">'+medal+label+'</span>';
+}
+function _fmtSpq(spq){ return spq?Math.round(spq)+'s/q':''; }
+
+// Compute this student's stats from their own history and write to allStars/$uid
+async function updateAllStarStats(){
+  if(!stuSession?.uid) return;
+  let data; try { data=await dbGet('practiceHistory/'+stuSession.uid); } catch(e){ return; }
+  const all=Object.values(data||{}).filter(Boolean);
+  const completed=all.filter(r=>r.status==='complete');
+  const takenCount=all.length, completedCount=completed.length;
+  if(completedCount===0){ try{ await db.ref('allStars/'+stuSession.uid).remove(); }catch(e){} return; }
+  let pctSum=0, spqSum=0, spqN=0;
+  completed.forEach(r=>{
+    pctSum += (typeof r.pct==='number'?r.pct:0);
+    if(typeof r.durationSec==='number' && r.durationSec>0 && r.total>0){
+      const spq=r.durationSec/r.total;
+      if(spq>0 && spq<=300){ spqSum+=spq; spqN++; }   // ignore implausible (resumed/abandoned) times
+    }
+  });
+  const avgPct=pctSum/completedCount;
+  const completionRatio=takenCount?completedCount/takenCount:0;
+  const avgSpq=spqN?spqSum/spqN:null;
+  let speed=50; // neutral if no timing data
+  if(avgSpq!=null) speed=Math.max(0,Math.min(100,(90-avgSpq)/(90-15)*100)); // 15s/q→100, 90s/q→0
+  const volume=Math.min(completedCount,20)/20*100;
+  const score=avgPct*0.55 + speed*0.20 + completionRatio*100*0.10 + volume*0.15;
+  const payload={ name:(stuSession.name||'Student'), completed:completedCount, taken:takenCount,
+    avgPct:Math.round(avgPct), avgSpq:(avgSpq!=null?Math.round(avgSpq):null),
+    score:Math.round(score*10)/10, updatedAt:Date.now() };
+  try { await db.ref('allStars/'+stuSession.uid).set(payload); } catch(e){ console.warn('all-star write failed:',e&&e.message||e); }
+}
+
+function _allStarRanked(data){
+  return Object.entries(data||{})
+    .map(([uid,v])=>({uid,...v}))
+    .filter(v=>v && typeof v.score==='number' && v.completed>0)
+    .sort((a,b)=> (b.score-a.score) || (b.avgPct-a.avgPct) || ((a.avgSpq==null?1e9:a.avgSpq)-(b.avgSpq==null?1e9:b.avgSpq)));
+}
+
+// Set the badge beside the student's name in the top-right (none if not in top 10)
+function applyMyAllStarBadge(rank){
+  const el=document.getElementById('stuAllStarBadge');
+  if(!el) return;
+  if(rank && rank<=10){ el.innerHTML=_allStarBadgeSpan(rank); el.style.display='inline-flex'; }
+  else { el.innerHTML=''; el.style.display='none'; }
+}
+
+// Refresh just the top-right badge (called on app load and after finishing an exam)
+async function refreshMyAllStarBadge(){
+  if(!stuSession?.uid){ applyMyAllStarBadge(0); return; }
+  let data; try { data=await dbGet('allStars'); } catch(e){ return; }
+  const ranked=_allStarRanked(data);
+  let myRank=0; ranked.slice(0,10).forEach((r,i)=>{ if(r.uid===stuSession.uid) myRank=i+1; });
+  applyMyAllStarBadge(myRank);
+}
+
+// Render the top-10 leaderboard on the practice tab
+async function renderAllStars(){
+  const el=document.getElementById('pxAllStars');
+  if(!el) return;
+  let data; try { data=await dbGet('allStars'); } catch(e){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">Could not load rankings.</div>'; return; }
+  const ranked=_allStarRanked(data);
+  const top=ranked.slice(0,10);
+  let myRank=0; top.forEach((r,i)=>{ if(r.uid===stuSession?.uid) myRank=i+1; });
+  applyMyAllStarBadge(myRank);
+  if(!top.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No rankings yet — finish a practice exam to get on the board! 🏆</div>'; return; }
+  el.innerHTML=top.map((r,i)=>{
+    const rank=i+1, me=r.uid===stuSession?.uid;
+    const stats=r.completed+' exam'+(r.completed===1?'':'s')+' · '+r.avgPct+'% avg'+(r.avgSpq?' · '+_fmtSpq(r.avgSpq):'');
+    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid var(--border);'+(me?'background:rgba(124,58,237,.10);border-radius:8px':'')+'">'+
+      _allStarBadgeSpan(rank)+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+(me?' <span style="color:var(--accent);font-size:.68rem">(you)</span>':'')+'</div>'+
+      '<div style="font-family:monospace;font-size:.68rem;color:var(--muted)">'+stats+'</div></div>'+
+      '<div style="font-family:monospace;font-size:1rem;font-weight:800;color:'+_allStarColor(rank)+';min-width:40px;text-align:right">'+Math.round(r.score)+'</div>'+
+    '</div>';
+  }).join('');
 }
 
 // Top N topics where the student scored below 70% (worst first)
@@ -13029,7 +13139,7 @@ async function practiceResumeFromModal(){
   _pxMode=summary.mode||'official';
   _pxOfficialSubject=summary.subject!=='mixed'?summary.subject:null;
   // Rebuild running stats from stored answers
-  _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxFlagCount=0;
+  _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxFlagCount=0; _pxStartedAt=Date.now();
   Object.entries(_pxAnswers).forEach(([idxStr,letter])=>{
     const idx=parseInt(idxStr);
     const q=_pxQuestions[idx];

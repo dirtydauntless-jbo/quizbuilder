@@ -206,6 +206,21 @@
     "questionOverrides": {
       ".read": true,
       ".write": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+    },
+    "allStars": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        ".validate": "newData.hasChildren(['name','score']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60 && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 100 && (!newData.hasChild('avgPct') || (newData.child('avgPct').isNumber() && newData.child('avgPct').val() >= 0 && newData.child('avgPct').val() <= 100)) && (!newData.hasChild('completed') || (newData.child('completed').isNumber() && newData.child('completed').val() >= 0 && newData.child('completed').val() <= 100000)) && (!newData.hasChild('taken') || (newData.child('taken').isNumber() && newData.child('taken').val() >= 0 && newData.child('taken').val() <= 100000)) && (!newData.hasChild('completed') || !newData.hasChild('taken') || newData.child('taken').val() >= newData.child('completed').val()) && (!newData.hasChild('avgSpq') || newData.child('avgSpq').val() === null || (newData.child('avgSpq').isNumber() && newData.child('avgSpq').val() >= 0))",
+        "name":      { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "score":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "avgPct":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "completed": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+        "taken":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+        "avgSpq":    { ".validate": "newData.val() === null || (newData.isNumber() && newData.val() >= 0)" },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "$other":    { ".validate": false }
+      }
     }
   }
 }
