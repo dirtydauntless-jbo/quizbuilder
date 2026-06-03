@@ -12,6 +12,16 @@ function getContent() {
   return _content;
 }
 
+// ── Lazy-load O&P (oral & practical) study questions ─────────────────────────
+let _opBank = null;
+function getOPBank() {
+  if (_opBank === null) {
+    try { _opBank = require(path.join(process.cwd(), 'op_questions.json')); }
+    catch { _opBank = {}; }
+  }
+  return _opBank;
+}
+
 // ── Lazy-load FAA question bank ───────────────────────────────────────────────
 let _faaBank = null;
 function getFaaBank() {
@@ -157,6 +167,7 @@ Rules:
 - LAW / FORMULA REARRANGEMENTS: never ask an open-ended question whose choices are just different correct rearrangements of the same law. For example, do NOT ask "what is the relationship between voltage, current, and resistance?" with choices V = I × R, I = V / R, R = V / I — all three are correct. Instead ask a question that targets ONE form (e.g., "Which equation is used to find resistance when voltage and current are known?" → only R = V / I is correct, and the other two choices must be WRONG rearrangements such as R = I / V or R = I × V).
 - Prefer focused questions over compound ones ("what is X AND how is it calculated") — compound phrasing tends to make more than one choice partly correct.
 - ONLY ONE choice is correct — verify that wrong answers are factually incorrect, not synonyms or paraphrases of the correct answer
+- ALL THREE choices must be DISTINCT IN MEANING: no two choices may say the same thing, be paraphrases, or describe the same outcome in different words. Every choice must be clearly different.
 - DISTRACTOR QUALITY (important): the two wrong answers must be moderately challenging — about a 7 out of 10 in how closely they relate to the correct answer. A well-prepared student should still pick the right one after careful reading, but a guesser must NOT be able to eliminate the wrong answers at a glance. Specifically:
   * Keep every choice in the SAME subject area and addressing the SAME concept as the question — NEVER use an obviously off-topic or absurd option (for example, do not put "computer programming skills" or "engine overhaul training" as a distractor on a human-factors question)
   * Build each wrong answer from a realistic mistake an AMT student might actually make: a common misconception, a true-but-irrelevant fact, a correct principle applied to the wrong situation, or the right idea with one key detail changed
@@ -194,7 +205,37 @@ Format: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"
   } catch { return []; }
 }
 
-// ── QC pass — only run on AI-generated questions ─────────────────────────────
+// ── Convert O&P (oral & practical) study Q&A into 3-choice multiple-choice ────
+// The O&P answer becomes the correct choice; the AI writes two plausible wrong choices.
+async function generateFromOP(topic, qCount) {
+  if (qCount < 1) return [];
+  const subject = TOPIC_SUBJECT[topic] || 'general';
+  const op = getOPBank();
+  const pool = op[subject] && op[subject][topic];
+  if (!Array.isArray(pool) || !pool.length) return [];
+  const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
+  const picks = shuffle(pool.slice()).slice(0, Math.min(qCount, pool.length));
+  const out = [];
+  for (let i = 0; i < picks.length; i += AI_BATCH) {
+    const batch = picks.slice(i, i + AI_BATCH);
+    const prompt = `You convert FAA oral & practical (O&P) study questions into 3-choice multiple-choice exam questions, all on the topic "${topic}".
+For EACH item below (a question and its correct answer), write ONE multiple-choice question:
+- Keep the question's meaning; you may lightly reword for a written-test format.
+- The CORRECT choice must be a concise statement of the provided correct answer.
+- Write TWO incorrect but plausible distractors in the same style and length. They must be factually FALSE, stay on the "${topic}" topic, and leave EXACTLY ONE correct choice — never make a distractor that is also true. All three choices must be DISTINCT IN MEANING — no two may be paraphrases or convey the same idea.
+- explanation: 1-2 sentences on why the answer is correct. Do NOT mention any handbook number.
+Return ONLY a JSON array, same order as the items: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"..."}]
+Items:
+${JSON.stringify(batch.map(c => ({ question: c.q, answer: c.a })))}`;
+    try {
+      const arr = parseJSON(await callClaude(prompt, 4096));
+      if (Array.isArray(arr)) arr.forEach(q => { if (q && q.question && q.choices) out.push({ ...q, topic, subject, handbook, source: 'op' }); });
+    } catch { /* skip this batch */ }
+  }
+  return out.slice(0, qCount);
+}
+
+// ── QC pass — run on AI-generated and O&P-converted questions ────────────────
 async function qcBatch(questions) {
   if (!questions.length) return questions;
 
@@ -205,7 +246,7 @@ Check for and fix:
 1. If the correct answer has a number, every wrong answer must also have a DIFFERENT specific number (same units — do not drop units or change to a different unit type)
 2. If the correct answer has units (psi, inches, degrees, rpm, volts, lbs, etc.), all wrong answers must use those exact same units
 3. No wrong answer may be a synonym, paraphrase, or restatement of the correct answer — if one is, replace it with a factually incorrect but plausible alternative
-4. No two wrong answers may mean the same thing — if two are similar, replace one
+4. ALL THREE choices must be DISTINCT IN MEANING — no two of the three may say the same thing, be paraphrases of each other, or describe the same outcome with different wording (this applies to the correct choice vs a distractor AND to the two distractors). If any two convey the same idea, rewrite one into a clearly different, factually incorrect statement.
 5. All choices should be similar in grammatical structure and length
 6. Each wrong answer must be clearly incorrect per FAA standards
 7. DISTRACTOR DIFFICULTY: replace any wrong answer that is off-topic, absurd, or eliminable without real subject knowledge. Every distractor must stay in the same subject area and address the same concept as the question, and should read as a realistic mistake (a common misconception, a true-but-irrelevant fact, or a correct principle applied to the wrong context). Aim for moderately challenging (about 7/10 related to the correct answer) while keeping exactly one defensible answer
@@ -223,29 +264,34 @@ ${JSON.stringify(questions)}`;
   } catch { return questions; }
 }
 
-// ── Mix FAA + AI questions for one topic ──────────────────────────────────────
-async function buildTopicQuestions(topic, total, content, faaRatioOverride) {
+// ── Mix FAA + O&P + AI questions for one topic ───────────────────────────────
+async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride) {
   if (total < 1) return [];
 
   const bank = getFaaBank();
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const bankPool = bank[subject]?.[topic];
   const bankSize = Array.isArray(bankPool) ? bankPool.length : 0;
+  const isFaaOnly = FAA_ONLY_TOPICS.has(topic);
 
-  // Calculation-heavy topics → verified bank only (no AI arithmetic errors).
-  // A caller-supplied ratio (e.g. focused exam = 0.5) overrides the random default.
-  // Otherwise → random 20–60% FAA, rest AI, capped at what's available.
-  const targetFaaPct = FAA_ONLY_TOPICS.has(topic) ? 1
+  // Calculation-heavy topics → verified bank only (no AI/O&P arithmetic errors).
+  // Otherwise: caller may request a FAA share (focused exam = 0.5) and an O&P share (0.25);
+  // the remainder is AI from the 8083. Default (official exams) = random 20–60% FAA, rest AI.
+  const faaPct = isFaaOnly ? 1
     : (typeof faaRatioOverride === 'number' ? faaRatioOverride : (0.20 + Math.random() * 0.40));
-  const faaCount = Math.min(Math.round(total * targetFaaPct), bankSize, total);
-  const aiCount = total - faaCount;
+  const opPct  = isFaaOnly ? 0 : (typeof opRatioOverride === 'number' ? opRatioOverride : 0);
 
-  const [faaQuestions, aiQuestions] = await Promise.all([
+  let faaCount = Math.min(Math.round(total * faaPct), bankSize, total);
+  let opCount  = Math.min(Math.round(total * opPct), Math.max(0, total - faaCount));
+  let aiCount  = Math.max(0, total - faaCount - opCount);
+
+  const [faaQuestions, opQuestions, aiQuestions] = await Promise.all([
     Promise.resolve(getFaaQuestions(topic, faaCount)),
+    generateFromOP(topic, opCount),
     generateForTopic(topic, aiCount, content),
   ]);
 
-  return [...faaQuestions, ...aiQuestions];
+  return [...faaQuestions, ...opQuestions, ...aiQuestions];
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -256,7 +302,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { topics, count, mode, faaRatio } = req.body || {};
+  const { topics, count, mode, faaRatio, opRatio } = req.body || {};
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
 
   // MODE: 'all' — return EVERY stored bank question for the selected topics (no AI, no cap).
@@ -273,8 +319,10 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ questions: all.filter(q => choicesAllDistinct(q.choices)) });
   }
 
-  // Focused exam passes faaRatio (e.g. 0.5 = half verified FAA, half AI from the 8083).
+  // Focused exam passes faaRatio (0.5 = half verified FAA) and opRatio (0.25 = quarter O&P);
+  // the remainder is AI from the 8083.
   const fr = (typeof faaRatio === 'number' && faaRatio >= 0 && faaRatio <= 1) ? faaRatio : undefined;
+  const or = (typeof opRatio === 'number' && opRatio >= 0 && opRatio <= 1) ? opRatio : undefined;
   const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
   const n = Math.min(topics.length, total);
   const selectedTopics = n < topics.length
@@ -289,17 +337,17 @@ module.exports = async function handler(req, res) {
   try {
     // Step 1: Build each topic's question mix in parallel
     const batches = await Promise.all(
-      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr))
+      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr, or))
     );
     let questions = batches.flat();
 
     if (!questions.length) return res.status(502).json({ error: 'No questions generated. Please try again.' });
 
-    // Step 2: QC pass — only on AI-generated questions (in chunks of 10)
-    const aiQs   = questions.filter(q => q.source === 'ai');
+    // Step 2: QC pass — on AI-generated AND O&P-converted questions (in chunks of 10)
+    const genQs  = questions.filter(q => q.source === 'ai' || q.source === 'op');
     const faaQs  = questions.filter(q => q.source === 'faa');
     const chunks = [];
-    for (let i = 0; i < aiQs.length; i += 10) chunks.push(aiQs.slice(i, i + 10));
+    for (let i = 0; i < genQs.length; i += 10) chunks.push(genQs.slice(i, i + 10));
     const reviewed = await Promise.all(chunks.map(c => qcBatch(c)));
     questions = [...faaQs, ...reviewed.flat()];
 
@@ -322,7 +370,7 @@ module.exports = async function handler(req, res) {
     // Step 3: evaluate choices — randomize the correct answer's position on AI questions
     // (so it isn't always "A") and strip any leftover handbook citation, then shuffle + trim.
     questions.forEach(q => {
-      if (q.source === 'ai') {
+      if (q.source === 'ai' || q.source === 'op') {
         shuffleChoicePositions(q);
         if (q.explanation) {
           q.explanation = q.explanation

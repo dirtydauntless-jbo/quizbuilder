@@ -12575,10 +12575,10 @@ async function practiceGenerate(){
       await pxRunExam(topics, 0, topicLabel+' — All Questions', {mode:'all'});
       return;
     }
-    // default: Focused FAA Written Exam
+    // default: Focused FAA Written Exam — 50% FAA bank · 25% O&P · 25% AI from the 8083
     const sections=new Set(checked.map(cb=>cb.dataset.section));
     const total = (sections.has('airframe')||sections.has('powerplant')) ? 100 : 60;
-    await pxRunExam(topics, total, topicLabel+' — Focused FAA Exam ('+total+'q)', {faaRatio:0.5});
+    await pxRunExam(topics, total, topicLabel+' — Focused FAA Exam ('+total+'q)', {faaRatio:0.5, opRatio:0.25});
     return;
   }
   _pxAssignId=null;
@@ -12601,7 +12601,7 @@ async function pxRunExam(topics, count, label, opts){
     const res=await fetch('https://classroomamt.vercel.app/api/generate',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{})})
+      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{})})
     });
     const data=await res.json();
     if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
