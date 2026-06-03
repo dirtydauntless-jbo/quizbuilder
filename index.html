@@ -12725,12 +12725,10 @@ function pxPrevRecapHTML(i){
     '<div style="font-weight:700;font-size:.85rem;line-height:1.4;margin-bottom:8px">'+q.question+'</div>'+choices+flagBtn+'</div>';
 }
 
-// Student flags a question whose answer may be wrong — sent to the master admin for Beta review
-async function pxSubmitReview(i){
-  const q = _pxQuestions[i];
+// Core: student flags a question (its answer may be wrong) — sent to the master admin for Beta review.
+async function _pxFlagQuestion(q, studentAnswer, btn){
   if(!q) return;
   if(!stuSession?.uid){ showToast('Please sign in to submit a question for review.','error'); return; }
-  const btn = document.getElementById('pxFlagBtn'+i);
   if(btn && btn.dataset.sent==='1') return;
   // Client-side rate limit (instant feedback). The real limit is enforced by Firebase rules.
   if(Date.now()-_pxLastFlagTs < PX_FLAG_MIN_INTERVAL){
@@ -12755,7 +12753,7 @@ async function pxSubmitReview(i){
     question: q.question || '',
     choices: q.choices || {},
     currentCorrect: q.correct || '',
-    studentAnswer: _pxAnswers[i] || '',
+    studentAnswer: studentAnswer || '',
     status: 'pending'
   };
   try {
@@ -12767,7 +12765,7 @@ async function pxSubmitReview(i){
     });
     _pxLastFlagTs = Date.now();
     _pxFlagCount++;
-    if(btn){ btn.dataset.sent='1'; btn.innerHTML='✓ Sent for review — thanks!'; btn.style.color='var(--cl)'; btn.style.borderColor='var(--cl)'; }
+    if(btn){ btn.dataset.sent='1'; btn.innerHTML='✓ Sent for review — thanks!'; btn.style.color='var(--cl)'; btn.style.borderColor='var(--cl)'; btn.style.cursor='default'; }
     showToast('Question sent to admin for review. Thank you!','success');
   } catch(e){
     if(btn){ btn.disabled=false; btn.style.cursor='pointer'; }
@@ -12776,6 +12774,10 @@ async function pxSubmitReview(i){
     else showToast('Could not submit: '+msg,'error');
   }
 }
+// During the exam (recap box)
+function pxSubmitReview(i){ _pxFlagQuestion(_pxQuestions[i], _pxAnswers[i], document.getElementById('pxFlagBtn'+i)); }
+// During post-exam review of a completed exam
+function pxRevSubmitReview(i){ const d=(_pxRevData&&_pxRevData.questions)?_pxRevData:{questions:_pxQuestions,answers:_pxAnswers}; _pxFlagQuestion((d.questions||[])[i], (d.answers||{})[i], document.getElementById('pxRevFlagBtn'+i)); }
 
 // Admin corrections, applied to questions before grading so fixes go live without a redeploy.
 // answerOverrides/{subject}/{id} = letter   (answer-only fix)
@@ -13379,7 +13381,8 @@ function buildRevQuestionCard(q,i,sel,ok,answered){
       expBlock='<div style="'+expStyle+'">'+q.explanation+'</div>';
     }
   }
-  return '<div style="background:var(--panel);border:1px solid '+(answered?(ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'):'var(--border)')+';border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q'+(i+1)+(q.topic?' · '+q.topic:'')+'</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:'+(answered?(ok?'var(--cl)':'var(--wl)'):'var(--muted)')+'">'+(!answered?'NOT ANSWERED':ok?'✓ CORRECT':'✗ INCORRECT')+'</div></div>'+figImg+'<div style="font-weight:700;margin-bottom:9px;font-size:.87rem;line-height:1.4">'+q.question+'</div><div style="display:flex;flex-direction:column;gap:4px">'+choices+'</div>'+expBlock+(q.handbook?'<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 '+q.handbook+(q.topic?' · '+q.topic:'')+'</div>':'')+'</div>';
+  const flagBtn = !_betaWrittenExam ? '' : '<div style="margin-top:9px;text-align:right"><button id="pxRevFlagBtn'+i+'" onclick="pxRevSubmitReview('+i+')" title="Think this answer is wrong? Send it to the admin for review." style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:monospace;font-size:.68rem;padding:5px 11px;cursor:pointer;transition:all .15s" onmouseover="if(this.dataset.sent!==\'1\'){this.style.borderColor=\'var(--accent)\';this.style.color=\'var(--accent)\'}" onmouseout="if(this.dataset.sent!==\'1\'){this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted)\'}">⚑ Submit for review</button></div>';
+  return '<div style="background:var(--panel);border:1px solid '+(answered?(ok?'rgba(34,197,94,.4)':'rgba(204,68,68,.4)'):'var(--border)')+';border-radius:var(--r);padding:13px 15px;margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Q'+(i+1)+(q.topic?' · '+q.topic:'')+'</div><div style="font-family:monospace;font-size:.7rem;font-weight:700;color:'+(answered?(ok?'var(--cl)':'var(--wl)'):'var(--muted)')+'">'+(!answered?'NOT ANSWERED':ok?'✓ CORRECT':'✗ INCORRECT')+'</div></div>'+figImg+'<div style="font-weight:700;margin-bottom:9px;font-size:.87rem;line-height:1.4">'+q.question+'</div><div style="display:flex;flex-direction:column;gap:4px">'+choices+'</div>'+expBlock+(q.handbook?'<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:5px">📚 '+q.handbook+(q.topic?' · '+q.topic:'')+'</div>':'')+flagBtn+'</div>';
 }
 
 function practiceCloseReview(){
