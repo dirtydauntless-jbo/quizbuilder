@@ -83,6 +83,26 @@ function shuffle(arr) {
   return arr;
 }
 
+// ── Answer-choice evaluation helpers ─────────────────────────────────────────
+function _normChoice(s){ return String(s==null?'':s).toLowerCase().replace(/\s+/g,' ').replace(/[.;,·\s]+$/,'').trim(); }
+// True only if every choice is non-empty and no two are textually equivalent
+function choicesAllDistinct(choices){
+  const vals = Object.values(choices || {}).map(_normChoice);
+  if (!vals.length || vals.some(v => !v)) return false;
+  return new Set(vals).size === vals.length;
+}
+// Randomize which letter holds the correct answer (keeps text↔correct mapping intact)
+function shuffleChoicePositions(q){
+  const letters = Object.keys(q.choices || {});
+  if (letters.length < 2 || !q.correct || !(q.correct in q.choices)) return q;
+  const entries = letters.map(l => ({ isCorrect: l === q.correct, val: q.choices[l] }));
+  shuffle(entries);
+  const nc = {}; let cor = letters[0];
+  entries.forEach((e, i) => { nc[letters[i]] = e.val; if (e.isCorrect) cor = letters[i]; });
+  q.choices = nc; q.correct = cor;
+  return q;
+}
+
 // ── Pull random FAA questions for a topic ────────────────────────────────────
 function getFaaQuestions(topic, n) {
   if (n < 1) return [];
@@ -145,7 +165,7 @@ Rules:
 - If the correct answer contains a number, ALL wrong answers must also contain a different specific number in the same units
 - If the correct answer contains units (psi, inches, degrees, volts, etc.), ALL wrong answers must use those same units
 - All choices should be similar in length and grammatical structure
-- For the explanation field: write 1-2 sentences explaining WHY the correct answer is correct per FAA standards, then cite the specific chapter number and section name from ${handbook} where this is covered
+- For the explanation field: write 1-2 sentences explaining WHY the correct answer is correct per FAA standards. Do NOT cite or include the handbook designation — never write "${handbook}" or "FAA-H-8083" in the explanation. Keep it about the concept itself; you may name the relevant subject/chapter topic in plain words if useful.
 - Return ONLY a valid JSON array, no markdown
 
 Format: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"..."}]`;
@@ -250,7 +270,7 @@ module.exports = async function handler(req, res) {
     }
     if (!all.length) return res.status(502).json({ error: 'No stored questions found for the selected topics.' });
     shuffle(all);
-    return res.status(200).json({ questions: all });
+    return res.status(200).json({ questions: all.filter(q => choicesAllDistinct(q.choices)) });
   }
 
   // Focused exam passes faaRatio (e.g. 0.5 = half verified FAA, half AI from the 8083).
@@ -283,21 +303,35 @@ module.exports = async function handler(req, res) {
     const reviewed = await Promise.all(chunks.map(c => qcBatch(c)));
     questions = [...faaQs, ...reviewed.flat()];
 
-    // Step 2.5: Backfill from the FAA bank if the AI under-generated, so the
-    // exam always reaches `total` whenever enough unique questions exist.
+    // Step 2.4: drop any question whose answer choices aren't all distinct (no duplicate/equivalent answers)
+    questions = questions.filter(q => choicesAllDistinct(q.choices));
+
+    // Step 2.5: Backfill from the FAA bank if we're short, so the exam still reaches `total`.
     if (questions.length < total) {
       const used = new Set(questions.map(q => q.question));
       const extras = [];
       for (const t of selectedTopics) {
         for (const q of getFaaQuestions(t, 1000)) {        // whole available pool for the topic
-          if (!used.has(q.question)) { used.add(q.question); extras.push(q); }
+          if (!used.has(q.question) && choicesAllDistinct(q.choices)) { used.add(q.question); extras.push(q); }
         }
       }
       shuffle(extras);
       for (const q of extras) { if (questions.length >= total) break; questions.push(q); }
     }
 
-    // Step 3: Shuffle and trim
+    // Step 3: evaluate choices — randomize the correct answer's position on AI questions
+    // (so it isn't always "A") and strip any leftover handbook citation, then shuffle + trim.
+    questions.forEach(q => {
+      if (q.source === 'ai') {
+        shuffleChoicePositions(q);
+        if (q.explanation) {
+          q.explanation = q.explanation
+            .replace(/\s*\((?:ref:?\s*)?FAA-H-8083[^)]*\)/gi, '')   // drop "(Ref: FAA-H-8083-30B, Ch ...)"
+            .replace(/\s*(?:per|see|ref(?:erence)?:?)?\s*FAA-H-8083-?\d*[AB]?[^.]*/gi, '') // drop bare mentions
+            .replace(/\s{2,}/g, ' ').replace(/\s+([.,;])/g, '$1').trim();
+        }
+      }
+    });
     shuffle(questions);
     questions = questions.slice(0, total);
 
