@@ -3528,6 +3528,7 @@ async function masterDashLoad(){
   _opSimLoadAdminPanel();
   _qReviewLoad();
   _announceAdminLoad();
+  allStarsRebuild(); // keep the All-Stars board synced from every student's completed exams
 
   // ── Populate sub-panels ───────────────────────────────────────────────────
   function render24hr(logObj, elId){
@@ -12901,11 +12902,10 @@ async function renderAllStars(){
   if(!top.length){ el.innerHTML='<div style="font-size:.92rem;color:var(--muted);text-align:center;padding:18px 0">No rankings yet — finish a practice exam to earn points and get on the board! 🏆</div>'; return; }
   const rowHtml=top.map((r,i)=>{
     const rank=i+1, me=r.uid===stuSession?.uid;
-    const stats=r.completed+' exam'+(r.completed===1?'':'s')+' · '+r.avgPct+'% avg'+(r.avgSpq?' · '+_fmtSpq(r.avgSpq):'');
-    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-bottom:1px solid var(--border);'+(me?'background:rgba(124,58,237,.12);border-radius:8px':'')+'">'+
+    return '<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--border);'+(me?'background:rgba(124,58,237,.12);border-radius:8px':'')+'">'+
+      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.25rem;color:var(--muted);min-width:30px;text-align:right">'+rank+')</span>'+
       _allStarBadgeSpan(rank)+
-      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:1.02rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+(me?' <span style="color:var(--accent);font-size:.78rem;font-weight:700">(you)</span>':'')+'</div>'+
-      '<div style="font-family:monospace;font-size:.76rem;color:var(--muted);margin-top:2px">'+stats+'</div></div>'+
+      '<div style="flex:1;min-width:0;font-weight:700;font-size:1.05rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+(me?' <span style="color:var(--accent);font-size:.78rem;font-weight:700">(you)</span>':'')+'</div>'+
       '<div style="text-align:right;min-width:64px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;line-height:1;font-weight:800;color:'+_allStarColor(rank)+'">'+Math.round(r.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.6rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
     '</div>';
   }).join('');
@@ -12913,13 +12913,12 @@ async function renderAllStars(){
   let standing='';
   if(stuSession?.uid && myRankFull>10){
     const mine=ranked[myRankFull-1];
-    standing='<div style="margin-top:12px;padding:12px 14px;border:1.5px dashed var(--accent);border-radius:10px;background:rgba(8,145,178,.06);display:flex;align-items:center;gap:12px">'+
-      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:var(--accent);min-width:54px">#'+myRankFull+'</div>'+
-      '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:1rem">'+_qEsc(mine.name||'You')+' <span style="color:var(--accent);font-size:.78rem">(you)</span></div>'+
-      '<div style="font-family:monospace;font-size:.76rem;color:var(--muted);margin-top:2px">'+mine.completed+' exam'+(mine.completed===1?'':'s')+' · '+mine.avgPct+'% avg · rank '+myRankFull+' of '+ranked.length+'</div></div>'+
+    standing='<div style="margin-top:12px;padding:12px 14px;border:1.5px dashed var(--accent);border-radius:10px;background:rgba(8,145,178,.06);display:flex;align-items:center;gap:10px">'+
+      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.25rem;color:var(--accent);min-width:48px;text-align:right">'+myRankFull+')</span>'+
+      '<div style="flex:1;min-width:0;font-weight:700;font-size:1.05rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(mine.name||'You')+' <span style="color:var(--accent);font-size:.78rem">(you)</span></div>'+
       '<div style="text-align:right;min-width:64px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;line-height:1;font-weight:800;color:var(--accent)">'+Math.round(mine.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.6rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
     '</div>'+
-    '<div style="font-size:.8rem;color:var(--muted);text-align:center;margin-top:8px">'+(myRankFull-10)+' spot'+((myRankFull-10)===1?'':'s')+' from the top 10 — keep practicing! 💪</div>';
+    '<div style="font-size:.8rem;color:var(--muted);text-align:center;margin-top:8px">Rank '+myRankFull+' of '+ranked.length+' · '+(myRankFull-10)+' spot'+((myRankFull-10)===1?'':'s')+' from the top 10 — keep practicing! 💪</div>';
   }
   el.innerHTML=rowHtml+standing;
 }
