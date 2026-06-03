@@ -1359,6 +1359,11 @@ setTimeout(function(){
         </div>
         <button onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
         <div id="pxError" style="color:var(--wl);font-family:monospace;font-size:.8rem;margin-top:8px;text-align:center;min-height:18px"></div>
+        <!-- History -->
+        <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Past Attempts</div>
+          <div id="pxHistoryList"><div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No attempts yet</div></div>
+        </div>
         <!-- Comprehensive performance breakdown -->
         <div class="pxh-section" style="margin-top:24px">
           <div style="background:linear-gradient(135deg,rgba(8,145,178,.12),rgba(124,58,237,.10));border:1.5px solid var(--accent);border-radius:12px;padding:18px 18px 16px">
@@ -1371,11 +1376,6 @@ setTimeout(function(){
             </div>
             <div id="pxComprehensiveOut" style="margin-top:14px"></div>
           </div>
-        </div>
-        <!-- History -->
-        <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
-          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Past Attempts</div>
-          <div id="pxHistoryList"><div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No attempts yet</div></div>
         </div>
         <!-- Classroom AMT All-Stars leaderboard -->
         <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
@@ -12854,9 +12854,9 @@ async function updateAllStarStats(){
     let speedMult=1;
     if(spqUsed!=null){ const sc=Math.max(0,Math.min(1,(90-spqUsed)/(90-15))); speedMult=1+sc*0.5; } // 15s/q→1.5×, ≥90s/q→1×
     const accMult = pct>=90?1.5 : pct>=80?1.25 : pct>=70?1.1 : 1.0;
-    points += Math.round(correct * 10 * speedMult * accMult);
+    points += correct * speedMult * accMult;   // ~1 pt per correct answer, boosted by speed & accuracy
   });
-  points = Math.min(points, 100000000);
+  points = Math.min(Math.round(points), 100000000);
   const avgPct=pctSum/completedCount;
   const avgSpq=spqN?spqSum/spqN:null;
   const payload={ name:(stuSession.name||'Student'), completed:completedCount, taken:takenCount,
@@ -12902,21 +12902,21 @@ async function renderAllStars(){
   if(!top.length){ el.innerHTML='<div style="font-size:.92rem;color:var(--muted);text-align:center;padding:18px 0">No rankings yet — finish a practice exam to earn points and get on the board! 🏆</div>'; return; }
   const rowHtml=top.map((r,i)=>{
     const rank=i+1, me=r.uid===stuSession?.uid;
-    return '<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--border);'+(me?'background:rgba(124,58,237,.12);border-radius:8px':'')+'">'+
-      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.25rem;color:var(--muted);min-width:30px;text-align:right">'+rank+')</span>'+
+    return '<div style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-bottom:1px solid var(--border);'+(me?'background:rgba(124,58,237,.12);border-radius:8px':'')+'">'+
+      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;color:var(--muted);min-width:26px;text-align:right">'+rank+')</span>'+
       _allStarBadgeSpan(rank)+
-      '<div style="flex:1;min-width:0;font-weight:700;font-size:1.05rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+(me?' <span style="color:var(--accent);font-size:.78rem;font-weight:700">(you)</span>':'')+'</div>'+
-      '<div style="text-align:right;min-width:64px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;line-height:1;font-weight:800;color:'+_allStarColor(rank)+'">'+Math.round(r.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.6rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
+      '<div style="flex:1;min-width:0;font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+(me?' <span style="color:var(--accent);font-size:.72rem;font-weight:700">(you)</span>':'')+'</div>'+
+      '<div style="text-align:right;min-width:52px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.15rem;line-height:1;font-weight:800;color:'+_allStarColor(rank)+'">'+Math.round(r.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.56rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
     '</div>';
   }).join('');
   // "Your standing" block when the student isn't shown in the top 10
   let standing='';
   if(stuSession?.uid && myRankFull>10){
     const mine=ranked[myRankFull-1];
-    standing='<div style="margin-top:12px;padding:12px 14px;border:1.5px dashed var(--accent);border-radius:10px;background:rgba(8,145,178,.06);display:flex;align-items:center;gap:10px">'+
-      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.25rem;color:var(--accent);min-width:48px;text-align:right">'+myRankFull+')</span>'+
-      '<div style="flex:1;min-width:0;font-weight:700;font-size:1.05rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(mine.name||'You')+' <span style="color:var(--accent);font-size:.78rem">(you)</span></div>'+
-      '<div style="text-align:right;min-width:64px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;line-height:1;font-weight:800;color:var(--accent)">'+Math.round(mine.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.6rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
+    standing='<div style="margin-top:12px;padding:10px 12px;border:1.5px dashed var(--accent);border-radius:10px;background:rgba(8,145,178,.06);display:flex;align-items:center;gap:9px">'+
+      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;color:var(--accent);min-width:42px;text-align:right">'+myRankFull+')</span>'+
+      '<div style="flex:1;min-width:0;font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(mine.name||'You')+' <span style="color:var(--accent);font-size:.72rem">(you)</span></div>'+
+      '<div style="text-align:right;min-width:52px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.15rem;line-height:1;font-weight:800;color:var(--accent)">'+Math.round(mine.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.56rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
     '</div>'+
     '<div style="font-size:.8rem;color:var(--muted);text-align:center;margin-top:8px">Rank '+myRankFull+' of '+ranked.length+' · '+(myRankFull-10)+' spot'+((myRankFull-10)===1?'':'s')+' from the top 10 — keep practicing! 💪</div>';
   }
@@ -12947,9 +12947,9 @@ async function allStarsRebuild(){
       if(typeof r.durationSec==='number'&&r.durationSec>0&&total>0){ const spq=r.durationSec/total; if(spq>0&&spq<=300){spqSum+=spq;spqN++;spqUsed=spq;} }
       let speedMult=1; if(spqUsed!=null){ const sc=Math.max(0,Math.min(1,(90-spqUsed)/(90-15))); speedMult=1+sc*0.5; }
       const accMult=pct>=90?1.5:pct>=80?1.25:pct>=70?1.1:1.0;
-      points+=Math.round(correct*10*speedMult*accMult);
+      points+=correct*speedMult*accMult;   // ~1 pt per correct answer, boosted by speed & accuracy
     });
-    points=Math.min(points,100000000);
+    points=Math.min(Math.round(points),100000000);
     const prof=profs&&profs[uid];
     const name=(prof&&(prof.name||prof.displayName||prof.email))||'Student';
     updates['allStars/'+uid]={ name:String(name).slice(0,60), completed:completed.length, taken:exams.length,
