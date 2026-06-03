@@ -3600,6 +3600,7 @@ function _qWhen(ts){ return ts?new Date(ts).toLocaleString([], {month:'short',da
 // Render one submission. Pending = actionable (pick answer / dismiss); resolved/dismissed = read-only log entry.
 function _qReviewCard(key, r){
   const choices=r.choices||{};
+  const canEdit = !!(r.subject && r.qid); // only bank questions (have id) can be edited/persisted
   const meta=[r.subject,r.topic,(r.qid?'id '+r.qid:''),(r.qid?'':'(AI-generated — no auto-apply)')].filter(Boolean).join(' · ');
   const head='<div style="font-family:monospace;font-size:.64rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">'+_qEsc(meta)+'</div>'+
     '<div style="font-family:monospace;font-size:.68rem;color:var(--accent);margin-bottom:8px">👤 '+_qEsc(r.studentName||'Unknown student')+(r.ts?' &nbsp;·&nbsp; 🕒 '+_qEsc(_qWhen(r.ts)):'')+'</div>'+
@@ -3617,6 +3618,7 @@ function _qReviewCard(key, r){
       opts+
       '<div id="qrmsg-'+key+'" style="font-family:monospace;font-size:.7rem;color:var(--muted);margin:9px 0 8px"><b>Step 2</b> — no answer selected yet.</div>'+
       '<div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap">'+
+        (canEdit?'<button onclick="qReviewEdit(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:monospace;font-size:.7rem;padding:7px 12px;cursor:pointer;margin-right:auto">✏️ Edit question</button>':'')+
         '<button onclick="qReviewDismiss(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:monospace;font-size:.7rem;padding:7px 12px;cursor:pointer">Dismiss (no change)</button>'+
         '<button id="qrconfirm-'+key+'" onclick="qReviewConfirm(\''+key+'\')" disabled style="border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--muted);font-family:monospace;font-size:.72rem;font-weight:700;padding:7px 14px;cursor:not-allowed;opacity:.6">Confirm correct answer</button>'+
       '</div>'+
@@ -3629,8 +3631,75 @@ function _qReviewCard(key, r){
   const resInfo=isResolved
     ? '<div style="font-family:monospace;font-size:.68rem;color:var(--cl);margin-top:6px">Answer set to <b>'+_qEsc(r.adminCorrect||'?')+'</b>'+(r.resolvedAt?' on '+_qEsc(_qWhen(r.resolvedAt)):'')+(r.studentAnswer?' &nbsp;·&nbsp; student had picked '+_qEsc(r.studentAnswer):'')+'</div>'
     : '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:6px">No change made'+(r.resolvedAt?' · '+_qEsc(_qWhen(r.resolvedAt)):'')+'</div>';
-  return '<div style="border:1px solid var(--border);border-radius:8px;padding:13px 14px;margin-bottom:10px;background:var(--panel);opacity:.92">'+
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div style="flex:1">'+head+'</div>'+badge+'</div>'+resInfo+'</div>';
+  const editRow = canEdit
+    ? '<div style="text-align:right;margin-top:8px"><button onclick="qReviewEdit(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:monospace;font-size:.7rem;padding:6px 11px;cursor:pointer">✏️ Edit question / answer</button></div>'
+    : '';
+  return '<div id="qrcard-'+key+'" style="border:1px solid var(--border);border-radius:8px;padding:13px 14px;margin-bottom:10px;background:var(--panel);opacity:.92">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div style="flex:1">'+head+'</div>'+badge+'</div>'+resInfo+editRow+'</div>';
+}
+
+// HTML-attribute-safe escape (for input value="...")
+function _qAttr(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Open an inline editor for a flagged question (works on pending, resolved, or dismissed; bank questions only)
+async function qReviewEdit(key){
+  const r=await dbGet('questionReviews/'+key).catch(()=>null);
+  if(!r) return;
+  if(!r.subject || !r.qid){ showToast("AI-generated questions can't be edited — they're one-off and regenerate.",'error'); return; }
+  const ov=await dbGet('questionOverrides/'+r.subject+'/'+r.qid).catch(()=>null);
+  const q = (ov && ov.question!=null) ? ov.question : (r.question||'');
+  const choices = (ov && ov.choices) ? ov.choices : (r.choices||{});
+  const correct = (ov && ov.correct!=null) ? ov.correct : (r.currentCorrect||'');
+  const cont=document.getElementById('qrcard-'+key);
+  if(!cont) return;
+  const letters=Object.keys(choices);
+  const choiceInputs=letters.map(l=>
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
+      '<label style="display:flex;align-items:center;gap:5px;font-family:monospace;font-size:.8rem;white-space:nowrap"><input type="radio" name="qredit-correct-'+key+'" value="'+l+'"'+(l===correct?' checked':'')+'> <b>'+l+'</b></label>'+
+      '<input type="text" id="qredit-choice-'+key+'-'+l+'" value="'+_qAttr(choices[l])+'" style="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-family:monospace;font-size:.8rem">'+
+    '</div>').join('');
+  cont.innerHTML=
+    '<div style="font-family:monospace;font-size:.64rem;color:var(--muted);text-transform:uppercase;margin-bottom:8px">✏️ Editing — '+_qEsc([r.subject,r.topic,'id '+r.qid].filter(Boolean).join(' · '))+'</div>'+
+    '<label style="font-family:monospace;font-size:.7rem;color:var(--muted)">Question</label>'+
+    '<textarea id="qredit-q-'+key+'" rows="3" style="width:100%;margin:4px 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-size:.85rem;line-height:1.4;resize:vertical">'+_qEsc(q)+'</textarea>'+
+    '<label style="font-family:monospace;font-size:.7rem;color:var(--muted)">Answer choices — select the radio for the correct one</label>'+
+    '<div style="margin:6px 0 10px">'+choiceInputs+'</div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'+
+      '<button onclick="_qReviewLoad()" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:monospace;font-size:.72rem;padding:7px 12px;cursor:pointer">Cancel</button>'+
+      '<button onclick="qReviewSaveEdit(\''+key+'\')" style="border:1px solid var(--cl);border-radius:6px;background:var(--cl);color:#04240f;font-family:monospace;font-size:.72rem;font-weight:700;padding:7px 14px;cursor:pointer">💾 Save &amp; apply to exams</button>'+
+    '</div>'+
+    '<div style="font-family:monospace;font-size:.64rem;color:var(--muted);margin-top:8px">Applies to all future exams. If the correct answer changes, past exams are regraded against it.</div>';
+}
+
+async function qReviewSaveEdit(key){
+  const r=await dbGet('questionReviews/'+key).catch(()=>null);
+  if(!r || !r.subject || !r.qid){ showToast('Cannot save this question.','error'); return; }
+  const qEl=document.getElementById('qredit-q-'+key);
+  const question=(qEl?qEl.value:'').trim();
+  if(!question){ showToast('Question text cannot be empty.','error'); return; }
+  const letters=Object.keys(r.choices||{});
+  const choices={};
+  for(const l of letters){ const el=document.getElementById('qredit-choice-'+key+'-'+l); choices[l]=(el?el.value:'').trim(); }
+  if(letters.some(l=>!choices[l])){ showToast('Answer choices cannot be empty.','error'); return; }
+  let correct=null;
+  const radios=document.getElementsByName('qredit-correct-'+key);
+  for(const rd of radios){ if(rd.checked){ correct=rd.value; break; } }
+  if(!correct){ showToast('Select the correct answer.','error'); return; }
+  try {
+    const updates={};
+    updates['questionOverrides/'+r.subject+'/'+r.qid]={question,choices,correct,editedAt:Date.now()};
+    updates['questionReviews/'+key+'/status']='resolved';
+    updates['questionReviews/'+key+'/adminCorrect']=correct;
+    updates['questionReviews/'+key+'/resolvedAt']=Date.now();
+    updates['questionReviews/'+key+'/edited']=true;
+    await db.ref().update(updates);
+    _pxInvalidateOverrides();
+    const rg=await qReviewApplyRegrade(r.subject, r.qid, correct); // regrade past exams against the (possibly new) correct answer
+    let msg='✓ Saved — question updated for all future exams.';
+    if(rg.exams>0){ const parts=[]; if(rg.gained>0)parts.push('+'+rg.gained+' credited'); if(rg.lost>0)parts.push('−'+rg.lost+' removed'); msg+=' Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+(parts.length?' ('+parts.join(', ')+').':'.'); }
+    showToast(msg,'success');
+    _qReviewLoad();
+  } catch(e){ showToast('Save failed: '+(e&&e.message||e),'error'); }
 }
 
 async function _qReviewLoad(){
@@ -3695,7 +3764,7 @@ async function qReviewResolve(key, letter){
     updates['questionReviews/'+key+'/resolvedAt']=Date.now();
     if(r.subject && r.qid){ updates['answerOverrides/'+r.subject+'/'+r.qid]=letter; }
     await db.ref().update(updates);
-    _pxOverridesCache=null; // invalidate cached overrides so the next exam picks this up
+    _pxInvalidateOverrides(); // invalidate cached overrides so the next exam picks this up
     delete _qReviewSel[key];
     // Full regrade of past exams against the new answer (credit new-answer pickers, remove from old-answer pickers)
     let rg={students:0,exams:0,gained:0,lost:0};
@@ -12435,20 +12504,29 @@ async function pxSubmitReview(i){
   }
 }
 
-// Admin answer corrections, applied to questions before grading so fixes go live without a redeploy
-let _pxOverridesCache = null;
+// Admin corrections, applied to questions before grading so fixes go live without a redeploy.
+// answerOverrides/{subject}/{id} = letter   (answer-only fix)
+// questionOverrides/{subject}/{id} = {question?, choices?, correct?}  (full edit)
+let _pxOverridesCache = null;   // answerOverrides
+let _pxQOverridesCache = null;  // questionOverrides
+function _pxInvalidateOverrides(){ _pxOverridesCache=null; _pxQOverridesCache=null; }
 async function pxApplyOverrides(questions){
   try {
-    if(_pxOverridesCache === null){
-      _pxOverridesCache = (await dbGet('answerOverrides').catch(()=>null)) || {};
-    }
-    const ov = _pxOverridesCache;
+    if(_pxOverridesCache === null)  _pxOverridesCache  = (await dbGet('answerOverrides').catch(()=>null))   || {};
+    if(_pxQOverridesCache === null) _pxQOverridesCache = (await dbGet('questionOverrides').catch(()=>null)) || {};
+    const ao = _pxOverridesCache, qo = _pxQOverridesCache;
     (questions||[]).forEach(q=>{
-      if(q && q.subject && q.id != null && ov[q.subject] && ov[q.subject][q.id] != null){
-        q.correct = ov[q.subject][q.id];
+      if(!q || !q.subject || q.id == null) return;
+      const id = q.id;
+      if(ao[q.subject] && ao[q.subject][id] != null) q.correct = ao[q.subject][id];
+      const o = qo[q.subject] && qo[q.subject][id];
+      if(o){
+        if(o.question != null) q.question = o.question;
+        if(o.choices)          q.choices  = o.choices;
+        if(o.correct != null)  q.correct  = o.correct;
       }
     });
-  } catch(e){ console.warn('answer-override fetch failed:', e&&e.message||e); }
+  } catch(e){ console.warn('override fetch failed:', e&&e.message||e); }
 }
 
 function practiceRenderQuestion(idx){

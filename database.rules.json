@@ -202,6 +202,10 @@
     "answerOverrides": {
       ".read": true,
       ".write": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+    },
+    "questionOverrides": {
+      ".read": true,
+      ".write": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
     }
   }
 }
