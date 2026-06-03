@@ -12460,7 +12460,7 @@ function practiceRenderTopicPicker(){
       '<label for="pxSectionSelect" style="display:block;font-family:monospace;font-size:.74rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:7px">Step 1 — Choose a subject area 👇</label>'+
       '<select id="pxSectionSelect" onchange="pxShowSection(this.value)" '+
         'style="width:100%;padding:14px 14px;border:2px solid var(--accent);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:1.05rem;font-weight:700;font-family:inherit;box-sizing:border-box;cursor:pointer">'+
-        sections.map(s=>`<option value="${s.key}">${s.label}  ▼  (tap to change)</option>`).join('')+
+        sections.map(s=>`<option value="${s.key}">${s.label}</option>`).join('')+
       '</select>'+
       '<div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-top:8px">Step 2 — check the topics below, then choose a size</div>'+
       '<div id="pxSelCount" style="font-family:monospace;font-size:.74rem;color:var(--muted);margin-top:4px">No topics selected</div>'+
