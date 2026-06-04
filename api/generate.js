@@ -66,6 +66,17 @@ for (const [subj, topics] of Object.entries(SUBJECT_TOPICS)) {
 // (Mathematics 96, Physics 96, Weight and Balance 43).
 const FAA_ONLY_TOPICS = new Set(['Mathematics', 'Physics', 'Weight and Balance']);
 
+// Spec/timing-heavy topics where AI is shakier on precise facts → lean harder on the verified
+// bank (≥75% FAA), so only a small share is AI-generated.
+const HIGH_FAA_TOPICS = new Set([
+  'Reciprocating Engines',
+  'Turbine Engines',
+  'Reciprocating Engine Induction and Cooling',
+  'Ignition and Starting Systems',
+  'Engine Fuel and Fuel Metering Systems'
+]);
+const HIGH_FAA_MIN = 0.75;
+
 // ── Shared utils ──────────────────────────────────────────────────────────────
 async function callClaude(prompt, maxTokens = 4096) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -294,8 +305,10 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
   // Calculation-heavy topics → verified bank only (no AI/O&P arithmetic errors).
   // Otherwise: caller may request a FAA share (focused exam = 0.5) and an O&P share (0.25);
   // the remainder is AI from the 8083. Default (official exams) = random 20–60% FAA, rest AI.
-  const faaPct = isFaaOnly ? 1
+  let faaPct = isFaaOnly ? 1
     : (typeof faaRatioOverride === 'number' ? faaRatioOverride : (0.20 + Math.random() * 0.40));
+  // Spec/timing-heavy topics lean harder on the verified bank (less AI exposure)
+  if(!isFaaOnly && HIGH_FAA_TOPICS.has(topic)) faaPct = Math.max(faaPct, HIGH_FAA_MIN);
   const opPct  = isFaaOnly ? 0 : (typeof opRatioOverride === 'number' ? opRatioOverride : 0);
 
   let faaCount = Math.min(Math.round(total * faaPct), bankSize, total);
