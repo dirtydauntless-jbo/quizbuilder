@@ -12857,6 +12857,20 @@ async function practiceStartAssigned(assignId){
   if(!a){ alert('Could not load this assigned exam.'); return; }
   _pxAssignId=assignId;
   _pxClassId=a.classId||null; _pxClassExamId=a.classExamId||null; // integrity context for class exams
+  // ── Already started → RESUME the exact same generated test (never regenerate) ──
+  if(a.examKey){
+    const [summary, examData] = await Promise.all([
+      dbGet('practiceHistory/'+stuSession.uid+'/'+a.examKey).catch(()=>null),
+      dbGet('practiceExamData/'+stuSession.uid+'/'+a.examKey).catch(()=>null)
+    ]);
+    if(summary && summary.status==='complete'){ alert('You already completed this assigned exam.'); return; }
+    if(examData && (examData.questions||[]).length){
+      _pxRevKey=a.examKey; _pxRevSummary=summary||{label:(a.label||'Assigned Exam'),date:Date.now(),total:(examData.questions||[]).length,assignId,mode:(a.mode||'topic'),subject:(a.subject||'mixed'),status:'incomplete'}; _pxRevData=examData;
+      practiceResumeFromModal(); // loads the saved questions/answers — same test
+      return;
+    }
+    // examKey set but data missing (rare) → fall through and generate fresh
+  }
   let topics, count, label;
   if(a.mode==='official' && a.subject){
     _pxMode='official'; _pxOfficialSubject=a.subject;
@@ -12889,7 +12903,7 @@ async function pxRenderAssigned(){
       return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)">'+
         '<div><div style="font-weight:700;font-size:.92rem">'+desc+(n?' · '+n+' questions':'')+'</div>'+
         '<div style="font-family:monospace;font-size:.7rem;color:var(--muted)">from '+(a.byName||'your instructor')+(a.status==='in_progress'?' · in progress':'')+'</div></div>'+
-        '<button onclick="practiceStartAssigned(\''+id+'\')" class="btn btn-primary" style="font-size:.8rem;white-space:nowrap">Start →</button>'+
+        '<button onclick="practiceStartAssigned(\''+id+'\')" class="btn btn-primary" style="font-size:.8rem;white-space:nowrap">'+(a.status==='in_progress'?'Resume →':'Start →')+'</button>'+
       '</div>';
     }).join('')+'</div>';
 }
