@@ -766,12 +766,24 @@ setTimeout(function(){
       <div class="section-head" style="margin:0 0 4px">📝 Assign a Practice Exam</div>
       <div style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-bottom:18px">Generate a practice exam for any registered student. When they finish, you'll see their score and exactly where they're weak.</div>
 
-      <!-- Step 1: pick student -->
+      <!-- Step 1: pick target (student or whole classroom) -->
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
-        <div style="font-family:monospace;font-size:.74rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">1 · Student</div>
-        <input id="assignSearch" oninput="assignSearchStudents()" placeholder="Search by name or email…" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.95rem;box-sizing:border-box">
-        <div id="assignSearchResults" style="margin-top:8px"></div>
-        <div id="assignSelected" style="margin-top:8px"></div>
+        <div style="font-family:monospace;font-size:.74rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">1 · Assign To</div>
+        <div style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;max-width:440px">
+          <button id="asgTargetStudent" onclick="assignSetTarget('student')" style="flex:1;padding:9px;border:none;cursor:pointer;font-family:monospace;font-size:.78rem;font-weight:700;letter-spacing:1px;background:#0891b2;color:#fff">👤 ONE STUDENT</button>
+          <button id="asgTargetClass" onclick="assignSetTarget('classroom')" style="flex:1;padding:9px;border:none;cursor:pointer;font-family:monospace;font-size:.78rem;font-weight:700;letter-spacing:1px;background:var(--panel2);color:var(--muted)">🏫 WHOLE CLASSROOM</button>
+        </div>
+        <div id="asgStudentPick">
+          <input id="assignSearch" oninput="assignSearchStudents()" placeholder="Search by name or email…" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.95rem;box-sizing:border-box">
+          <div id="assignSearchResults" style="margin-top:8px"></div>
+          <div id="assignSelected" style="margin-top:8px"></div>
+        </div>
+        <div id="asgClassPick" style="display:none">
+          <select id="assignClassSelect" onchange="assignSelectClass(this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.95rem;box-sizing:border-box;cursor:pointer">
+            <option value="">— Select a classroom —</option>
+          </select>
+          <div id="asgClassInfo" style="margin-top:8px;font-family:monospace;font-size:.78rem;color:var(--muted)"></div>
+        </div>
       </div>
 
       <!-- Step 2: choose exam -->
@@ -7041,12 +7053,15 @@ function instSwitchTabRaw(tab){
 
 // ── Assign Practice Exam (instructor) ────────────────────────────────────────
 let _asgStudent=null, _asgMode='official', _asgSubject=null, _asgProfiles=null;
+let _asgTarget='student', _asgClass=null, _asgClassList=null;
 function assignInitTab(){
-  _asgStudent=null; _asgMode='official'; _asgSubject=null; _asgProfiles=null;
+  _asgStudent=null; _asgMode='official'; _asgSubject=null; _asgProfiles=null; _asgTarget='student'; _asgClass=null; _asgClassList=null;
   const s=document.getElementById('assignSearch'); if(s) s.value='';
   document.getElementById('assignSearchResults').innerHTML='';
   document.getElementById('assignSelected').innerHTML='';
   document.getElementById('assignStatus').textContent='';
+  const ci=document.getElementById('asgClassInfo'); if(ci) ci.textContent='';
+  assignSetTarget('student');
   assignSetMode('official');
   ['general','airframe','powerplant'].forEach(x=>{const b=document.querySelector('.asgSubj[data-subj="'+x+'"]');if(b){b.style.background='var(--panel2)';b.style.borderColor='var(--border)';b.style.color='var(--text)';}});
   assignRenderTopicPicker();
@@ -7067,6 +7082,38 @@ function assignSelectStudent(uid){
   document.getElementById('assignSearch').value='';
   document.getElementById('assignSelected').innerHTML='<div style="padding:9px 12px;border:1px solid var(--cl);border-radius:var(--r);background:rgba(58,170,102,.1)">Selected: <b>'+esc(_asgStudent.name||'(no name)')+'</b> <span style="color:var(--muted);font-family:monospace;font-size:.75rem">'+esc(_asgStudent.email)+'</span> <button onclick="_asgStudent=null;document.getElementById(\'assignSelected\').innerHTML=\'\'" style="margin-left:8px;background:none;border:none;color:var(--wl);cursor:pointer">✕ clear</button></div>';
 }
+function assignSetTarget(t){
+  _asgTarget=t;
+  const sp=document.getElementById('asgStudentPick'), cp=document.getElementById('asgClassPick');
+  if(sp) sp.style.display = t==='student'?'block':'none';
+  if(cp) cp.style.display = t==='classroom'?'block':'none';
+  const sb=document.getElementById('asgTargetStudent'), cb=document.getElementById('asgTargetClass');
+  if(sb){ sb.style.background=t==='student'?'#0891b2':'var(--panel2)'; sb.style.color=t==='student'?'#fff':'var(--muted)'; }
+  if(cb){ cb.style.background=t==='classroom'?'#0891b2':'var(--panel2)'; cb.style.color=t==='classroom'?'#fff':'var(--muted)'; }
+  if(t==='classroom') assignLoadClasses();
+}
+async function assignLoadClasses(){
+  const sel=document.getElementById('assignClassSelect'); if(!sel) return;
+  if(!_asgClassList){
+    try{
+      const ownData=await dbGet('instructorClassrooms/'+instUser.uid)||{};
+      const coData=await dbGet('coInstructorClassrooms/'+instUser.uid)||{};
+      const ids=[...new Set([...Object.keys(ownData),...Object.keys(coData)])];
+      const cls=await Promise.all(ids.map(async id=>{ const c=await dbGet('classrooms/'+id).catch(()=>null); return c?{id,name:c.name||'Classroom'}:null; }));
+      _asgClassList=cls.filter(Boolean).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    }catch(e){ _asgClassList=[]; }
+  }
+  sel.innerHTML='<option value="">— Select a classroom —</option>'+_asgClassList.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
+}
+async function assignSelectClass(classId){
+  const info=document.getElementById('asgClassInfo');
+  if(!classId){ _asgClass=null; if(info) info.textContent=''; return; }
+  const found=(_asgClassList||[]).find(c=>c.id===classId)||{};
+  _asgClass={id:classId, name:found.name||'Classroom'};
+  if(info) info.textContent='Loading roster…';
+  try{ const stu=await dbGet('classroomStudents/'+classId)||{}; const n=Object.keys(stu).length; _asgClass.count=n; if(info) info.textContent='🏫 '+n+' student'+(n===1?'':'s')+' will receive this exam.'; }
+  catch(e){ if(info) info.textContent=''; }
+}
 function assignSetMode(mode){
   _asgMode=mode;
   document.getElementById('asgOfficialPanel').style.display=mode==='official'?'flex':'none';
@@ -7086,40 +7133,99 @@ function assignRenderTopicPicker(){
 }
 async function assignSubmit(){
   const st=document.getElementById('assignStatus');
-  if(!_asgStudent){ st.style.color='var(--wl)'; st.textContent='Pick a student first.'; return; }
-  const payload={assignedBy:instUser.uid, byName:(instProfile&&instProfile.name)||instUser.email||'Instructor', studentName:_asgStudent.name||'', createdAt:Date.now(), status:'assigned'};
+  // Build the shared exam payload (same shape for one student or a whole class)
+  const base={assignedBy:instUser.uid, byName:(instProfile&&instProfile.name)||instUser.email||'Instructor', createdAt:Date.now(), status:'assigned'};
   if(_asgMode==='official'){
     if(!_asgSubject){ st.style.color='var(--wl)'; st.textContent='Pick a subject.'; return; }
-    payload.mode='official'; payload.subject=_asgSubject; payload.count=OFFICIAL_EXAMS[_asgSubject].count; payload.label=OFFICIAL_EXAMS[_asgSubject].label;
+    base.mode='official'; base.subject=_asgSubject; base.count=OFFICIAL_EXAMS[_asgSubject].count; base.label=OFFICIAL_EXAMS[_asgSubject].label;
   } else {
     const topics=[...document.querySelectorAll('.asgTopic:checked')].map(c=>c.value);
     if(!topics.length){ st.style.color='var(--wl)'; st.textContent='Pick at least one topic.'; return; }
     const count=Math.max(1,Math.min(100,parseInt(document.getElementById('asgCount').value)||topics.length));
-    payload.mode='topic'; payload.topics=topics; payload.count=count; payload.label=topics.length===1?topics[0]:topics.length+' Topics';
+    base.mode='topic'; base.topics=topics; base.count=count; base.label=topics.length===1?topics[0]:topics.length+' Topics';
   }
+  // ── Whole classroom: fan out one copy per student, tagged with a shared classExamId ──
+  if(_asgTarget==='classroom'){
+    if(!_asgClass||!_asgClass.id){ st.style.color='var(--wl)'; st.textContent='Pick a classroom.'; return; }
+    st.style.color='var(--muted)'; st.textContent='Assigning to class…';
+    try{
+      const stu=await dbGet('classroomStudents/'+_asgClass.id)||{};
+      const entries=Object.entries(stu).filter(([,v])=>v&&typeof v==='object');
+      if(!entries.length){ st.style.color='var(--wl)'; st.textContent='No students in that classroom.'; return; }
+      const classExamId='ce_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      const updates={}; let n=0;
+      for(const [stuKey,v] of entries){
+        const uid=(v&&v.uid)||stuKey;
+        const aid=db.ref('assignedExams/'+uid).push().key;
+        updates['assignedExams/'+uid+'/'+aid]={...base, studentName:(v&&v.name)||'', classId:_asgClass.id, className:_asgClass.name, classExamId};
+        n++;
+      }
+      await db.ref().update(updates);
+      st.style.color='var(--cl)'; st.textContent='✓ Assigned to '+n+' student'+(n===1?'':'s')+' in '+_asgClass.name+'.';
+      document.querySelectorAll('.asgTopic:checked').forEach(c=>c.checked=false);
+      assignLoadList();
+    }catch(e){ st.style.color='var(--wl)'; st.textContent='Failed: '+(e.message||e); }
+    return;
+  }
+  // ── Single student ──
+  if(!_asgStudent){ st.style.color='var(--wl)'; st.textContent='Pick a student first.'; return; }
+  base.studentName=_asgStudent.name||'';
   st.style.color='var(--muted)'; st.textContent='Assigning…';
   try{
-    await dbPush('assignedExams/'+_asgStudent.uid, payload);
+    await dbPush('assignedExams/'+_asgStudent.uid, base);
     st.style.color='var(--cl)'; st.textContent='✓ Assigned to '+(_asgStudent.name||'student')+'.';
     _asgStudent=null; document.getElementById('assignSelected').innerHTML='';
     document.querySelectorAll('.asgTopic:checked').forEach(c=>c.checked=false);
     assignLoadList();
   }catch(e){ st.style.color='var(--wl)'; st.textContent='Failed: '+(e.message||e); }
 }
+function _asgExamLabel(a){ return a.mode==='official'?(({general:'General',airframe:'Airframe',powerplant:'Powerplant'})[a.subject]||a.subject)+' Official':(a.label||'Custom'); }
 async function assignLoadList(){
   const el=document.getElementById('assignList'); if(!el) return;
   let all={}; try{ all=await dbGet('assignedExams')||{}; }catch(e){ el.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.8rem">Could not load assignments.</div>'; return; }
-  const rows=[];
-  for(const [stuUid,exams] of Object.entries(all)){ for(const [aid,a] of Object.entries(exams||{})){ if(a&&a.assignedBy===instUser.uid) rows.push({stuUid,aid,a}); } }
-  rows.sort((x,y)=>(y.a.createdAt||0)-(x.a.createdAt||0));
-  if(!rows.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted)">No exams assigned yet.</div>'; return; }
-  el.innerHTML=rows.map(({stuUid,aid,a})=>{
-    const exam=a.mode==='official'?(({general:'General',airframe:'Airframe',powerplant:'Powerplant'})[a.subject]||a.subject)+' Official':(a.label||'Custom');
-    const done=a.status==='complete';
-    const score=done?(a.score+'/'+a.total+' · '+a.pct+'%'):(a.status==='in_progress'?'in progress':'not started');
-    const col=done?(a.pct>=70?'var(--cl)':'var(--wl)'):'var(--muted)';
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:11px 14px;margin-bottom:7px"><div><div style="font-weight:700;font-size:.9rem">'+esc(a.studentName||'(student)')+' — '+exam+'</div><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">'+(a.createdAt?fmtDate(a.createdAt):'')+'</div></div><div style="display:flex;align-items:center;gap:12px"><span style="font-family:monospace;font-size:.82rem;font-weight:700;color:'+col+'">'+score+'</span>'+(done?'<button onclick="assignViewResult(\''+stuUid+'\',\''+aid+'\')" class="btn" style="font-size:.78rem">View breakdown</button>':'')+'</div></div>';
-  }).join('');
+  const indiv=[]; const groups={};
+  for(const [stuUid,exams] of Object.entries(all)){
+    for(const [aid,a] of Object.entries(exams||{})){
+      if(!a||a.assignedBy!==instUser.uid) continue;
+      if(a.classExamId){ (groups[a.classExamId]=groups[a.classExamId]||{meta:a,items:[]}).items.push({stuUid,aid,a}); }
+      else indiv.push({stuUid,aid,a});
+    }
+  }
+  let html='';
+  const groupArr=Object.entries(groups).sort((x,y)=>(y[1].meta.createdAt||0)-(x[1].meta.createdAt||0));
+  if(groupArr.length){
+    html+='<div style="font-family:monospace;font-size:.72rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:0 0 8px">🏫 Class Exams</div>';
+    html+=groupArr.map(([ceid,g])=>{
+      const m=g.meta, exam=_asgExamLabel(m);
+      const done=g.items.filter(it=>it.a.status==='complete');
+      const avg=done.length?Math.round(done.reduce((s,it)=>s+(it.a.pct||0),0)/done.length):0;
+      const roster=g.items.slice().sort((a,b)=>(a.a.studentName||'').localeCompare(b.a.studentName||'')).map(it=>{
+        const dn=it.a.status==='complete';
+        const score=dn?(it.a.score+'/'+it.a.total+' · '+it.a.pct+'%'):(it.a.status==='in_progress'?'in progress':'not started');
+        const col=dn?(it.a.pct>=70?'var(--cl)':'var(--wl)'):'var(--muted)';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 2px;border-bottom:1px solid var(--border)"><span style="font-size:.85rem">'+esc(it.a.studentName||'(student)')+'</span><span style="display:flex;gap:10px;align-items:center"><span style="font-family:monospace;font-size:.8rem;font-weight:700;color:'+col+'">'+score+'</span>'+(dn?'<button onclick="assignViewResult(\''+it.stuUid+'\',\''+it.aid+'\')" class="btn" style="font-size:.72rem;padding:3px 9px">Review</button>':'')+'</span></div>';
+      }).join('');
+      return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:9px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var r=document.getElementById(\'cer_'+ceid+'\');if(r)r.style.display=(r.style.display===\'none\'?\'block\':\'none\')">'+
+          '<div><div style="font-weight:700;font-size:.92rem">'+esc(m.className||'Class')+' — '+exam+'</div><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">'+done.length+'/'+g.items.length+' completed · avg '+avg+'% · '+(m.createdAt?fmtDate(m.createdAt):'')+'</div></div>'+
+          '<span style="font-family:monospace;color:var(--muted)">▼ roster</span>'+
+        '</div>'+
+        '<div id="cer_'+ceid+'" style="display:none;margin-top:8px">'+roster+'</div>'+
+      '</div>';
+    }).join('');
+  }
+  if(indiv.length){
+    html+='<div style="font-family:monospace;font-size:.72rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:'+(groupArr.length?'16px':'0')+' 0 8px">👤 Individual Students</div>';
+    indiv.sort((x,y)=>(y.a.createdAt||0)-(x.a.createdAt||0));
+    html+=indiv.map(({stuUid,aid,a})=>{
+      const exam=_asgExamLabel(a);
+      const done=a.status==='complete';
+      const score=done?(a.score+'/'+a.total+' · '+a.pct+'%'):(a.status==='in_progress'?'in progress':'not started');
+      const col=done?(a.pct>=70?'var(--cl)':'var(--wl)'):'var(--muted)';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:11px 14px;margin-bottom:7px"><div><div style="font-weight:700;font-size:.9rem">'+esc(a.studentName||'(student)')+' — '+exam+'</div><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">'+(a.createdAt?fmtDate(a.createdAt):'')+'</div></div><div style="display:flex;align-items:center;gap:12px"><span style="font-family:monospace;font-size:.82rem;font-weight:700;color:'+col+'">'+score+'</span>'+(done?'<button onclick="assignViewResult(\''+stuUid+'\',\''+aid+'\')" class="btn" style="font-size:.78rem">View breakdown</button>':'')+'</div></div>';
+    }).join('');
+  }
+  el.innerHTML=html||'<div style="font-family:monospace;font-size:.8rem;color:var(--muted)">No exams assigned yet.</div>';
 }
 async function assignViewResult(stuUid,aid){
   const a=await dbGet('assignedExams/'+stuUid+'/'+aid).catch(()=>null);
