@@ -894,7 +894,7 @@ setTimeout(function(){
         <span id="cdLiveLastUpd" style="font-family:monospace;font-size:.72rem;color:var(--muted)"></span>
       </div>
       <div style="margin-bottom:14px">
-        <label class="label">Select Quiz</label>
+        <label class="label">Select Quiz or FAA Practice Exam</label>
         <select class="select" id="cdLiveQuizPicker" onchange="loadCdLive()" style="max-width:360px"></select>
       </div>
       <div class="stats-row" style="margin-bottom:16px">
@@ -913,7 +913,7 @@ setTimeout(function(){
     </div>
     <div id="cd-tab-progress" class="tab-pane" style="display:none;padding:20px 22px">
       <div style="margin-bottom:14px">
-        <label class="label">Select Quiz</label>
+        <label class="label">Select Quiz or FAA Practice Exam</label>
         <select class="select" id="cdProgressQuizPicker" onchange="loadClassroomProgressAny()" style="max-width:360px"></select>
       </div>
       <!-- GRADE BOOK -->
@@ -943,7 +943,7 @@ setTimeout(function(){
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;color:var(--accent);margin-bottom:4px">Student Performance</div>
       <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:16px">Class results and AI analysis for this classroom</div>
       <div style="margin-bottom:14px">
-        <label class="label">Select Quiz</label>
+        <label class="label">Select Quiz or FAA Practice Exam</label>
         <select class="select" id="cdPerfQuizPicker" onchange="loadCdPerfTab()" style="max-width:360px"></select>
       </div>
       <div id="cdPerfContent"><div class="empty-state">Select a quiz to see performance data.</div></div>
@@ -6800,6 +6800,7 @@ async function loadCdPerfTab(){
         opts += sessionNums.map(n=>`<option value="sim::${n}">📐 Micrometer Session ${n}</option>`).join('');
       }
     }catch(e){}
+    try { opts += await _classExamOptions(selectedClassId); } catch(e){}
     picker.innerHTML = opts || '<option value="">No data yet</option>';
   }
 
@@ -6810,6 +6811,11 @@ async function loadCdPerfTab(){
   if(val.startsWith('sim::')){
     const sessionNum = val.split('::')[1];
     await loadSimPerfTab(selectedClassId, sessionNum, content);
+    return;
+  }
+  // Route to FAA practice-exam class performance
+  if(val.startsWith('exam::')){
+    await loadExamPerformance(selectedClassId, val.split('::')[1]);
     return;
   }
 
@@ -7160,6 +7166,11 @@ async function assignSubmit(){
         updates['assignedExams/'+uid+'/'+aid]={...base, studentName:(v&&v.name)||'', classId:_asgClass.id, className:_asgClass.name, classExamId};
         n++;
       }
+      // Registry entry so the gradebook/performance pickers can list this class exam
+      updates['classrooms/'+_asgClass.id+'/practiceExams/'+classExamId]={
+        label:base.label, mode:base.mode, subject:base.subject||null, topics:base.topics||null,
+        total:base.count, createdAt:base.createdAt, by:base.byName, studentCount:n
+      };
       await db.ref().update(updates);
       st.style.color='var(--cl)'; st.textContent='✓ Assigned to '+n+' student'+(n===1?'':'s')+' in '+_asgClass.name+'.';
       document.querySelectorAll('.asgTopic:checked').forEach(c=>c.checked=false);
@@ -7614,12 +7625,12 @@ async function loadAssignedQuizzes(classId){
       const picker = document.getElementById('cdProgressQuizPicker');
       const instrSessions = await dbGet(`instrumentSessions/${selectedClassId}/sessions`) || {};
       const sessionNums = Object.keys(instrSessions).sort((a,b)=>Number(a)-Number(b));
-      if(sessionNums.length && picker){
-        picker.innerHTML = sessionNums.map(n=>`<option value="instr::${n}">📐 Micrometer Session ${n}</option>`).join('');
+      let opts = sessionNums.map(n=>`<option value="instr::${n}">📐 Micrometer Session ${n}</option>`).join('');
+      try { opts += await _classExamOptions(selectedClassId); } catch(e){}
+      if(picker){
+        picker.innerHTML = opts || '<option value="">No grades yet</option>';
         picker.onchange = function(){ loadClassroomProgressAny(); };
-        loadClassroomProgressAny();
-      } else if(picker){
-        picker.innerHTML = '<option value="">No grades yet</option>';
+        if(opts) loadClassroomProgressAny();
       }
     }catch(e){}
     return;
@@ -7691,6 +7702,7 @@ async function loadAssignedQuizzes(classId){
       ).join('');
     }
   } catch(e){}
+  try { pickerOptions += await _classExamOptions(selectedClassId); } catch(e){}
   picker.innerHTML = pickerOptions || '<option value="">No grades yet</option>';
   // Fix onchange to handle both types
   picker.onchange = function(){ loadClassroomProgressAny(); };
@@ -7706,11 +7718,77 @@ async function loadClassroomProgressAny(){
   if(val.startsWith('instr::')) {
     const sessionNum = val.split('::')[1];
     loadInstrumentGradebook(selectedClassId, sessionNum);
+  } else if(val.startsWith('exam::')) {
+    loadExamGradebook(selectedClassId, val.split('::')[1]);
   } else {
     const quizId = val.startsWith('quiz::') ? val.split('::')[1] : val;
     // set the picker value the old way for compatibility
     loadClassroomProgress(quizId);
   }
+}
+
+// ── Class practice-exam gradebook + performance (FAA Practice Exams) ──────────
+async function _classExamOptions(classId){
+  try{
+    const ex=await dbGet('classrooms/'+classId+'/practiceExams')||{};
+    return Object.entries(ex).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0))
+      .map(([ceid,m])=>'<option value="exam::'+ceid+'">🧪 '+esc(m.label||'FAA Practice Exam')+' — FAA Practice</option>').join('');
+  }catch(e){ return ''; }
+}
+function _examGrade(pct){ return pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F'; }
+function _examGradeColor(pct){ return pct>=70?'var(--cl)':'var(--wl)'; }
+// Gather every student's result + integrity for one class exam
+async function _loadClassExamRows(classId, classExamId){
+  const stu=await dbGet('classroomStudents/'+classId)||{};
+  const roster=Object.entries(stu).filter(([,v])=>v&&typeof v==='object').map(([k,v])=>({uid:(v&&v.uid)||k, name:(v&&v.name)||'(student)'}));
+  const integ=await dbGet('integrityLog/'+classId+'/'+classExamId)||{};
+  return Promise.all(roster.map(async u=>{
+    const exams=await dbGet('assignedExams/'+u.uid).catch(()=>null)||{};
+    let aid=null,a=null;
+    for(const [k,v] of Object.entries(exams)){ if(v&&v.classExamId===classExamId){ aid=k; a=v; break; } }
+    const ev=integ[u.uid]?Object.values(integ[u.uid]):[];
+    const tab=ev.filter(e=>e&&e.type==='tab_switch').length, blur=ev.filter(e=>e&&e.type==='window_blur').length;
+    return {...u, aid, a, tab, blur, integEvents:tab+blur};
+  }));
+}
+async function loadExamGradebook(classId, classExamId){
+  const el=document.getElementById('gradeBook'); if(!el) return;
+  el.innerHTML='<div class="empty-state">Loading…</div>';
+  let rows; try{ rows=await _loadClassExamRows(classId, classExamId); }catch(e){ el.innerHTML='<div class="empty-state" style="color:var(--wl)">Error loading.</div>'; return; }
+  rows.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(!rows.length){ el.innerHTML='<div class="empty-state">No students in this class.</div>'; return; }
+  const cols='1.6fr .8fr 1.3fr .5fr 1fr .7fr';
+  const head='<div style="display:grid;grid-template-columns:'+cols+';gap:8px;padding:8px 10px;font-family:monospace;font-size:.66rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)"><span>Student</span><span>Score</span><span>Percent</span><span>Grade</span><span>Completed</span><span>Integrity</span></div>';
+  const body=rows.map(r=>{
+    const done=r.a&&r.a.status==='complete';
+    const pct=done?(r.a.pct||0):0;
+    const score=done?(r.a.score+'/'+r.a.total):'—';
+    const bar=done?('<div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+_examGradeColor(pct)+'"></div></div>'):('<span style="color:var(--muted);font-family:monospace;font-size:.72rem">'+(r.a?(r.a.status==='in_progress'?'in progress':'not started'):'not assigned')+'</span>');
+    const grade=done?'<span style="font-weight:800;color:'+_examGradeColor(pct)+'">'+_examGrade(pct)+'</span>':'—';
+    const comp=done&&r.a.completedAt?fmtDate(r.a.completedAt):'—';
+    const integ=r.integEvents>0?'<span title="'+r.tab+' tab switch(es), '+r.blur+' focus loss(es)" style="color:var(--wl);font-weight:700;cursor:help">⚠ '+r.integEvents+'</span>':(done?'<span style="color:var(--cl)">✓</span>':'—');
+    const click=done?(' style="cursor:pointer" onclick="assignViewResult(\''+r.uid+'\',\''+r.aid+'\')" title="Click to review this exam"'):'';
+    return '<div'+click+' style="display:grid;grid-template-columns:'+cols+';gap:8px;padding:9px 10px;align-items:center;border-bottom:1px solid var(--border);font-size:.85rem"><span style="font-weight:600;color:'+(done?'var(--blue)':'var(--text)')+'">'+esc(r.name)+'</span><span style="font-family:monospace;font-weight:700;color:'+(done?_examGradeColor(pct):'var(--muted)')+'">'+score+'</span><span>'+bar+(done?' <span style="font-family:monospace;font-size:.7rem;color:var(--muted)">'+pct+'%</span>':'')+'</span><span>'+grade+'</span><span style="font-family:monospace;font-size:.7rem;color:var(--muted)">'+comp+'</span><span style="font-family:monospace;font-size:.78rem">'+integ+'</span></div>';
+  }).join('');
+  const dn=rows.filter(r=>r.a&&r.a.status==='complete');
+  const avg=dn.length?Math.round(dn.reduce((s,r)=>s+(r.a.pct||0),0)/dn.length):0;
+  el.innerHTML='<div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:10px">'+dn.length+'/'+rows.length+' completed · class average '+avg+'% · click a finished student to review their exam</div>'+head+body;
+}
+async function loadExamPerformance(classId, classExamId){
+  const el=document.getElementById('cdPerfContent'); if(!el) return;
+  el.innerHTML='<div class="empty-state">Loading…</div>';
+  let rows; try{ rows=await _loadClassExamRows(classId, classExamId); }catch(e){ el.innerHTML='<div class="empty-state" style="color:var(--wl)">Error loading.</div>'; return; }
+  const done=rows.filter(r=>r.a&&r.a.status==='complete');
+  if(!done.length){ el.innerHTML='<div class="empty-state">No completed exams yet.</div>'; return; }
+  const agg={}; let totC=0,totQ=0;
+  done.forEach(r=>{ const ts=r.a.topicStats||{}; Object.entries(ts).forEach(([t,v])=>{ if(!v||typeof v.total!=='number')return; if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); totC+=(r.a.score||0); totQ+=(r.a.total||0); });
+  const topicRows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
+  const classPct=totQ?Math.round(totC/totQ*100):0;
+  const weak=topicRows.filter(r=>r.pct<70).slice(0,5);
+  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;letter-spacing:1px;color:var(--accent)">Class Average: '+classPct+'%</div><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">'+done.length+' student'+(done.length===1?'':'s')+' completed · '+totC+'/'+totQ+' total</div></div>';
+  if(weak.length){ html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Class needs the most work on</div>'+weak.map(r=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:3px">'+esc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+'</div>'; }
+  html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px"><div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:9px">All Topics — class aggregate (weakest first)</div>'+topicRows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.t)+'</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted)">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>';
+  el.innerHTML=html;
 }
 
 async function removeAssignment(classId, quizId){
@@ -12495,6 +12573,14 @@ const OFFICIAL_TOPICS = {
 let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _pxAnswers={}, _pxAssignId=null;
 let _pxCountMode='focused'; // 'focused' | 'all' — topic-mode exam type (defaults to focused FAA exam)
 let _pxStartedAt=0; // ms timestamp the current exam (or resumed session) began, for completion-time tracking
+// Integrity tracking for instructor-assigned CLASS exams (mirrors quiz integrity)
+let _pxClassId=null, _pxClassExamId=null, _pxExamLive=false, _pxExamHidden=null, _pxExamBlur=null;
+async function logExamIntegrityEvent(type){
+  if(!_pxExamLive || !stuSession?.uid || !_pxClassId || !_pxClassExamId) return;
+  const payload={ type, name:stuSession.name||'', uid:stuSession.uid, classroomId:_pxClassId, classExamId:_pxClassExamId, examLabel:'FAA Practice Exam', time:(typeof ts==='function'?ts():Date.now()) };
+  try{ await dbPush('feed', payload); }catch(e){}
+  try{ await dbPush('integrityLog/'+_pxClassId+'/'+_pxClassExamId+'/'+stuSession.uid, payload); }catch(e){}
+}
 let _pxCurrentQ=0, _pxCorrectCount=0, _pxAnsweredCount=0, _pxTopicStats={};
 let _pxExamKey=null;
 let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null, _pxRevFilter='all';
@@ -12513,7 +12599,7 @@ async function betaInit(){
 function _betaApplyTag(){ const t=document.getElementById('betaTag'); if(t) t.style.display=_betaWrittenExam?'':'none'; }
 
 function practiceInitTab(){
-  _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxAssignId=null;
+  _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxAssignId=null; _pxClassId=null; _pxClassExamId=null; _pxExamLive=false;
   practiceRenderTopicPicker();
   practiceSetCountMode('focused'); // default topic-mode exam type
   practiceSetMode('official');
@@ -12677,7 +12763,7 @@ async function practiceGenerate(){
     topics=checked.map(cb=>cb.dataset.topic);
     if(!topics.length){ if(errEl) errEl.textContent='Please select at least one topic.'; return; }
     const topicLabel = topics.length===1?topics[0]:`${topics.length} Topics`;
-    _pxAssignId=null;
+    _pxAssignId=null; _pxClassId=null; _pxClassExamId=null;
     if(_pxCountMode==='all'){
       await pxRunExam(topics, 0, topicLabel+' — All Questions', {mode:'all'});
       return;
@@ -12734,6 +12820,7 @@ async function pxRunExam(topics, count, label, opts){
       practiceLoadHistory(); // keep Past Attempts current so the new (in-progress) exam shows when they return to setup
     }
     _pxStartedAt=Date.now(); // start the completion-time clock
+    _pxExamLive=!!_pxClassExamId; // begin integrity tracking for class-assigned exams
     practiceRenderExam(label);
   } catch(e){
     document.getElementById('practiceLoading').classList.add('hidden');
@@ -12748,6 +12835,7 @@ async function practiceStartAssigned(assignId){
   const a=await dbGet('assignedExams/'+stuSession.uid+'/'+assignId).catch(()=>null);
   if(!a){ alert('Could not load this assigned exam.'); return; }
   _pxAssignId=assignId;
+  _pxClassId=a.classId||null; _pxClassExamId=a.classExamId||null; // integrity context for class exams
   let topics, count, label;
   if(a.mode==='official' && a.subject){
     _pxMode='official'; _pxOfficialSubject=a.subject;
@@ -13001,7 +13089,7 @@ function practiceFinish(){
   const titleEl=document.getElementById('pxResultsTitle');
   if(titleEl){ titleEl.textContent=`${correct}/${total} — ${pct}%`; titleEl.style.color=pct>=70?'var(--cl)':'var(--wl)'; }
   const durationSec = _pxStartedAt ? Math.max(1, Math.round((Date.now()-_pxStartedAt)/1000)) : null;
-  _pxStartedAt = 0;
+  _pxStartedAt = 0; _pxExamLive = false; // stop integrity tracking
   if(stuSession?.uid && _pxExamKey){
     db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:correct,pct,topicStats:_pxTopicStats,answeredCount:total,status:'complete',...(durationSec?{durationSec}:{})}).catch(e=>console.warn('finish save failed:',e&&e.message||e));
     // If this was an instructor-assigned exam, write the full results back so the instructor can review
@@ -13528,7 +13616,7 @@ async function practiceResumeFromModal(){
   _pxMode=summary.mode||'official';
   _pxOfficialSubject=summary.subject!=='mixed'?summary.subject:null;
   // Rebuild running stats from stored answers
-  _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxFlagCount=0; _pxStartedAt=Date.now();
+  _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxFlagCount=0; _pxStartedAt=Date.now(); _pxExamLive=!!_pxClassExamId;
   Object.entries(_pxAnswers).forEach(([idxStr,letter])=>{
     const idx=parseInt(idxStr);
     const q=_pxQuestions[idx];
@@ -15786,6 +15874,13 @@ document.addEventListener('visibilitychange', function(){
     }
     _simHiddenSince = null;
   }
+  // Class practice-exam integrity
+  if(_pxExamLive && stuSession && document.hidden){
+    _pxExamHidden = Date.now();
+  } else if(_pxExamLive && stuSession && !document.hidden){
+    if(_pxExamHidden && (Date.now() - _pxExamHidden) >= 1500){ logExamIntegrityEvent('tab_switch'); }
+    _pxExamHidden = null;
+  }
 });
 
 // Window blur: fires when student switches to another app/window
@@ -15796,6 +15891,7 @@ let _windowBlurSince = null;
 window.addEventListener('blur', function(){
   if(activeQuiz) _windowBlurSince = Date.now();
   if(_stuSimLiveMode && stuSession) _simWindowBlurSince = Date.now();
+  if(_pxExamLive && stuSession) _pxExamBlur = Date.now();
   _windowBlurTimer = setTimeout(()=>{
     if(!document.hidden){
       if(activeQuiz && !_quizFinished && _windowBlurSince && (Date.now() - _windowBlurSince) >= 3000){
@@ -15804,9 +15900,13 @@ window.addEventListener('blur', function(){
       if(_stuSimLiveMode && stuSession && _simWindowBlurSince && (Date.now() - _simWindowBlurSince) >= 3000){
         logSimIntegrityEvent('window_blur');
       }
+      if(_pxExamLive && stuSession && _pxExamBlur && (Date.now() - _pxExamBlur) >= 3000){
+        logExamIntegrityEvent('window_blur');
+      }
     }
     _windowBlurSince = null;
     _simWindowBlurSince = null;
+    _pxExamBlur = null;
   }, 3000);
 });
 window.addEventListener('focus', function(){
