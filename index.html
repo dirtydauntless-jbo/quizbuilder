@@ -13029,14 +13029,13 @@ function _qIdentity(q){ return (q && q._ohash) ? q._ohash : _qHash(q && q.questi
 // Admin corrections, applied to questions before grading so fixes go live without a redeploy.
 // answerOverrides/{qhash} = letter             (answer-only fix)
 // questionOverrides/{qhash} = {question?, choices?, correct?}  (full edit)
-let _pxOverridesCache = null;   // answerOverrides
-let _pxQOverridesCache = null;  // questionOverrides
-function _pxInvalidateOverrides(){ _pxOverridesCache=null; _pxQOverridesCache=null; }
+function _pxInvalidateOverrides(){ /* no-op: overrides are now fetched fresh on every exam */ }
 async function pxApplyOverrides(questions){
   try {
-    if(_pxOverridesCache === null)  _pxOverridesCache  = (await dbGet('answerOverrides').catch(()=>null))   || {};
-    if(_pxQOverridesCache === null) _pxQOverridesCache = (await dbGet('questionOverrides').catch(()=>null)) || {};
-    const ao = _pxOverridesCache, qo = _pxQOverridesCache;
+    // Always fetch fresh so a correction applies to the very NEXT exam, in any student's session
+    // (a per-session cache let students keep getting the old, un-corrected question).
+    const ao = (await dbGet('answerOverrides').catch(()=>null))   || {};
+    const qo = (await dbGet('questionOverrides').catch(()=>null)) || {};
     (questions||[]).forEach(q=>{
       if(!q || !q.question) return;
       const h = _qHash(q.question);
