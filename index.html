@@ -3411,13 +3411,10 @@ async function masterDashLoad(){
     `, true)}
 
     ${panel('md-regrade','Regrade a Corrected Question','🔧',`
-      <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5">After a question's correct answer is fixed in the bank, run this to regrade <b>past exams</b> against the new answer (credits students who picked it, removes the point from those who picked the old one — both directions). Future exams already use the corrected answer.</div>
+      <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5">After a question's correct answer is fixed in the bank, paste its <b>exact question text</b> and the correct answer to regrade <b>past exams</b> (credits students who picked it, removes the point from those who picked the old one). Question ids aren't unique, so this matches by the question text itself.</div>
+      <textarea id="rgQText" rows="3" placeholder="Paste the exact question text…" style="width:100%;box-sizing:border-box;margin-bottom:8px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-size:.85rem;line-height:1.4;resize:vertical"></textarea>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
-        <div><label style="font-family:monospace;font-size:.68rem;color:var(--muted);display:block;margin-bottom:3px">Subject</label>
-          <select id="rgSubject" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-family:monospace;font-size:.85rem"><option value="general">general</option><option value="airframe">airframe</option><option value="powerplant">powerplant</option></select></div>
-        <div><label style="font-family:monospace;font-size:.68rem;color:var(--muted);display:block;margin-bottom:3px">Question ID</label>
-          <input id="rgQid" placeholder="e.g. 516" style="width:90px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-family:monospace;font-size:.85rem"></div>
-        <div><label style="font-family:monospace;font-size:.68rem;color:var(--muted);display:block;margin-bottom:3px">Correct</label>
+        <div><label style="font-family:monospace;font-size:.68rem;color:var(--muted);display:block;margin-bottom:3px">Correct answer</label>
           <select id="rgLetter" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel2);color:var(--text);font-family:monospace;font-size:.85rem"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
         <button class="btn btn-primary btn-sm" onclick="adminRegradeQuestion()">Run regrade</button>
       </div>
@@ -3789,8 +3786,8 @@ function _qAttr(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&am
 async function qReviewEdit(key){
   const r=await dbGet('questionReviews/'+key).catch(()=>null);
   if(!r) return;
-  if(!r.subject || !r.qid){ showToast("AI-generated questions can't be edited — they're one-off and regenerate.",'error'); return; }
-  const ov=await dbGet('questionOverrides/'+r.subject+'/'+r.qid).catch(()=>null);
+  if(!r.subject || !r.qid){ showToast("AI/O&P questions can't be edited — they're one-off and regenerate.",'error'); return; }
+  const ov=await dbGet('questionOverrides/'+_qrHash(r)).catch(()=>null);
   const q = (ov && ov.question!=null) ? ov.question : (r.question||'');
   const choices = (ov && ov.choices) ? ov.choices : (r.choices||{});
   const correct = (ov && ov.correct!=null) ? ov.correct : (r.currentCorrect||'');
@@ -3818,6 +3815,7 @@ async function qReviewEdit(key){
 async function qReviewSaveEdit(key){
   const r=await dbGet('questionReviews/'+key).catch(()=>null);
   if(!r || !r.subject || !r.qid){ showToast('Cannot save this question.','error'); return; }
+  const h=_qrHash(r);
   const qEl=document.getElementById('qredit-q-'+key);
   const question=(qEl?qEl.value:'').trim();
   if(!question){ showToast('Question text cannot be empty.','error'); return; }
@@ -3831,17 +3829,17 @@ async function qReviewSaveEdit(key){
   if(!correct){ showToast('Select the correct answer.','error'); return; }
   try {
     const updates={};
-    updates['questionOverrides/'+r.subject+'/'+r.qid]={question,choices,correct,editedAt:Date.now()};
+    updates['questionOverrides/'+h]={question,choices,correct,editedAt:Date.now()};   // keyed by question hash
     updates['questionReviews/'+key+'/status']='resolved';
     updates['questionReviews/'+key+'/adminCorrect']=correct;
     updates['questionReviews/'+key+'/resolvedAt']=Date.now();
     updates['questionReviews/'+key+'/edited']=true;
     await db.ref().update(updates);
     _pxInvalidateOverrides();
-    const rg=await qReviewApplyRegrade(r.subject, r.qid, correct); // regrade past exams against the (possibly new) correct answer
+    const rg=await qReviewApplyRegrade(h, correct); // regrade past exams against the (possibly new) correct answer
     let msg='✓ Saved — question updated for all future exams.';
     if(rg.exams>0){ const parts=[]; if(rg.gained>0)parts.push('+'+rg.gained+' credited'); if(rg.lost>0)parts.push('−'+rg.lost+' removed'); msg+=' Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+(parts.length?' ('+parts.join(', ')+').':'.'); }
-    const dup=await _qReviewApplyToDuplicates(r.subject, r.qid, key, {status:'resolved', adminCorrect:correct});
+    const dup=await _qReviewApplyToDuplicates(h, key, {status:'resolved', adminCorrect:correct});
     if(dup>0) msg += ' Auto-resolved '+dup+' duplicate flag'+(dup===1?'':'s')+' of this question.';
     showToast(msg,'success');
     _qReviewLoad();
@@ -3900,16 +3898,19 @@ function qReviewConfirm(key){
   qReviewResolve(key, letter);
 }
 
-// Apply the same outcome to OTHER pending flags of the same question (same subject+id),
+// Stable identity for a flagged review (question ids are not unique — hash the question text)
+function _qrHash(r){ return r && (r.qhash || _qHash(r.question)); }
+
+// Apply the same outcome to OTHER pending flags of the SAME question (matched by question hash),
 // so duplicate flags from different students don't have to be reviewed again.
-async function _qReviewApplyToDuplicates(subject, qid, exceptKey, fields){
-  if(!subject || qid==null || qid==='') return 0;
+async function _qReviewApplyToDuplicates(hash, exceptKey, fields){
+  if(!hash) return 0;
   const all=await dbGet('questionReviews').catch(()=>null);
   if(!all) return 0;
   const updates={}; let n=0;
   Object.entries(all).forEach(([k,v])=>{
     if(!v || k===exceptKey || v.status!=='pending') return;
-    if(v.subject!==subject || String(v.qid)!==String(qid)) return;
+    if(_qrHash(v)!==hash) return;
     Object.entries(fields).forEach(([f,val])=>{ updates['questionReviews/'+k+'/'+f]=val; });
     updates['questionReviews/'+k+'/resolvedAt']=Date.now();
     updates['questionReviews/'+k+'/autoResolved']=true;
@@ -3922,24 +3923,24 @@ async function _qReviewApplyToDuplicates(subject, qid, exceptKey, fields){
 async function qReviewResolve(key, letter){
   const r=await dbGet('questionReviews/'+key).catch(()=>null);
   if(!r){ showToast('Could not load that review.','error'); return; }
+  const h=_qrHash(r);
   try {
     const updates={};
     updates['questionReviews/'+key+'/status']='resolved';
     updates['questionReviews/'+key+'/adminCorrect']=letter;
     updates['questionReviews/'+key+'/resolvedAt']=Date.now();
-    if(r.subject && r.qid){ updates['answerOverrides/'+r.subject+'/'+r.qid]=letter; }
+    if(r.qid && h){ updates['answerOverrides/'+h]=letter; }   // keyed by question hash (ids aren't unique)
     await db.ref().update(updates);
     _pxInvalidateOverrides(); // invalidate cached overrides so the next exam picks this up
     delete _qReviewSel[key];
     // Full regrade of past exams against the new answer (credit new-answer pickers, remove from old-answer pickers)
     let rg={students:0,exams:0,gained:0,lost:0};
-    if(r.subject && r.qid){ rg=await qReviewApplyRegrade(r.subject, r.qid, letter); }
-    // Confirm the override actually took effect for practice exams
+    if(r.qid && h){ rg=await qReviewApplyRegrade(h, letter); }
     let confirmed=false;
-    if(r.subject && r.qid){ const ov=await dbGet('answerOverrides/'+r.subject+'/'+r.qid).catch(()=>null); confirmed=(ov===letter); }
+    if(r.qid && h){ const ov=await dbGet('answerOverrides/'+h).catch(()=>null); confirmed=(ov===letter); }
     let msg = r.qid
-      ? ((confirmed?'✓ Confirmed — ':'')+'answer '+letter+' is now correct for all practice exams ('+r.subject+' id '+r.qid+').')
-      : ('Recorded as '+letter+' (AI question — regenerates automatically; no stored exams to regrade).');
+      ? ((confirmed?'✓ Confirmed — ':'')+'answer '+letter+' is now correct for this exact question on all practice exams.')
+      : ('Recorded as '+letter+' (AI/O&P question — regenerates automatically; no stored exams to regrade).');
     if(rg.exams>0){
       const parts=[];
       if(rg.gained>0) parts.push('+'+rg.gained+' credited');
@@ -3947,7 +3948,7 @@ async function qReviewResolve(key, letter){
       msg += ' Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+' across '+rg.students+' student'+(rg.students===1?'':'s')+(parts.length?' ('+parts.join(', ')+').':'.');
     }
     // Auto-resolve any other pending flags of this same question
-    const dup=await _qReviewApplyToDuplicates(r.subject, r.qid, key, {status:'resolved', adminCorrect:letter});
+    const dup=await _qReviewApplyToDuplicates(h, key, {status:'resolved', adminCorrect:letter});
     if(dup>0) msg += ' Auto-resolved '+dup+' duplicate flag'+(dup===1?'':'s')+' of this question.';
     showToast(msg,'success');
     _qReviewLoad();
@@ -3958,9 +3959,9 @@ async function qReviewResolve(key, letter){
 // Per occurrence the score delta = (picked===newLetter ? 1:0) − (picked===oldStoredCorrect ? 1:0),
 // so new-answer pickers gain a point and old-answer pickers lose theirs. Idempotent (once the stored
 // `correct` equals the new letter there's nothing left to change). Updates score, pct, and topicStats.
-async function qReviewApplyRegrade(subject, qid, letter){
+async function qReviewApplyRegrade(targetHash, letter){
   const result={students:0, exams:0, gained:0, lost:0};
-  if(!subject || !qid) return result;
+  if(!targetHash) return result;
   let allData, allHist;
   try { [allData, allHist]=await Promise.all([dbGet('practiceExamData'), dbGet('practiceHistory')]); }
   catch(e){ console.warn('regrade read failed:', e&&e.message||e); return result; }
@@ -3978,7 +3979,7 @@ async function qReviewApplyRegrade(subject, qid, letter){
       if(!Array.isArray(qs)) continue;
       let scoreDelta=0; const topicDelta={};
       qs.forEach((q,i)=>{
-        if(!q || q.subject!==subject || String(q.id)!==String(qid)) return;
+        if(!q || _qIdentity(q)!==targetHash) return;   // match the exact question by its text hash
         const oldCorrect=q.correct;
         if(oldCorrect===letter) return; // already on the new key — nothing to change
         updates['practiceExamData/'+uid+'/'+examKey+'/questions/'+i+'/correct']=letter;
@@ -4031,8 +4032,8 @@ async function qReviewDismiss(key){
     const r=await dbGet('questionReviews/'+key).catch(()=>null);
     await db.ref('questionReviews/'+key).update({status:'dismissed',resolvedAt:Date.now()});
     let msg='Dismissed.';
-    if(r && r.subject && r.qid){
-      const dup=await _qReviewApplyToDuplicates(r.subject, r.qid, key, {status:'dismissed'});
+    if(r){
+      const dup=await _qReviewApplyToDuplicates(_qrHash(r), key, {status:'dismissed'});
       if(dup>0) msg+=' Also dismissed '+dup+' duplicate flag'+(dup===1?'':'s')+' of this question.';
     }
     showToast(msg,'success'); _qReviewLoad();
@@ -12749,6 +12750,7 @@ async function _pxFlagQuestion(q, studentAnswer, btn){
     subject: q.subject || '',
     topic: q.topic || '',
     qid: (q.id != null ? String(q.id) : ''),
+    qhash: _qIdentity(q),
     source: q.source || '',
     question: q.question || '',
     choices: q.choices || {},
@@ -12779,9 +12781,23 @@ function pxSubmitReview(i){ _pxFlagQuestion(_pxQuestions[i], _pxAnswers[i], docu
 // During post-exam review of a completed exam
 function pxRevSubmitReview(i){ const d=(_pxRevData&&_pxRevData.questions)?_pxRevData:{questions:_pxQuestions,answers:_pxAnswers}; _pxFlagQuestion((d.questions||[])[i], (d.answers||{})[i], document.getElementById('pxRevFlagBtn'+i)); }
 
+// Stable per-question identity. Question ids are NOT unique (Weight & Balance alone reuses id 4
+// for several different questions), so overrides/reviews/regrades key on a hash of the question TEXT.
+function _qHash(s){
+  s = String(s==null?'':s).replace(/\s+/g,' ').trim().toLowerCase();
+  let h1=0xdeadbeef^s.length, h2=0x41c6ce57^s.length;
+  for(let i=0;i<s.length;i++){ const ch=s.charCodeAt(i); h1=Math.imul(h1^ch,2654435761); h2=Math.imul(h2^ch,1597334677); }
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+  h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  const n=4294967296*(2097151&h2)+(h1>>>0);
+  return 'q'+n.toString(36);
+}
+// The stable hash for a question — uses its original-text hash if it was override-applied
+function _qIdentity(q){ return (q && q._ohash) ? q._ohash : _qHash(q && q.question); }
+
 // Admin corrections, applied to questions before grading so fixes go live without a redeploy.
-// answerOverrides/{subject}/{id} = letter   (answer-only fix)
-// questionOverrides/{subject}/{id} = {question?, choices?, correct?}  (full edit)
+// answerOverrides/{qhash} = letter             (answer-only fix)
+// questionOverrides/{qhash} = {question?, choices?, correct?}  (full edit)
 let _pxOverridesCache = null;   // answerOverrides
 let _pxQOverridesCache = null;  // questionOverrides
 function _pxInvalidateOverrides(){ _pxOverridesCache=null; _pxQOverridesCache=null; }
@@ -12791,15 +12807,18 @@ async function pxApplyOverrides(questions){
     if(_pxQOverridesCache === null) _pxQOverridesCache = (await dbGet('questionOverrides').catch(()=>null)) || {};
     const ao = _pxOverridesCache, qo = _pxQOverridesCache;
     (questions||[]).forEach(q=>{
-      if(!q || !q.subject || q.id == null) return;
-      const id = q.id;
-      if(ao[q.subject] && ao[q.subject][id] != null) q.correct = ao[q.subject][id];
-      const o = qo[q.subject] && qo[q.subject][id];
-      if(o){
+      if(!q || !q.question) return;
+      const h = _qHash(q.question);
+      let applied=false;
+      if(ao[h] != null){ q.correct = ao[h]; applied=true; }
+      const o = qo[h];
+      if(o && typeof o==='object'){
         if(o.question != null) q.question = o.question;
         if(o.choices)          q.choices  = o.choices;
         if(o.correct != null)  q.correct  = o.correct;
+        applied=true;
       }
+      if(applied) q._ohash = h; // remember the original identity even if the text was changed
     });
   } catch(e){ console.warn('override fetch failed:', e&&e.message||e); }
 }
