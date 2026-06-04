@@ -153,16 +153,29 @@ async function generateForTopic(topic, qCount, content) {
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
   const sourceText = content[subject]?.[topic] || '';
-  const contextSection = sourceText
-    ? `\n\nBase every question ONLY on this reference text from ${handbook} (the "${topic}" section):\n\n${sourceText.slice(0, 6000)}`
-    : '';
+  const SLICE = 7000;
+  // Rotate the reference window across the whole section per batch, so generated questions
+  // cover the entire 8083 chapter (and probe deeper material) instead of only the opening.
+  const ctxFor = (b, nBatches) => {
+    if (!sourceText) return '';
+    let slice;
+    if (sourceText.length <= SLICE) slice = sourceText;
+    else {
+      const step = Math.max(1, Math.floor((sourceText.length - SLICE) / Math.max(1, nBatches)));
+      const start = Math.min(sourceText.length - SLICE, b * step + Math.floor(Math.random() * step));
+      slice = sourceText.slice(start, start + SLICE);
+    }
+    return `\n\nBase every question ONLY on this reference text from ${handbook} (the "${topic}" section). Draw from ACROSS this passage — including details, procedures, limits, and exceptions — not just the first sentences:\n\n${slice}`;
+  };
 
-  const buildPrompt = (n) => `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
+  const buildPrompt = (n, ctx) => `You are an FAA Aviation Maintenance Technician (AMT) exam question writer.
 
-Generate ${n} multiple choice practice question${n > 1 ? 's' : ''} STRICTLY about the single topic: "${topic}" (${subject} subject). Every question must be specifically about ${topic} — do NOT write questions about any other ${subject} topic.${contextSection}
+Generate ${n} CHALLENGING multiple choice practice question${n > 1 ? 's' : ''} STRICTLY about the single topic: "${topic}" (${subject} subject). Every question must be specifically about ${topic} — do NOT write questions about any other ${subject} topic.${ctx}
 
 Rules:
+- DIFFICULTY (important): write at or above the real FAA written-test level. Favor questions that make the student APPLY or INTERPRET the material — scenarios ("a technician finds…/ what should be done"), cause-and-effect, limits/tolerances, procedures, comparisons, and calculations where appropriate — over simple "what is the definition of X" recall. Pull specific facts (values, steps, exceptions) from the reference passage so a student must actually know the material, not just eliminate silly options.
 - Each question has exactly 3 choices: A, B, C (this matches the real FAA AMT test format)
+- ACCURACY: the marked correct answer MUST be factually correct and supported by the reference text. Re-verify it against the passage before finalizing — never mark a wrong choice as correct.
 - EXACTLY ONE correct answer: the correct choice must be the ONLY true/defensible one; both wrong choices must be factually FALSE. Never let a distractor be an alternative correct statement or a second valid formula for what is asked (e.g., if the answer is P = V × I, do NOT use P = I² × R as a wrong choice since it is also correct — use a genuinely wrong formula like P = V / I). Before finalizing each question, re-read all three choices and confirm only one is correct.
 - LAW / FORMULA REARRANGEMENTS: never ask an open-ended question whose choices are just different correct rearrangements of the same law. For example, do NOT ask "what is the relationship between voltage, current, and resistance?" with choices V = I × R, I = V / R, R = V / I — all three are correct. Instead ask a question that targets ONE form (e.g., "Which equation is used to find resistance when voltage and current are known?" → only R = V / I is correct, and the other two choices must be WRONG rearrangements such as R = I / V or R = I × V).
 - Prefer focused questions over compound ones ("what is X AND how is it calculated") — compound phrasing tends to make more than one choice partly correct.
@@ -187,8 +200,8 @@ Format: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"
     batches.push(Math.min(AI_BATCH, remaining));
   }
   try {
-    const results = await Promise.all(batches.map(n =>
-      callClaude(buildPrompt(n)).then(t => parseJSON(t)).catch(() => [])
+    const results = await Promise.all(batches.map((n, b) =>
+      callClaude(buildPrompt(n, ctxFor(b, batches.length))).then(t => parseJSON(t)).catch(() => [])
     ));
     const seen = new Set();
     const out = [];
@@ -242,6 +255,8 @@ async function qcBatch(questions) {
   const prompt = `You are a quality-control editor for FAA A&P exam questions. Review each question below and fix any issues with the answer choices.
 
 Check for and fix:
+0a. ACCURACY: confirm the marked correct answer is factually correct per FAA standards. If the marked answer is actually wrong, fix it — re-mark the truly correct choice, or correct that choice's wording. Never leave a wrong answer marked correct.
+0b. DIFFICULTY: if a question is trivially easy or answerable without real subject knowledge (obvious answer, silly distractors), rewrite it to FAA-written-test level — make the distractors plausible and, where natural, turn it into an application/scenario question. Keep it accurate.
 0. EXACTLY ONE CORRECT ANSWER (most important): verify that ONLY the marked correct choice is factually true; the other two MUST be factually FALSE. If any wrong choice is ALSO a true/defensible statement or a valid alternative formula for what the question asks, REWRITE that choice so it is genuinely incorrect — use a wrong formula, a wrong definition, or a value that does not apply. Two common traps to fix: (a) multiple valid formulas for the same quantity (e.g., "how is electrical power calculated" with both P = V × I and P = I² × R) and (b) a law asked open-endedly whose choices are just correct rearrangements (e.g., "relationship between voltage, current, resistance?" with V = I × R, I = V / R, and R = V / I — all correct). In these cases, keep the marked answer and rewrite the OTHER choices into incorrect rearrangements/formulas (e.g., R = I / V, P = V / I) so only one choice is right. After editing, re-read all three choices and confirm a knowledgeable A&P technician would accept exactly one and reject the other two.
 1. If the correct answer has a number, every wrong answer must also have a DIFFERENT specific number (same units — do not drop units or change to a different unit type)
 2. If the correct answer has units (psi, inches, degrees, rpm, volts, lbs, etc.), all wrong answers must use those exact same units
