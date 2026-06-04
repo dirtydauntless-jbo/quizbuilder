@@ -189,7 +189,7 @@ Rules:
 - If the correct answer contains a number, ALL wrong answers must also contain a different specific number in the same units
 - If the correct answer contains units (psi, inches, degrees, volts, etc.), ALL wrong answers must use those same units
 - All choices should be similar in length and grammatical structure
-- For the explanation field: write 1-2 sentences explaining WHY the correct answer is correct per FAA standards. Do NOT cite or include the handbook designation — never write "${handbook}" or "FAA-H-8083" in the explanation. Keep it about the concept itself; you may name the relevant subject/chapter topic in plain words if useful.
+- For the explanation field: write 1-2 sentences explaining WHY the correct answer is correct per FAA standards. Do NOT reference any choice by its letter (never write "Choice A/B/C" or "option B") — the choice order is randomized afterward, so refer to options by their wording/content if you must mention them. Do NOT cite or include the handbook designation — never write "${handbook}" or "FAA-H-8083" in the explanation. Keep it about the concept itself; you may name the relevant subject/chapter topic in plain words if useful.
 - Return ONLY a valid JSON array, no markdown
 
 Format: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"..."}]`;
@@ -236,7 +236,7 @@ For EACH item below (a question and its correct answer), write ONE multiple-choi
 - Keep the question's meaning; you may lightly reword for a written-test format.
 - The CORRECT choice must be a concise statement of the provided correct answer.
 - Write TWO incorrect but plausible distractors in the same style and length. They must be factually FALSE, stay on the "${topic}" topic, and leave EXACTLY ONE correct choice — never make a distractor that is also true. All three choices must be DISTINCT IN MEANING — no two may be paraphrases or convey the same idea.
-- explanation: 1-2 sentences on why the answer is correct. Do NOT mention any handbook number.
+- explanation: 1-2 sentences on why the answer is correct. Do NOT reference choices by letter (no "Choice A/B/C") since order is randomized, and do NOT mention any handbook number.
 Return ONLY a JSON array, same order as the items: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"..."}]
 Items:
 ${JSON.stringify(batch.map(c => ({ question: c.q, answer: c.a })))}`;
@@ -265,6 +265,8 @@ Check for and fix:
 5. All choices should be similar in grammatical structure and length
 6. Each wrong answer must be clearly incorrect per FAA standards
 7. DISTRACTOR DIFFICULTY: replace any wrong answer that is off-topic, absurd, or eliminable without real subject knowledge. Every distractor must stay in the same subject area and address the same concept as the question, and should read as a realistic mistake (a common misconception, a true-but-irrelevant fact, or a correct principle applied to the wrong context). Aim for moderately challenging (about 7/10 related to the correct answer) while keeping exactly one defensible answer
+
+8. EXPLANATION must NOT reference choices by letter (no "Choice A/B/C" or "option B") — the choice order is randomized after this step, so any letter reference will be wrong. Rewrite such references to describe the option by its content, or just explain why the correct answer is right.
 
 Return the corrected questions as a JSON array in EXACTLY the same format, preserving all fields (question, choices, correct, explanation, topic, handbook, source). Do not change the question text or the correct answer's meaning — only fix the wrong answer choices (and, if a distractor was independently correct, make it incorrect). No markdown, just the JSON array.
 
