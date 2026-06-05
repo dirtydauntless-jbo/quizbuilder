@@ -801,7 +801,7 @@ setTimeout(function(){
         </div>
         <div id="asgTopicPanel" style="display:none">
           <div id="asgCountRow" style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><label style="font-family:monospace;font-size:.8rem;color:var(--muted)">Questions:</label><input id="asgCount" type="number" min="1" max="100" value="20" style="width:70px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text)"></div>
-          <div id="asgClassExamNote" style="display:none;font-family:monospace;font-size:.74rem;color:var(--accent);background:rgba(8,145,178,.08);border:1px solid var(--accent);border-radius:var(--r);padding:9px 12px;margin-bottom:10px;line-height:1.4">🧪 Full-length FAA-style exam — <b>60</b> questions (General) or <b>100</b> (Airframe / Powerplant), focused on the topics you pick. 50% known FAA · 25% O&P · 25% from the 8083.</div>
+          <div id="asgClassExamNote" style="display:none;font-family:monospace;font-size:.74rem;color:var(--accent);background:rgba(8,145,178,.08);border:1px solid var(--accent);border-radius:var(--r);padding:9px 12px;margin-bottom:10px;line-height:1.4">🧪 Full-length FAA-style exam — <b>60</b> questions (General) or <b>100</b> (Airframe / Powerplant), focused on the topics you pick. 50% known FAA · 40% O&P · 10% from the 8083.</div>
           <div id="asgTopicPicker" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);padding:10px"></div>
         </div>
       </div>
@@ -7173,10 +7173,10 @@ async function assignSubmit(){
   if(_asgTarget==='classroom'){
     if(!_asgClass||!_asgClass.id){ st.style.color='var(--wl)'; st.textContent='Pick a classroom.'; return; }
     // Custom-topic class exams are always full length (60 General / 100 Airframe·Powerplant)
-    // with the focused 50% FAA · 25% O&P · 25% AI mix — no instructor-chosen count.
+    // with the focused 50% FAA · 40% O&P · 10% AI mix — no instructor-chosen count.
     if(base.mode==='topic'){
       base.count=_asgTopicsFullLength(base.topics||[]);
-      base.faaRatio=0.5; base.opRatio=0.25;
+      base.faaRatio=0.5; base.opRatio=0.4;
       base.label=(base.topics.length===1?base.topics[0]:base.topics.length+' Topics')+' — Focused FAA Exam ('+base.count+'q)';
     }
     st.style.color='var(--muted)'; st.textContent='Assigning to class…';
@@ -12794,10 +12794,10 @@ async function practiceGenerate(){
       await pxRunExam(topics, 0, topicLabel+' — All Questions', {mode:'all'});
       return;
     }
-    // default: Focused FAA Written Exam — 50% FAA bank · 25% O&P · 25% AI from the 8083
+    // default: Focused FAA Written Exam — 50% FAA bank · 40% O&P (AI MC) · 10% AI from the 8083
     const sections=new Set(checked.map(cb=>cb.dataset.section));
     const total = (sections.has('airframe')||sections.has('powerplant')) ? 100 : 60;
-    await pxRunExam(topics, total, topicLabel+' — Focused FAA Exam ('+total+'q)', {faaRatio:0.5, opRatio:0.25});
+    await pxRunExam(topics, total, topicLabel+' — Focused FAA Exam ('+total+'q)', {faaRatio:0.5, opRatio:0.4});
     return;
   }
   _pxAssignId=null;
