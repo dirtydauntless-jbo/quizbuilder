@@ -1057,6 +1057,7 @@ setTimeout(function(){
           <svg id="instCalSvg" viewBox="0 0 920 320" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
         </div>
         <div id="instCalReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.000"</div>
+        <div id="instCalFormula" style="display:none;margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
@@ -1628,6 +1629,7 @@ setTimeout(function(){
         <svg id="stuCalSvg" viewBox="0 0 920 320" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
       </div>
       <div id="stuCalReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.000"</div>
+      <div id="stuCalFormula" style="display:none;margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
     </div>
 
     <!-- Controls row -->
@@ -18764,6 +18766,20 @@ function caliperSvgDraw(value, side, showGuide, locked){
   }
 }
 
+// Vernier caliper reading breakdown: whole" + .100s + .025-line + vernier-thousandths = total"
+function _calFormulaString(value, d){
+  const readStr = value.toFixed(3)+'"';
+  const lastMain = Math.floor(value/0.025)*0.025;
+  const wholeIn  = Math.floor(value);
+  const tenths   = Math.floor((value - wholeIn)/0.1)*0.1;
+  const qtrRem   = Math.round((lastMain - wholeIn - tenths)*1000)/1000;
+  const verThou  = d.vernier * 0.001;
+  const p1 = `${wholeIn}"`;
+  const p2 = tenths   > 0.00001 ? `+.${Math.round(tenths*10).toString()}00` : null;
+  const p3 = qtrRem   > 0.00001 ? `+.0${Math.round(qtrRem*1000).toString().padStart(2,'0')}` : null;
+  const p4 = verThou  > 0.00001 ? `+.${String(d.vernier).padStart(3,'0')}` : null;
+  return [p1,p2,p3,p4].filter(Boolean).join(' ') + ' = ' + readStr;
+}
 function caliperRedraw(side){
   const s = SIM[side];
   const d = calDecompose(s.value);
@@ -18773,6 +18789,11 @@ function caliperRedraw(side){
   const zoom = document.getElementById(zoomId);
   if(body) body.innerHTML = caliperSvgBody(s.value, s.locked, side);
   if(zoom) zoom.innerHTML = caliperSvgZoom(d, s.value, s.showGuide, s.locked, side, !!s.calRevealed);
+  // Reading + breakdown shown BELOW the scale (only when revealed)
+  const rd = document.getElementById(side==='inst'?'instCalReadout':'stuCalReadout');
+  if(rd){ if(s.calRevealed){ rd.textContent = s.value.toFixed(3)+'"'; rd.classList.remove('hidden'); } else { rd.classList.add('hidden'); } }
+  const fEl = document.getElementById(side==='inst'?'instCalFormula':'stuCalFormula');
+  if(fEl){ const f = s.calRevealed ? _calFormulaString(s.value, d) : ''; fEl.textContent = f; fEl.style.display = f ? 'block' : 'none'; }
   caliperAttachDrag(zoomId, side);
 }
 
@@ -18910,24 +18931,8 @@ function caliperSvgZoom(d, value, showGuide, locked, side, calRevealed=false){
     }
   }
 
-  // ── READING + FORMULA (only when calRevealed) ─────────────────────
-  if(calRevealed){
-    const readStr = value.toFixed(3)+'"';
-    s += `<rect x="${W/2-95}" y="${H-52}" width="190" height="42" rx="6" fill="#0a1628" stroke="${ACCENT}" stroke-width="2.5"/>`;
-    s += `<text x="${W/2}" y="${H-22}" text-anchor="middle" font-size="24" font-family="monospace" font-weight="bold" fill="${ACCENT}">${readStr}</text>`;
-    // 4-part formula: whole inches + tenths + 0.025 line + vernier thousandths
-    const lastMain = Math.floor(value/0.025)*0.025;
-    const wholeIn  = Math.floor(value);
-    const tenths   = Math.floor((value - wholeIn)/0.1)*0.1;
-    const qtrRem   = Math.round((lastMain - wholeIn - tenths)*1000)/1000;
-    const verThou  = d.vernier * 0.001;
-    const p1 = `${wholeIn}"`;
-    const p2 = tenths   > 0.00001 ? `+.${Math.round(tenths*10).toString()}00` : null;
-    const p3 = qtrRem   > 0.00001 ? `+.0${Math.round(qtrRem*1000).toString().padStart(2,'0')}` : null;
-    const p4 = verThou  > 0.00001 ? `+.${String(d.vernier).padStart(3,'0')}` : null;
-    const formula = [p1,p2,p3,p4].filter(Boolean).join(' ') + ' = ' + readStr;
-    s += `<text x="12" y="${H-24}" font-size="20" font-family="monospace" font-weight="bold" fill="#f0c040">${formula}</text>`;
-  }
+  // Reading + breakdown formula are shown in HTML elements BELOW the scale (see _calFormulaString
+  // + caliperRedraw) so they never cover the caliper scale.
   s += `<text x="${W-10}" y="${H-20}" text-anchor="end" font-size="11" font-family="monospace" fill="${locked?'#cc0000':'#99a'}">${locked?'🔒 LOCKED':'← drag →'}</text>`;
 
   return s;
