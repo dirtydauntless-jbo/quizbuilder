@@ -1044,6 +1044,7 @@ setTimeout(function(){
           <svg id="instMicSvg" viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
         </div>
         <div id="instMicReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.0000"</div>
+        <div id="instMicFormula" style="display:none;margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
         <div style="font-family:monospace;font-size:.72rem;color:var(--muted);padding-bottom:4px" id="instSimRangeLabel">Range: 0–1"</div>
       </div>
 
@@ -1615,6 +1616,7 @@ setTimeout(function(){
         <svg id="stuMicSvg" viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
       </div>
       <div id="stuMicReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.0000"</div>
+      <div id="stuMicFormula" style="display:none;margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
     </div>
 
     <!-- Vernier Caliper SVG (shown when instrument=cal) -->
@@ -19180,6 +19182,24 @@ function micBuildRangeBtns(side){
   });
 }
 
+// Build the reading-breakdown string: base" + .100s + .025s + .001s + .0001s = total"
+function _micFormulaString(d){
+  if(!d || !d.revealed) return '';
+  const val = (typeof d.value==='number') ? d.value : (d.base + d.local);
+  const tt = Math.round(val*10000);            // total in ten-thousandths (avoids float drift)
+  let rem = tt - d.base*10000;
+  const sleeveNumTT = Math.floor(rem/1000)*1000; rem -= sleeveNumTT;   // .100" steps
+  const sleeveSubTT = Math.floor(rem/250)*250;   rem -= sleeveSubTT;   // .025" steps
+  const thouTT      = Math.floor(rem/10)*10;     rem -= thouTT;        // .001" steps
+  const vernTT      = rem;                                              // .0001" steps (0–9)
+  const pt = (v,dec)=>'+.'+(v/10000).toFixed(dec).split('.')[1];
+  const parts = [ d.base+'"' ];
+  if(sleeveNumTT>0) parts.push(pt(sleeveNumTT,3));
+  if(sleeveSubTT>0) parts.push(pt(sleeveSubTT,3));
+  if(thouTT>0)      parts.push(pt(thouTT,3));
+  if(vernTT>0)      parts.push(pt(vernTT,4));
+  return parts.join(' ') + ' = ' + val.toFixed(4) + '"';
+}
 function micRenderSide(side){
   const s = SIM[side];
   const svgId   = side==='inst' ? 'instMicSvg'    : 'stuMicSvg';
@@ -19202,6 +19222,9 @@ function micRenderSide(side){
 
   const rd = document.getElementById(readId);
   if(rd) rd.textContent = s.value.toFixed(4)+'"';
+  // Reading-breakdown formula, shown BELOW the scale (only when revealed)
+  const fEl = document.getElementById(side==='inst'?'instMicFormula':'stuMicFormula');
+  if(fEl){ const f = (s.micRevealed ? _micFormulaString(d) : ''); fEl.textContent = f; fEl.style.display = f ? 'block' : 'none'; }
   if(side==='inst'){
     const rl = document.getElementById('instSimRangeLabel');
     if(rl) rl.textContent = `Range: ${d.base}\u2013${d.base+1}"`;
@@ -19424,26 +19447,8 @@ function micSvgZoom(d, side='inst'){
   s += `<text x="22" y="12" text-anchor="start" font-family="Arial" font-size="10" fill="#999">SLEEVE / VERNIER</text>`;
   s += `<text x="${FACE_L+6}" y="12" text-anchor="start" font-family="Arial" font-size="10" fill="#999">THIMBLE</text>`;
 
-  // ── READING + FORMULA (only when revealed) ───────────────────────
-  // sleeve 0.100s + sleeve 0.025s + thimble 0.001s + vernier 0.0001s
-  if(d.revealed){
-    const val = (typeof d.value==='number') ? d.value : (d.base + d.local);
-    const tt = Math.round(val*10000);            // total in ten-thousandths (avoids float drift)
-    let rem = tt - d.base*10000;
-    const sleeveNumTT = Math.floor(rem/1000)*1000; rem -= sleeveNumTT;   // .100" steps
-    const sleeveSubTT = Math.floor(rem/250)*250;   rem -= sleeveSubTT;   // .025" steps
-    const thouTT      = Math.floor(rem/10)*10;     rem -= thouTT;        // .001" steps
-    const vernTT      = rem;                                              // .0001" steps (0–9)
-    const pt = (v,dec)=>'+.'+(v/10000).toFixed(dec).split('.')[1];
-    const parts = [ d.base+'"' ];
-    if(sleeveNumTT>0) parts.push(pt(sleeveNumTT,3));
-    if(sleeveSubTT>0) parts.push(pt(sleeveSubTT,3));
-    if(thouTT>0)      parts.push(pt(thouTT,3));
-    if(vernTT>0)      parts.push(pt(vernTT,4));
-    const formula = parts.join(' ') + ' = ' + val.toFixed(4) + '"';
-    s += `<rect x="8" y="${H-32}" width="${W-16}" height="28" rx="5" fill="rgba(8,16,30,0.93)" stroke="#f0c040" stroke-width="2"/>`;
-    s += `<text x="18" y="${H-12}" font-size="18" font-family="monospace" font-weight="bold" fill="#f0c040">${formula}</text>`;
-  }
+  // Reading breakdown formula is shown in an HTML element BELOW the scale (see _micFormulaString
+  // + micRenderSide) so it never covers the sleeve scale.
 
   // Border
   s += `<rect x="1" y="1" width="${W-2}" height="${H-2}" fill="none" stroke="#aaa" stroke-width="1.5"/>`;
