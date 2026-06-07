@@ -292,6 +292,38 @@ ${JSON.stringify(questions)}`;
   } catch { return questions; }
 }
 
+// ── Dedicated semantic-distinctness vet (runs AFTER qcBatch on AI/O&P questions) ─
+// qcBatch is a broad checklist where "distinct meaning" is just one of many items, so it
+// can get under-weighted. This pass does exactly ONE job: catch answer choices that MEAN
+// the same thing even when worded differently (synonyms, paraphrases, equivalent numbers/
+// units, restated outcomes) and rewrite the offender so all three choices are clearly
+// distinct with exactly one correct. Anything it genuinely cannot make distinct gets its
+// `correct` blanked so the caller's filter drops it (better to drop than to ship a dud).
+async function vetDistinctChoices(questions) {
+  if (!questions.length) return questions;
+
+  const prompt = `You are a strict FAA A&P exam answer-choice auditor. Your ONLY job is to guarantee that no two of a question's three choices mean the same thing.
+
+For EACH question below:
+- Compare the three choices pairwise (A vs B, A vs C, B vs C).
+- Treat two choices as EQUIVALENT (a violation) if a knowledgeable A&P technician would read them as saying the SAME thing, even when the wording differs. This includes: synonyms or paraphrases ("prevents corrosion" vs "stops rust"; "increases" vs "becomes greater"), the same outcome restated ("the engine will not start" vs "the engine fails to start"), and numerically/dimensionally equal values ("0.5 in" vs "1/2 inch" vs ".50\""; "32°F" vs "0°C").
+- If ANY pair is equivalent, KEEP the marked correct choice exactly as-is and REWRITE the other offending choice into a clearly DIFFERENT, factually FALSE but plausible distractor on the same topic — matching the correct choice's length, units, and style — so that all three choices are now distinct in meaning and exactly ONE is correct.
+- If two equivalent choices were BOTH essentially the correct answer, keep the correct one and replace the other with a genuinely wrong distractor.
+- Do NOT change the question text, the correct answer's meaning, or the explanation — except remove any "Choice A/B/C"/"option B" letter reference (choice order is randomized later).
+- If you genuinely cannot produce three distinct-meaning choices for a question, set its "correct" field to "" (empty string) so it will be discarded.
+
+Return a JSON array in the SAME order and format, preserving ALL fields present on each item (question, choices, correct, explanation, topic, handbook, source, subject, id, figureNum). No markdown — just the JSON array.
+
+Questions:
+${JSON.stringify(questions)}`;
+
+  try {
+    const arr = parseJSON(await callClaude(prompt, 4096));
+    if (Array.isArray(arr) && arr.length === questions.length) return arr;
+    return questions;
+  } catch { return questions; }
+}
+
 // ── Mix FAA + O&P + AI questions for one topic ───────────────────────────────
 async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride) {
   if (total < 1) return [];
@@ -349,8 +381,8 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ questions: all.filter(q => choicesAllDistinct(q.choices)) });
   }
 
-  // Focused exam passes faaRatio (0.5 = half verified FAA) and opRatio (0.25 = quarter O&P);
-  // the remainder is AI from the 8083.
+  // Focused exam passes faaRatio (0.5 = half verified FAA) and opRatio (0.4 = O&P share);
+  // the remainder (~0.1) is AI from the 8083.
   const fr = (typeof faaRatio === 'number' && faaRatio >= 0 && faaRatio <= 1) ? faaRatio : undefined;
   const or = (typeof opRatio === 'number' && opRatio >= 0 && opRatio <= 1) ? opRatio : undefined;
   const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
@@ -379,10 +411,18 @@ module.exports = async function handler(req, res) {
     const chunks = [];
     for (let i = 0; i < genQs.length; i += 10) chunks.push(genQs.slice(i, i + 10));
     const reviewed = await Promise.all(chunks.map(c => qcBatch(c)));
-    questions = [...faaQs, ...reviewed.flat()];
+    let genReviewed = reviewed.flat();
 
-    // Step 2.4: drop any question whose answer choices aren't all distinct (no duplicate/equivalent answers)
-    questions = questions.filter(q => choicesAllDistinct(q.choices));
+    // Step 2.2: dedicated semantic-distinctness vet — catch choices that MEAN the same thing
+    // even when worded differently (the broad qcBatch can miss these). Re-chunk and run focused.
+    const vchunks = [];
+    for (let i = 0; i < genReviewed.length; i += 10) vchunks.push(genReviewed.slice(i, i + 10));
+    const vetted = await Promise.all(vchunks.map(c => vetDistinctChoices(c)));
+    questions = [...faaQs, ...vetted.flat()];
+
+    // Step 2.4: drop any question whose choices aren't all distinct OR whose correct answer is
+    // missing/invalid (the vet blanks `correct` on questions it could not make distinct).
+    questions = questions.filter(q => choicesAllDistinct(q.choices) && q.correct && q.choices && (q.correct in q.choices));
 
     // Step 2.5: Backfill from the FAA bank if we're short, so the exam still reaches `total`.
     if (questions.length < total) {
