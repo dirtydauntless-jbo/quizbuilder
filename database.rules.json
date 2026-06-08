@@ -209,6 +209,31 @@
       ".read": true,
       ".write": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
     },
+    "faaVariants": {
+      ".read": true,
+      "flagged": {
+        "$vid": {
+          ".write": "auth != null && newData.exists()",
+          ".validate": "newData.isBoolean() && newData.val() === true"
+        }
+      },
+      "pool": {
+        "$subject": {
+          "$topic": {
+            "$vid": {
+              "cleanDeploys": {
+                ".write": "auth != null && data.parent().child('q').exists()",
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000 && (!data.exists() || newData.val() === data.val() + 1)"
+              },
+              "stage": {
+                ".write": "auth != null && data.parent().child('q').exists()",
+                ".validate": "newData.val() === 'pending' || newData.val() === 'jar'"
+              }
+            }
+          }
+        }
+      }
+    },
     "allStars": {
       ".read": "auth != null",
       "$uid": {

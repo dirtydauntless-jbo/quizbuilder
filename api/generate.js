@@ -158,6 +158,56 @@ function applyOverridesToBank(items, overrides) {
   return items.filter(q => q && q.choices && q.correct && (q.correct in q.choices));
 }
 
+// ── FAA-variant "cookie jar" — persistent pool of vetted reworded questions ──
+// A variant earns its place by surviving exams without being flagged. Lifecycle:
+//   • Server generates a FRESH variant → writes it to the pool as stage:'pending', cleanDeploys:0.
+//   • Each exam it appears on without the test-taker flagging it → client bumps cleanDeploys.
+//   • At 5 clean deploys → client promotes it to stage:'jar' (a reliable, reusable question).
+//   • Any flag → client sets faaVariants/flagged/{vid}; the server excludes & prunes it.
+// Pool entries are FROZEN copies (never re-derived when the source bank question is corrected).
+// CONTENT is written only by this server (using FIREBASE_DB_SECRET, which bypasses rules);
+// students' clients may only bump the counter / set the flag (guarded by security rules).
+const FIREBASE_SECRET = process.env.FIREBASE_DB_SECRET || '';
+// RTDB keys can't contain . $ # [ ] / or control chars — sanitize topic names into keys.
+function _safeKey(s){ return String(s == null ? '' : s).replace(/[.$#\[\]\/\x00-\x1f\x7f]/g, '_'); }
+
+async function dbRead(pathStr){
+  try {
+    const url = FIREBASE_SECRET
+      ? `${FIREBASE_DB}/${pathStr}.json?auth=${encodeURIComponent(FIREBASE_SECRET)}`
+      : `${FIREBASE_DB}/${pathStr}.json`;
+    const r = await fetch(url);
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+async function dbWrite(pathStr, value, method){
+  if (!FIREBASE_SECRET) return false;   // no write credential → jar stays read-only (graceful)
+  try {
+    const r = await fetch(`${FIREBASE_DB}/${pathStr}.json?auth=${encodeURIComponent(FIREBASE_SECRET)}`, {
+      method: method || 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(value),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
+// Read the reusable (non-flagged, structurally valid) variants stored for one topic.
+async function getVariantPool(subject, topic, flaggedMap){
+  const node = await dbRead(`faaVariants/pool/${subject}/${_safeKey(topic)}`);
+  if (!node || typeof node !== 'object') return [];
+  const fl = flaggedMap || {};
+  const out = [];
+  for (const vid of Object.keys(node)) {
+    const e = node[vid];
+    if (!e || fl[vid]) continue;
+    const q = e.q;
+    if (!q || !q.question || !q.choices || !q.correct || !(q.correct in q.choices)) continue;
+    out.push({ vid, q, stage: e.stage === 'jar' ? 'jar' : 'pending', cleanDeploys: e.cleanDeploys || 0 });
+  }
+  return out;
+}
+
 // ── Answer-choice evaluation helpers ─────────────────────────────────────────
 function _normChoice(s){ return String(s==null?'':s).toLowerCase().replace(/\s+/g,' ').replace(/[.;,·\s]+$/,'').trim(); }
 // True only if every choice is non-empty and no two are textually equivalent
@@ -333,7 +383,9 @@ function getFaaNoFigure(topic, n) {
 //   3. Number tweak       — change one value so the answer changes; keep the OLD correct answer
 //                           in the pool as a now-wrong distractor. (Disabled on calc/spec topics.)
 // Output is tagged source:'faa-variant' so it still flows through qcBatch + the distinctness vet.
-async function generateFaaVariants(topic, qCount, overrides) {
+// This produces BRAND-NEW variants (the expensive path). The pool-aware generateFaaVariants()
+// below reuses jar/pending variants first and only calls this to top up.
+async function generateFreshVariants(topic, qCount, overrides) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
@@ -368,20 +420,75 @@ Return ONLY a JSON array, SAME order as the items: [{"question":"...","choices":
 Original questions:
 ${JSON.stringify(batch.map(q => ({ question: q.question, choices: q.choices, correct: q.correct, correctText: q.choices[q.correct] })))}`;
 
-  const out = [];
+  let raw = [];
   for (let i = 0; i < seeds.length; i += AI_BATCH) {
     const batch = seeds.slice(i, i + AI_BATCH);
     try {
       const arr = parseJSON(await callClaude(buildPrompt(batch), 4096));
       if (Array.isArray(arr)) arr.forEach(q => {
         if (q && q.question && q.choices && q.correct && (q.correct in q.choices)) {
-          delete q.variantMode;
-          out.push({ ...q, topic, subject, handbook, source: 'faa-variant' });
+          raw.push({ question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation || '' });
         }
       });
     } catch { /* skip this batch */ }
   }
-  return out.slice(0, qCount);
+  if (!raw.length) return [];
+
+  // Vet fresh variants NOW (QC pass + dedicated distinctness vet), in chunks of 10, so what we
+  // store in the cookie jar is already clean. Reused pool variants skip this — they were vetted
+  // when first created and are frozen.
+  const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
+  raw = (await Promise.all(chunk(raw, 10).map(c => qcBatch(c)))).flat();
+  raw = (await Promise.all(chunk(raw, 10).map(c => vetDistinctChoices(c)))).flat();
+  raw = raw.filter(q => q && q.question && choicesAllDistinct(q.choices) && q.correct && (q.correct in q.choices));
+
+  return raw.slice(0, qCount).map(q => ({
+    question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation || '',
+    topic, subject, handbook, source: 'faa-variant'
+  }));
+}
+
+// Pool-aware variant supplier: reuse vetted variants from the cookie jar (and give pending ones
+// exam exposure so they can graduate), generating fresh only to cover the shortfall + a small
+// "grow" trickle while the jar is still thin. Fresh variants are registered into the pool here.
+async function generateFaaVariants(topic, qCount, overrides, flaggedMap) {
+  if (qCount < 1) return [];
+  const subject = TOPIC_SUBJECT[topic] || 'general';
+  const safeT = _safeKey(topic);
+
+  const pool = await getVariantPool(subject, topic, flaggedMap);
+  const jar  = shuffle(pool.filter(p => p.stage === 'jar'));
+  const pend = shuffle(pool.filter(p => p.stage !== 'jar'));
+
+  // Decide how many to generate fresh. If the pool can already cover the request, only trickle
+  // a few new candidates until the jar is comfortably stocked (≥4× this topic's per-exam need).
+  let freshN;
+  if (pool.length >= qCount) freshN = (jar.length >= qCount * 4) ? 0 : Math.max(1, Math.round(qCount * 0.2));
+  else freshN = qCount - pool.length;
+  freshN = Math.max(0, Math.min(freshN, qCount));
+  const reuseN = qCount - freshN;
+
+  // Reuse: cap pending exposure at ~40% so most reused questions are reliable jar ones; backfill
+  // from whichever side has more if one runs short.
+  const pendCap = Math.min(pend.length, Math.ceil(reuseN * 0.4));
+  let reuse = [...pend.slice(0, pendCap), ...jar.slice(0, Math.max(0, reuseN - pendCap))];
+  if (reuse.length < reuseN) reuse = reuse.concat(pend.slice(pendCap, pendCap + (reuseN - reuse.length)));
+  reuse = reuse.slice(0, reuseN);
+  const reused = reuse.map(p => ({ ...p.q, topic, subject, source: 'faa-variant', _vid: p.vid, _vstage: p.stage }));
+
+  // Fresh: generate (already QC'd + distinctness-vetted inside), register into the pool as
+  // pending, and tag with their new variant id + stage for the client's lifecycle tracking.
+  const fresh = freshN > 0 ? await generateFreshVariants(topic, freshN, overrides) : [];
+  for (const q of fresh) {
+    const vid = _qHash(q.question);
+    q._vid = vid; q._vstage = 'pending';
+    await dbWrite(`faaVariants/pool/${subject}/${safeT}/${vid}`, {
+      q: { question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation || '', topic, subject, handbook: q.handbook || '' },
+      cleanDeploys: 0, stage: 'pending', createdAt: Date.now()
+    }, 'PATCH');
+  }
+
+  return [...reused, ...fresh].slice(0, qCount);
 }
 
 // ── QC pass — run on AI-generated and O&P-converted questions ────────────────
@@ -450,7 +557,7 @@ ${JSON.stringify(questions)}`;
 }
 
 // ── Mix FAA + O&P + AI questions for one topic ───────────────────────────────
-async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride, varRatioOverride, overrides) {
+async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride, varRatioOverride, overrides, flaggedMap) {
   if (total < 1) return [];
 
   const bank = getFaaBank();
@@ -477,7 +584,7 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
 
   const [faaQuestions, varQuestions, opQuestions, aiQuestions] = await Promise.all([
     Promise.resolve(getFaaQuestions(topic, faaCount)),
-    generateFaaVariants(topic, varCount, overrides),
+    generateFaaVariants(topic, varCount, overrides, flaggedMap),
     generateFromOP(topic, opCount),
     generateForTopic(topic, aiCount, content),
   ]);
@@ -527,21 +634,28 @@ module.exports = async function handler(req, res) {
   const content = getContent();
 
   try {
-    // Fetch master-admin corrections once so reworded FAA variants are seeded from the
-    // CORRECTED bank, never from a question a student already got fixed. (Verbatim FAA
-    // questions are corrected on the client, which also preserves their override identity.)
-    const overrides = (typeof vr === 'number' && vr > 0) ? await getOverrides() : { ao: {}, qo: {} };
+    // Fetch master-admin corrections + the variant flag list once. Corrections seed reworded
+    // variants from the CORRECTED bank (never a question a student already got fixed); the flag
+    // list excludes any cookie-jar variant that was reported as wrong. (Verbatim FAA questions
+    // are corrected on the client, which also preserves their override identity.)
+    const useVariants = typeof vr === 'number' && vr > 0;
+    const [overrides, flaggedMap] = await Promise.all([
+      useVariants ? getOverrides() : Promise.resolve({ ao: {}, qo: {} }),
+      useVariants ? (dbRead('faaVariants/flagged').then(v => v || {})) : Promise.resolve({}),
+    ]);
 
     // Step 1: Build each topic's question mix in parallel
     const batches = await Promise.all(
-      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr, or, vr, overrides))
+      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr, or, vr, overrides, flaggedMap))
     );
     let questions = batches.flat();
 
     if (!questions.length) return res.status(502).json({ error: 'No questions generated. Please try again.' });
 
-    // Step 2: QC pass — on all GENERATED questions (AI-from-8083, O&P-converted, FAA variants)
-    const isGen  = q => q.source === 'ai' || q.source === 'op' || q.source === 'faa-variant';
+    // Step 2: QC pass — on AI-from-8083 and O&P-converted questions. FAA variants are NOT
+    // re-vetted here: fresh ones are QC'd + distinctness-vetted at generation time, and reused
+    // cookie-jar variants are already vetted and frozen.
+    const isGen  = q => q.source === 'ai' || q.source === 'op';
     const genQs  = questions.filter(isGen);
     const faaQs  = questions.filter(q => !isGen(q));
     const chunks = [];

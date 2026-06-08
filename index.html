@@ -12601,6 +12601,7 @@ const OFFICIAL_TOPICS = {
   powerplant: ['Engine Electrical Systems','Engine Exhaust and Reverser Systems','Engine Fire Protection Systems','Engine Fuel and Fuel Metering Systems','Engine Inspection','Engine Instrument Systems','Engine Lubrication Systems','Ignition and Starting Systems','Propellers','Reciprocating Engines','Reciprocating Engine Induction and Cooling','Turbine Engine Air Systems','Turbine Engines']
 };
 let _pxMode='official', _pxOfficialSubject=null, _pxCount=5, _pxQuestions=[], _pxAnswers={}, _pxAssignId=null;
+let _pxFlaggedVids=new Set(); // FAA-variant ids the student flagged this exam (don't credit a clean deploy)
 let _pxCountMode='focused'; // 'focused' | 'all' — topic-mode exam type (defaults to focused FAA exam)
 let _pxStartedAt=0; // ms timestamp the current exam (or resumed session) began, for completion-time tracking
 // Integrity tracking for instructor-assigned CLASS exams (mirrors quiz integrity)
@@ -12824,13 +12825,13 @@ async function pxRunExam(topics, count, label, opts){
     const res=await fetch('https://classroomamt.vercel.app/api/generate',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{})})
+      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.varRatio!=null?{varRatio:opts.varRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{})})
     });
     const data=await res.json();
     if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
     _pxQuestions=data.questions;
     await pxApplyOverrides(_pxQuestions); // apply any admin answer corrections before grading/saving
-    _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxFlagCount=0;
+    _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxFlagCount=0; _pxFlaggedVids=new Set();
     if(stuSession?.uid){
       const histRef=db.ref('practiceHistory/'+stuSession.uid).push();
       _pxExamKey=histRef.key;
@@ -13007,6 +13008,11 @@ async function _pxFlagQuestion(q, studentAnswer, btn){
     });
     _pxLastFlagTs = Date.now();
     _pxFlagCount++;
+    // If a cookie-jar FAA variant was flagged, pull it from rotation so it's never reused.
+    if(q.source==='faa-variant' && q._vid){
+      _pxFlaggedVids.add(q._vid);
+      db.ref('faaVariants/flagged/'+q._vid).set(true).catch(()=>{});
+    }
     if(btn){ btn.dataset.sent='1'; btn.innerHTML='✓ Sent for review — thanks!'; btn.style.color='var(--cl)'; btn.style.borderColor='var(--cl)'; btn.style.cursor='default'; }
     showToast('Question sent to admin for review. Thank you!','success');
   } catch(e){
@@ -13020,6 +13026,30 @@ async function _pxFlagQuestion(q, studentAnswer, btn){
 function pxSubmitReview(i){ _pxFlagQuestion(_pxQuestions[i], _pxAnswers[i], document.getElementById('pxFlagBtn'+i)); }
 // During post-exam review of a completed exam
 function pxRevSubmitReview(i){ const d=(_pxRevData&&_pxRevData.questions)?_pxRevData:{questions:_pxQuestions,answers:_pxAnswers}; _pxFlagQuestion((d.questions||[])[i], (d.answers||{})[i], document.getElementById('pxRevFlagBtn'+i)); }
+
+// ── FAA-variant cookie-jar lifecycle (client side) ───────────────────────────
+// The SERVER authors variant content; the client only bumps the survive-counter and flags
+// bad ones (both allowed by security rules). MUST match _safeKey() in api/generate.js.
+function _vjSafeKey(s){ return String(s==null?'':s).replace(/[.$#\[\]\/\x00-\x1f\x7f]/g,'_'); }
+function _vjRef(q){
+  if(!q || !q._vid || !q.subject || !q.topic) return null;
+  return db.ref('faaVariants/pool/'+q.subject+'/'+_vjSafeKey(q.topic)+'/'+q._vid);
+}
+// Credit a clean deploy to every cookie-jar variant on a just-finished exam that the test-taker
+// did NOT flag. At 5 clean deploys a pending variant graduates to the reliable jar.
+function _vjRecordCleanDeploys(questions){
+  if(!stuSession?.uid || !Array.isArray(questions)) return;
+  const seen=new Set();
+  questions.forEach(q=>{
+    if(!q || q.source!=='faa-variant' || !q._vid) return;
+    if(_pxFlaggedVids.has(q._vid)) return;          // flagged this exam → don't credit it
+    if(seen.has(q._vid)) return; seen.add(q._vid);  // once per exam
+    const ref=_vjRef(q); if(!ref) return;
+    ref.child('cleanDeploys').transaction(c=>(c||0)+1).then(res=>{
+      if(res.committed && res.snapshot && res.snapshot.val()>=5) ref.child('stage').set('jar').catch(()=>{});
+    }).catch(()=>{});
+  });
+}
 
 // Stable per-question identity. Question ids are NOT unique (Weight & Balance alone reuses id 4
 // for several different questions), so overrides/reviews/regrades key on a hash of the question TEXT.
@@ -13146,6 +13176,8 @@ function practiceFinish(){
     }
     // Update All-Stars ranking + the badge by the student's name
     updateAllStarStats().then(refreshMyAllStarBadge).catch(()=>{});
+    // Credit a clean deploy to any cookie-jar FAA variants that survived this exam unflagged
+    _vjRecordCleanDeploys(_pxQuestions);
   }
   const bd=document.getElementById('pxResultsBreakdown');
   if(!bd) return;
