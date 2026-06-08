@@ -104,6 +104,60 @@ function shuffle(arr) {
   return arr;
 }
 
+// ── Admin corrections (review system) ────────────────────────────────────────
+// Master-admin fixes from the Beta review system are stored in Firebase as FLAT nodes keyed by
+// a hash of the question text, and applied CLIENT-side before grading (pxApplyOverrides):
+//   answerOverrides/{qhash}   = "B"                                  (answer-only fix)
+//   questionOverrides/{qhash} = {question?, choices?, correct?}      (full edit)
+// Verbatim FAA-bank questions are corrected on the client. But FAA-VARIANTS are reworded
+// server-side from the raw bank, so without this they could be derived from an UN-corrected
+// question. We fetch the overrides (public read) and apply them to each seed before rewording.
+const FIREBASE_DB = 'https://quiz-f332f-default-rtdb.firebaseio.com';
+
+// MUST stay byte-for-byte identical to _qHash() in index.html, or override keys won't match.
+function _qHash(s) {
+  s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase();
+  let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length;
+  for (let i = 0; i < s.length; i++) { const ch = s.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const n = 4294967296 * (2097151 & h2) + (h1 >>> 0);
+  return 'q' + n.toString(36);
+}
+
+// Fetch the current corrections once per request (always fresh, so a just-resolved fix is
+// honored on the very next exam). Falls back to empty on any network/parse error.
+async function getOverrides() {
+  try {
+    const [aoR, qoR] = await Promise.all([
+      fetch(FIREBASE_DB + '/answerOverrides.json'),
+      fetch(FIREBASE_DB + '/questionOverrides.json'),
+    ]);
+    const ao = aoR.ok ? (await aoR.json()) || {} : {};
+    const qo = qoR.ok ? (await qoR.json()) || {} : {};
+    return { ao, qo };
+  } catch { return { ao: {}, qo: {} }; }
+}
+
+// Apply admin corrections to bank questions IN PLACE (same order as the client: answer fix,
+// then full-edit override). Drops any seed whose corrected `correct` no longer maps to a choice.
+function applyOverridesToBank(items, overrides) {
+  const ao = (overrides && overrides.ao) || {};
+  const qo = (overrides && overrides.qo) || {};
+  items.forEach(q => {
+    if (!q || !q.question) return;
+    const h = _qHash(q.question);
+    if (ao[h] != null) q.correct = ao[h];
+    const o = qo[h];
+    if (o && typeof o === 'object') {
+      if (o.question != null) q.question = o.question;
+      if (o.choices)          q.choices  = o.choices;
+      if (o.correct != null)  q.correct  = o.correct;
+    }
+  });
+  return items.filter(q => q && q.choices && q.correct && (q.correct in q.choices));
+}
+
 // ── Answer-choice evaluation helpers ─────────────────────────────────────────
 function _normChoice(s){ return String(s==null?'':s).toLowerCase().replace(/\s+/g,' ').replace(/[.;,·\s]+$/,'').trim(); }
 // True only if every choice is non-empty and no two are textually equivalent
@@ -279,11 +333,15 @@ function getFaaNoFigure(topic, n) {
 //   3. Number tweak       — change one value so the answer changes; keep the OLD correct answer
 //                           in the pool as a now-wrong distractor. (Disabled on calc/spec topics.)
 // Output is tagged source:'faa-variant' so it still flows through qcBatch + the distinctness vet.
-async function generateFaaVariants(topic, qCount) {
+async function generateFaaVariants(topic, qCount, overrides) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
-  const seeds = getFaaNoFigure(topic, qCount);
+  // Pull a few extra seeds so we still hit qCount after corrections drop any now-invalid ones.
+  let seeds = getFaaNoFigure(topic, qCount + 3);
+  if (!seeds.length) return [];
+  // Apply master-admin corrections so variants are NEVER reworded from an un-corrected question.
+  seeds = applyOverridesToBank(seeds, overrides).slice(0, qCount);
   if (!seeds.length) return [];
   // Number-tweak recomputes an answer, so keep it off pure-calculation and spec/timing topics.
   const allowNumberTweak = !FAA_ONLY_TOPICS.has(topic) && !HIGH_FAA_TOPICS.has(topic);
@@ -392,7 +450,7 @@ ${JSON.stringify(questions)}`;
 }
 
 // ── Mix FAA + O&P + AI questions for one topic ───────────────────────────────
-async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride, varRatioOverride) {
+async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride, varRatioOverride, overrides) {
   if (total < 1) return [];
 
   const bank = getFaaBank();
@@ -419,7 +477,7 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
 
   const [faaQuestions, varQuestions, opQuestions, aiQuestions] = await Promise.all([
     Promise.resolve(getFaaQuestions(topic, faaCount)),
-    generateFaaVariants(topic, varCount),
+    generateFaaVariants(topic, varCount, overrides),
     generateFromOP(topic, opCount),
     generateForTopic(topic, aiCount, content),
   ]);
@@ -469,9 +527,14 @@ module.exports = async function handler(req, res) {
   const content = getContent();
 
   try {
+    // Fetch master-admin corrections once so reworded FAA variants are seeded from the
+    // CORRECTED bank, never from a question a student already got fixed. (Verbatim FAA
+    // questions are corrected on the client, which also preserves their override identity.)
+    const overrides = (typeof vr === 'number' && vr > 0) ? await getOverrides() : { ao: {}, qo: {} };
+
     // Step 1: Build each topic's question mix in parallel
     const batches = await Promise.all(
-      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr, or, vr))
+      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr, or, vr, overrides))
     );
     let questions = batches.flat();
 
