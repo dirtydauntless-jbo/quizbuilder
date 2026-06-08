@@ -259,6 +259,73 @@ ${JSON.stringify(batch.map(c => ({ question: c.q, answer: c.a })))}`;
   return out.slice(0, qCount);
 }
 
+// ── Pull random NO-FIGURE bank questions (full record) to seed variants ──────
+function getFaaNoFigure(topic, n) {
+  if (n < 1) return [];
+  const subject = TOPIC_SUBJECT[topic] || 'general';
+  const bank = getFaaBank();
+  const pool = (bank[subject]?.[topic] || []).filter(q => !q.figureNum && !q.needsReview && q.choices && q.correct && (q.correct in q.choices));
+  if (!pool.length) return [];
+  const take = Math.min(n, pool.length);
+  const idx = shuffle([...Array(pool.length).keys()]).slice(0, take);
+  return idx.map(i => ({ question: pool[i].question, choices: pool[i].choices, correct: pool[i].correct }));
+}
+
+// ── Reword known FAA bank questions into NEW variants (how the real exam recycles) ─
+// Seeds from NO-FIGURE bank questions only (a reworded stem can't depend on an image), then
+// applies one of three FAA-style transforms per question:
+//   1. Definition flip   — reword so a previously-WRONG choice becomes the correct answer.
+//   2. Distractor focal  — make one of the old answer choices the subject of a new question.
+//   3. Number tweak       — change one value so the answer changes; keep the OLD correct answer
+//                           in the pool as a now-wrong distractor. (Disabled on calc/spec topics.)
+// Output is tagged source:'faa-variant' so it still flows through qcBatch + the distinctness vet.
+async function generateFaaVariants(topic, qCount) {
+  if (qCount < 1) return [];
+  const subject = TOPIC_SUBJECT[topic] || 'general';
+  const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
+  const seeds = getFaaNoFigure(topic, qCount);
+  if (!seeds.length) return [];
+  // Number-tweak recomputes an answer, so keep it off pure-calculation and spec/timing topics.
+  const allowNumberTweak = !FAA_ONLY_TOPICS.has(topic) && !HIGH_FAA_TOPICS.has(topic);
+
+  const buildPrompt = (batch) => `You rewrite real FAA Aviation Maintenance Technician (AMT) written-test questions into NEW variant questions — the way the real FAA exam recycles its question bank. Every variant must stay STRICTLY on the topic "${topic}" (${subject} subject).
+
+For EACH original question below (its choices are given with the correct one marked), produce ONE new 3-choice multiple-choice question (A, B, C; exactly one correct) by applying the SINGLE best-fitting strategy:
+
+1. DEFINITION FLIP — reword the stem so that a PREVIOUSLY-WRONG choice becomes the correct answer (ask for the opposite condition, the excluded case, the "least/except", or a different property). The new correct answer must be one of the original WRONG choices (or a correct restatement of it); include the original correct answer as a now-INCORRECT distractor.
+
+2. DISTRACTOR FOCAL POINT — take one of the original answer choices and make IT the subject of a brand-new question, then write two fresh, plausible-but-false distractors. The variant now directly tests that concept.
+
+3. NUMBER TWEAK — change exactly ONE numeric value in the stem so the correct answer changes. Recompute the new correct answer and DOUBLE-CHECK the arithmetic. Keep the ORIGINAL correct answer in the choice pool as a now-INCORRECT distractor. ${allowNumberTweak ? 'Use this only when the original is a clean numeric problem you can re-solve with certainty.' : 'DO NOT use this strategy for these items — they are calculation/spec sensitive; use strategy 1 or 2 instead.'}
+
+Rules for EVERY variant:
+- Must be answerable on its own, WITHOUT any figure or the original question in view.
+- Factually correct per FAA standards; EXACTLY ONE choice correct, the other two factually FALSE (never a second defensible answer).
+- All three choices DISTINCT IN MEANING — no synonyms, paraphrases, or numerically/dimensionally equal values.
+- Match choice length, units, and style; if the answer has a number, all choices have a different number in the same units.
+- explanation: 1-2 sentences on WHY the answer is correct. Do NOT reference choices by letter (order is randomized later) and do NOT cite any handbook number.
+- Do not copy the original verbatim — it must read as a genuinely new question.
+
+Return ONLY a JSON array, SAME order as the items: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"...","variantMode":1}]
+Original questions:
+${JSON.stringify(batch.map(q => ({ question: q.question, choices: q.choices, correct: q.correct, correctText: q.choices[q.correct] })))}`;
+
+  const out = [];
+  for (let i = 0; i < seeds.length; i += AI_BATCH) {
+    const batch = seeds.slice(i, i + AI_BATCH);
+    try {
+      const arr = parseJSON(await callClaude(buildPrompt(batch), 4096));
+      if (Array.isArray(arr)) arr.forEach(q => {
+        if (q && q.question && q.choices && q.correct && (q.correct in q.choices)) {
+          delete q.variantMode;
+          out.push({ ...q, topic, subject, handbook, source: 'faa-variant' });
+        }
+      });
+    } catch { /* skip this batch */ }
+  }
+  return out.slice(0, qCount);
+}
+
 // ── QC pass — run on AI-generated and O&P-converted questions ────────────────
 async function qcBatch(questions) {
   if (!questions.length) return questions;
@@ -325,7 +392,7 @@ ${JSON.stringify(questions)}`;
 }
 
 // ── Mix FAA + O&P + AI questions for one topic ───────────────────────────────
-async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride) {
+async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride, varRatioOverride) {
   if (total < 1) return [];
 
   const bank = getFaaBank();
@@ -335,25 +402,29 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
   const isFaaOnly = FAA_ONLY_TOPICS.has(topic);
 
   // Calculation-heavy topics → verified bank only (no AI/O&P arithmetic errors).
-  // Otherwise: caller may request a FAA share (focused exam = 0.5) and an O&P share (0.25);
-  // the remainder is AI from the 8083. Default (official exams) = random 20–60% FAA, rest AI.
+  // Otherwise the caller may request a FAA share (focused exam = 0.5), a reworded-FAA-variant
+  // share (0.3), and an O&P share (0.2); any remainder is AI from the 8083.
+  // Default (official exams) = random 20–60% FAA, rest AI.
   let faaPct = isFaaOnly ? 1
     : (typeof faaRatioOverride === 'number' ? faaRatioOverride : (0.20 + Math.random() * 0.40));
   // Spec/timing-heavy topics lean harder on the verified bank (less AI exposure)
   if(!isFaaOnly && HIGH_FAA_TOPICS.has(topic)) faaPct = Math.max(faaPct, HIGH_FAA_MIN);
+  const varPct = isFaaOnly ? 0 : (typeof varRatioOverride === 'number' ? varRatioOverride : 0);
   const opPct  = isFaaOnly ? 0 : (typeof opRatioOverride === 'number' ? opRatioOverride : 0);
 
   let faaCount = Math.min(Math.round(total * faaPct), bankSize, total);
-  let opCount  = Math.min(Math.round(total * opPct), Math.max(0, total - faaCount));
-  let aiCount  = Math.max(0, total - faaCount - opCount);
+  let varCount = Math.min(Math.round(total * varPct), Math.max(0, total - faaCount));
+  let opCount  = Math.min(Math.round(total * opPct), Math.max(0, total - faaCount - varCount));
+  let aiCount  = Math.max(0, total - faaCount - varCount - opCount);
 
-  const [faaQuestions, opQuestions, aiQuestions] = await Promise.all([
+  const [faaQuestions, varQuestions, opQuestions, aiQuestions] = await Promise.all([
     Promise.resolve(getFaaQuestions(topic, faaCount)),
+    generateFaaVariants(topic, varCount),
     generateFromOP(topic, opCount),
     generateForTopic(topic, aiCount, content),
   ]);
 
-  return [...faaQuestions, ...opQuestions, ...aiQuestions];
+  return [...faaQuestions, ...varQuestions, ...opQuestions, ...aiQuestions];
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -364,7 +435,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { topics, count, mode, faaRatio, opRatio } = req.body || {};
+  const { topics, count, mode, faaRatio, opRatio, varRatio } = req.body || {};
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
 
   // MODE: 'all' — return EVERY stored bank question for the selected topics (no AI, no cap).
@@ -381,10 +452,11 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ questions: all.filter(q => choicesAllDistinct(q.choices)) });
   }
 
-  // Focused exam passes faaRatio (0.5 = half verified FAA) and opRatio (0.4 = O&P share);
-  // the remainder (~0.1) is AI from the 8083.
+  // Focused exam passes faaRatio (0.5 = half verified FAA), varRatio (0.3 = reworded FAA
+  // variants) and opRatio (0.2 = O&P share); any remainder is AI from the 8083.
   const fr = (typeof faaRatio === 'number' && faaRatio >= 0 && faaRatio <= 1) ? faaRatio : undefined;
   const or = (typeof opRatio === 'number' && opRatio >= 0 && opRatio <= 1) ? opRatio : undefined;
+  const vr = (typeof varRatio === 'number' && varRatio >= 0 && varRatio <= 1) ? varRatio : undefined;
   const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
   const n = Math.min(topics.length, total);
   const selectedTopics = n < topics.length
@@ -399,15 +471,16 @@ module.exports = async function handler(req, res) {
   try {
     // Step 1: Build each topic's question mix in parallel
     const batches = await Promise.all(
-      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr, or))
+      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr, or, vr))
     );
     let questions = batches.flat();
 
     if (!questions.length) return res.status(502).json({ error: 'No questions generated. Please try again.' });
 
-    // Step 2: QC pass — on AI-generated AND O&P-converted questions (in chunks of 10)
-    const genQs  = questions.filter(q => q.source === 'ai' || q.source === 'op');
-    const faaQs  = questions.filter(q => q.source === 'faa');
+    // Step 2: QC pass — on all GENERATED questions (AI-from-8083, O&P-converted, FAA variants)
+    const isGen  = q => q.source === 'ai' || q.source === 'op' || q.source === 'faa-variant';
+    const genQs  = questions.filter(isGen);
+    const faaQs  = questions.filter(q => !isGen(q));
     const chunks = [];
     for (let i = 0; i < genQs.length; i += 10) chunks.push(genQs.slice(i, i + 10));
     const reviewed = await Promise.all(chunks.map(c => qcBatch(c)));
@@ -440,7 +513,7 @@ module.exports = async function handler(req, res) {
     // Step 3: evaluate choices — randomize the correct answer's position on AI questions
     // (so it isn't always "A") and strip any leftover handbook citation, then shuffle + trim.
     questions.forEach(q => {
-      if (q.source === 'ai' || q.source === 'op') {
+      if (q.source === 'ai' || q.source === 'op' || q.source === 'faa-variant') {
         shuffleChoicePositions(q);
         if (q.explanation) {
           q.explanation = q.explanation
