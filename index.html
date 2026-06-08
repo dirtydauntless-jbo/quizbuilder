@@ -29,8 +29,12 @@ body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 a{color:var(--accent);text-decoration:none}
 
 /* -- SHARED COMPONENTS -- */
-.app-header{background:var(--panel);border-bottom:2px solid var(--accent);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;gap:12px;flex-wrap:wrap;caret-color:transparent}
-.app-header *:not(input):not(textarea){caret-color:transparent}
+.app-header{background:var(--panel);border-bottom:2px solid var(--accent);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;gap:12px;flex-wrap:wrap}
+/* Caret-browsing (and stray focus carets) paint a blinking text caret into ordinary,
+   non-editable page content. Hide the caret everywhere, then restore it only on real
+   editable fields so typing still shows a cursor. */
+*{caret-color:transparent}
+input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:auto}
 .app-title{font-family:'Bebas Neue',sans-serif;font-size:1.95rem;letter-spacing:3px;color:var(--accent);white-space:nowrap}
 .app-subtitle{font-family:monospace;font-size:.95rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-left:10px}
 .user-pill{font-family:monospace;font-size:.93rem;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:7px;white-space:nowrap}
