@@ -213,7 +213,7 @@
       ".read": true,
       "flagged": {
         "$vid": {
-          ".write": "auth != null && newData.exists()",
+          ".write": "auth != null && (newData.exists() || root.child('config/masterAdmins').child(auth.uid).val() === true || root.child('config/superAdmins').child(auth.uid).val() === true)",
           ".validate": "newData.isBoolean() && newData.val() === true"
         }
       },
@@ -221,6 +221,7 @@
         "$subject": {
           "$topic": {
             "$vid": {
+              ".write": "auth != null && (root.child('config/masterAdmins').child(auth.uid).val() === true || root.child('config/superAdmins').child(auth.uid).val() === true)",
               "cleanDeploys": {
                 ".write": "auth != null && data.parent().child('q').exists()",
                 ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000 && (!data.exists() || newData.val() === data.val() + 1)"

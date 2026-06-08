@@ -3420,6 +3420,18 @@ async function masterDashLoad(){
       <div id="qReviewList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, true)}
 
+    ${panel('md-variants','FAA Variant Pool (Cookie Jar)','🍪',`
+      <div style="font-family:monospace;font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Reworded FAA variants saved for reuse. <b>Pending</b> = on probation (auto-promotes after 5 clean, unflagged exam appearances). <b>Jar</b> = reliable &amp; reused. <b>Retired</b> = excluded from all exams. You can promote instantly (skip the 5-pass), edit a question, send back, retire/restore, or delete.</div>
+      <div id="vpoolStats" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <select id="vpoolSubject" onchange="_vpoolRender()" class="input" style="width:auto;font-size:.78rem;padding:6px 10px"><option value="">All subjects</option><option value="general">General</option><option value="airframe">Airframe</option><option value="powerplant">Powerplant</option></select>
+        <select id="vpoolStage" onchange="_vpoolRender()" class="input" style="width:auto;font-size:.78rem;padding:6px 10px"><option value="">All stages</option><option value="jar">Jar (reliable)</option><option value="pending">Pending</option><option value="retired">Retired</option></select>
+        <input id="vpoolSearch" oninput="_vpoolRender()" class="input" placeholder="Search question text…" style="flex:1;min-width:130px;font-size:.78rem;padding:6px 10px"/>
+        <button class="btn btn-ghost btn-sm" onclick="_vpoolLoad()">↻ Refresh</button>
+      </div>
+      <div id="vpoolList" style="max-height:320px;overflow-y:auto"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
+    `, false)}
+
     ${panel('md-leaderboard','All-Stars Leaderboard','🏆',`
       <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:10px;line-height:1.5">The leaderboard fills in automatically as students open the practice tab. If older students who already took exams aren't showing, click below to rebuild it now from every student's completed exams (also refreshes names and points).</div>
       <button class="btn btn-primary btn-sm" onclick="allStarsRebuild()">🔄 Rebuild Leaderboard Now</button>
@@ -3657,8 +3669,143 @@ function masterDashToggle(id){
   if(arrow) arrow.textContent=isOpen?'▼':'▲';
   if(!isOpen && id==='md-opsim') _opSimLoadAdminPanel();
   if(!isOpen && id==='md-qreview') _qReviewLoad();
+  if(!isOpen && id==='md-variants') _vpoolLoad();
   if(!isOpen && id==='md-users') _usersLoad();
   if(!isOpen && id==='md-announce') _announceAdminLoad();
+}
+
+// ── FAA Variant Pool (cookie jar) — master-admin management screen ───────────
+let _vpoolData=[];       // flattened pool entries {_i,subject,topicKey,vid,q,stage,cleanDeploys,flagged}
+let _vpoolEditIdx=-1;    // index of the row currently being edited (-1 = none)
+const _vpBtn      = 'background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:monospace;font-size:.68rem;padding:5px 10px;cursor:pointer';
+const _vpBtnWarn  = 'background:transparent;border:1px solid #cc8a44;border-radius:6px;color:#e0a44a;font-family:monospace;font-size:.68rem;padding:5px 10px;cursor:pointer';
+const _vpBtnDanger= 'background:transparent;border:1px solid #cc4444;border-radius:6px;color:#e06666;font-family:monospace;font-size:.68rem;padding:5px 10px;cursor:pointer';
+const _vpBtnGo    = 'background:#f0c040;border:1px solid #f0c040;border-radius:6px;color:#1a1a1a;font-family:monospace;font-size:.68rem;font-weight:700;padding:5px 10px;cursor:pointer';
+
+function _vpoolBadge(stage,flagged){
+  if(flagged) return '<span style="font-family:monospace;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(204,68,68,.15);color:#e06666;border:1px solid #cc4444">RETIRED</span>';
+  if(stage==='jar') return '<span style="font-family:monospace;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(240,192,64,.15);color:#f0c040;border:1px solid #f0c040">JAR</span>';
+  return '<span style="font-family:monospace;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(34,184,216,.12);color:#22b8d8;border:1px solid #22b8d8">PENDING</span>';
+}
+async function _vpoolLoad(){
+  const list=document.getElementById('vpoolList');
+  if(list) list.innerHTML='<div class="empty-state" style="font-size:.8rem">Loading…</div>';
+  _vpoolEditIdx=-1;
+  const [pool,flagged]=await Promise.all([dbGet('faaVariants/pool').catch(()=>null),dbGet('faaVariants/flagged').catch(()=>null)]);
+  const fl=flagged||{}, p=pool||{}, rows=[];
+  for(const subject of Object.keys(p)){
+    const topics=p[subject]||{};
+    for(const topicKey of Object.keys(topics)){
+      const vv=topics[topicKey]||{};
+      for(const vid of Object.keys(vv)){
+        const e=vv[vid];
+        if(!e || !e.q || typeof e.q!=='object') continue;
+        rows.push({_i:rows.length, subject, topicKey, vid, q:e.q, stage:e.stage==='jar'?'jar':'pending', cleanDeploys:e.cleanDeploys||0, flagged:!!fl[vid]});
+      }
+    }
+  }
+  _vpoolData=rows;
+  _vpoolRender();
+}
+function _vpoolRender(){
+  const list=document.getElementById('vpoolList'); if(!list) return;
+  const statsEl=document.getElementById('vpoolStats');
+  const total=_vpoolData.length;
+  const jar=_vpoolData.filter(r=>!r.flagged&&r.stage==='jar').length;
+  const pend=_vpoolData.filter(r=>!r.flagged&&r.stage==='pending').length;
+  const retired=_vpoolData.filter(r=>r.flagged).length;
+  if(statsEl){
+    const card=(label,val,col)=>`<div style="flex:1;min-width:80px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center"><div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:${col};letter-spacing:1px">${val}</div><div style="font-family:monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase">${label}</div></div>`;
+    statsEl.innerHTML=card('Total',total,'var(--text)')+card('Jar',jar,'#f0c040')+card('Pending',pend,'#22b8d8')+card('Retired',retired,'#e06666');
+  }
+  const fs=(document.getElementById('vpoolSubject')||{}).value||'';
+  const fst=(document.getElementById('vpoolStage')||{}).value||'';
+  const q=((document.getElementById('vpoolSearch')||{}).value||'').toLowerCase().trim();
+  let rows=_vpoolData.slice();
+  if(fs) rows=rows.filter(r=>r.subject===fs);
+  if(fst==='retired') rows=rows.filter(r=>r.flagged);
+  else if(fst==='jar') rows=rows.filter(r=>!r.flagged&&r.stage==='jar');
+  else if(fst==='pending') rows=rows.filter(r=>!r.flagged&&r.stage==='pending');
+  if(q) rows=rows.filter(r=>((r.q.question||'')+' '+(r.q.topic||'')).toLowerCase().includes(q));
+  rows.sort((a,b)=>(a.flagged?1:0)-(b.flagged?1:0) || (a.stage===b.stage?0:a.stage==='jar'?-1:1) || (b.cleanDeploys-a.cleanDeploys));
+  if(!rows.length){ list.innerHTML='<div class="empty-state" style="font-size:.8rem">No variants match.</div>'; return; }
+  list.innerHTML=rows.slice(0,300).map(r=> r._i===_vpoolEditIdx ? _vpoolEditCard(r) : _vpoolViewCard(r)).join('')
+    + (rows.length>300?`<div style="font-family:monospace;font-size:.7rem;color:var(--muted);text-align:center;padding:8px">Showing first 300 of ${rows.length}.</div>`:'');
+}
+function _vpoolViewCard(r){
+  const correctText=r.q.choices?(r.q.choices[r.q.correct]||''):'';
+  const prog=r.stage==='jar'?'✓ reliable':(r.cleanDeploys+'/5 clean deploys');
+  const a=[];
+  if(!r.flagged && r.stage==='pending') a.push(`<button onclick="_vpoolAction(${r._i},'promote')" style="${_vpBtnGo}">⭐ Promote now</button>`);
+  if(!r.flagged && r.stage==='jar')     a.push(`<button onclick="_vpoolAction(${r._i},'demote')" style="${_vpBtn}">↩ Send back</button>`);
+  a.push(`<button onclick="_vpoolEdit(${r._i})" style="${_vpBtn}">✏️ Edit</button>`);
+  if(!r.flagged) a.push(`<button onclick="_vpoolAction(${r._i},'retire')" style="${_vpBtnWarn}">⚑ Retire</button>`);
+  else           a.push(`<button onclick="_vpoolAction(${r._i},'restore')" style="${_vpBtn}">↺ Restore</button>`);
+  a.push(`<button onclick="_vpoolAction(${r._i},'delete')" style="${_vpBtnDanger}">🗑 Delete</button>`);
+  return `<div style="border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px;background:var(--panel)${r.flagged?';opacity:.65':''}">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+      ${_vpoolBadge(r.stage,r.flagged)}
+      <span style="font-family:monospace;font-size:.64rem;color:var(--muted)">${prog}</span>
+      <span style="font-family:monospace;font-size:.64rem;color:var(--muted)">· ${_qEsc(r.subject)} · ${_qEsc(r.q.topic||'')}</span>
+    </div>
+    <div style="font-size:.85rem;margin-bottom:5px">${_qEsc(r.q.question||'')}</div>
+    ${Object.keys(r.q.choices||{}).map(k=>`<div style="font-family:monospace;font-size:.74rem;color:${k===r.q.correct?'var(--cl)':'var(--muted)'};padding:1px 0">${k===r.q.correct?'✓':'·'} ${k}: ${_qEsc(r.q.choices[k])}</div>`).join('')}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">${a.join('')}</div>
+  </div>`;
+}
+function _vpoolEditCard(r){
+  const ch=r.q.choices||{}; const keys=['A','B','C'];
+  return `<div style="border:1px solid #f0c040;border-radius:8px;padding:12px 13px;margin-bottom:8px;background:var(--panel2)">
+    <div style="font-family:monospace;font-size:.64rem;color:#f0c040;text-transform:uppercase;margin-bottom:8px">✏️ Editing variant — ${_qEsc(r.subject)} · ${_qEsc(r.q.topic||'')}</div>
+    <label class="label" style="font-size:.66rem">Question</label>
+    <textarea id="vpEdQ" class="input" style="font-size:.82rem;min-height:60px;margin-bottom:8px">${_qEsc(r.q.question||'')}</textarea>
+    ${keys.map(k=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <label style="display:flex;align-items:center;gap:5px;font-family:monospace;font-size:.74rem;cursor:pointer;white-space:nowrap"><input type="radio" name="vpEdCorrect" value="${k}" ${r.q.correct===k?'checked':''} style="cursor:pointer"/> ${k}</label>
+      <input id="vpEd${k}" class="input" style="font-size:.8rem;flex:1" value="${_qEsc(ch[k]||'')}"/>
+    </div>`).join('')}
+    <label class="label" style="font-size:.66rem;margin-top:4px">Explanation</label>
+    <textarea id="vpEdExp" class="input" style="font-size:.8rem;min-height:48px;margin-bottom:10px">${_qEsc(r.q.explanation||'')}</textarea>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button onclick="_vpoolEditSave(${r._i})" style="${_vpBtnGo}">💾 Save changes</button>
+      <button onclick="_vpoolEditCancel()" style="${_vpBtn}">Cancel</button>
+    </div>
+  </div>`;
+}
+function _vpoolEdit(i){ _vpoolEditIdx=i; _vpoolRender(); }
+function _vpoolEditCancel(){ _vpoolEditIdx=-1; _vpoolRender(); }
+async function _vpoolEditSave(i){
+  const r=_vpoolData[i]; if(!r) return;
+  const question=(document.getElementById('vpEdQ')||{}).value||'';
+  const A=(document.getElementById('vpEdA')||{}).value||'', B=(document.getElementById('vpEdB')||{}).value||'', C=(document.getElementById('vpEdC')||{}).value||'';
+  const correctEl=document.querySelector('input[name="vpEdCorrect"]:checked');
+  const correct=correctEl?correctEl.value:'';
+  const explanation=(document.getElementById('vpEdExp')||{}).value||'';
+  if(!question.trim()||!A.trim()||!B.trim()||!C.trim()){ showToast('Question and all three choices are required.','error'); return; }
+  if(!correct){ showToast('Pick which choice is correct.','error'); return; }
+  const newQ={ question:question.trim(), choices:{A:A.trim(),B:B.trim(),C:C.trim()}, correct, explanation:explanation.trim(), topic:r.q.topic||'', subject:r.q.subject||r.subject, handbook:r.q.handbook||'' };
+  try{
+    await db.ref('faaVariants/pool/'+r.subject+'/'+r.topicKey+'/'+r.vid+'/q').set(newQ);
+    r.q=newQ; _vpoolEditIdx=-1; _vpoolRender();
+    showToast('Variant updated.','success');
+  }catch(e){ showToast('Save failed: '+(e&&e.message||e),'error'); }
+}
+async function _vpoolAction(i,action){
+  const r=_vpoolData[i]; if(!r) return;
+  const base='faaVariants/pool/'+r.subject+'/'+r.topicKey+'/'+r.vid;
+  try{
+    if(action==='promote'){ await db.ref(base+'/stage').set('jar'); r.stage='jar'; showToast('Promoted to the jar.','success'); }
+    else if(action==='demote'){ await db.ref(base+'/stage').set('pending'); r.stage='pending'; showToast('Sent back to pending.','success'); }
+    else if(action==='retire'){ await db.ref('faaVariants/flagged/'+r.vid).set(true); r.flagged=true; showToast('Retired — excluded from all exams.','success'); }
+    else if(action==='restore'){ await db.ref('faaVariants/flagged/'+r.vid).remove(); r.flagged=false; showToast('Restored to rotation.','success'); }
+    else if(action==='delete'){
+      if(!confirm('Permanently delete this variant from the pool?')) return;
+      await db.ref(base).remove();
+      await db.ref('faaVariants/flagged/'+r.vid).remove().catch(()=>{});
+      _vpoolData=_vpoolData.filter(x=>x!==r);
+      showToast('Deleted.','success');
+    }
+    _vpoolRender();
+  }catch(e){ showToast('Action failed: '+(e&&e.message||e),'error'); }
 }
 
 // ── User Directory — all students & instructors (super admin); admin-rights mgmt (master admin) ──
