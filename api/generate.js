@@ -600,23 +600,6 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // TEMP diagnostic: confirms the cookie-jar write credential is wired up. Returns booleans only
-  // (never the secret). Remove after verification.
-  if (req.body && req.body.diag === 'varjar') {
-    let writeStatus = null, readBackOk = false;
-    if (FIREBASE_SECRET) {
-      try {
-        const w = await fetch(`${FIREBASE_DB}/faaVariants/_diag.json?auth=${encodeURIComponent(FIREBASE_SECRET)}`, {
-          method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ts: Date.now() })
-        });
-        writeStatus = w.status;
-        const r = await fetch(`${FIREBASE_DB}/faaVariants/_diag.json`);
-        readBackOk = r.ok && !!(await r.json());
-      } catch (e) { writeStatus = 'err:' + (e && e.message); }
-    }
-    return res.status(200).json({ secretPresent: !!FIREBASE_SECRET, secretLen: FIREBASE_SECRET ? FIREBASE_SECRET.length : 0, writeStatus, readBackOk });
-  }
-
   const { topics, count, mode, faaRatio, opRatio, varRatio } = req.body || {};
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
 
