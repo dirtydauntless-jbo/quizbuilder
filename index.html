@@ -7423,8 +7423,14 @@ async function assignViewResult(stuUid,aid){
   const pass=(a.pct||0)>=70;
   const passBar='<div style="background:'+(pass?'rgba(34,197,94,.1)':'rgba(204,68,68,.1)')+';border:1px solid '+(pass?'rgba(34,197,94,.3)':'rgba(204,68,68,.3)')+';border-radius:var(--r);padding:11px 15px;margin-bottom:14px;font-family:monospace;font-size:.86rem;color:'+(pass?'var(--cl)':'var(--wl)')+'">'+(a.score||0)+'/'+(a.total||questions.length)+' — '+(a.pct||0)+'% · '+(pass?'PASSING':'NOT PASSING (FAA requires 70%)')+'</div>';
   const plan=(typeof pxStudyPlanHTML==='function')?pxStudyPlanHTML(questions,answers):'';
+  // Comprehensive per-topic breakdown — every topic on the exam (weakest first), in addition to
+  // the Top-3 study plan above. Computed from the actual questions/answers.
+  const topicAgg={};
+  questions.forEach((q,i)=>{const t=q.topic||'General';if(!topicAgg[t])topicAgg[t]={correct:0,total:0};topicAgg[t].total++;if(answers[i]===q.correct)topicAgg[t].correct++;});
+  const topicRows=Object.entries(topicAgg).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
+  const topicTable=topicRows.length?'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin:14px 0"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px">Performance By Topic — every topic (weakest first)</div>'+topicRows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.t)+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>':'';
   const qhtml='<div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px">Question-by-question</div>'+questions.map((q,i)=>{const sel=answers[i];const ok=sel===q.correct;const ans=sel!==undefined;return buildRevQuestionCard(q,i,sel,ok,ans);}).join('');
-  document.getElementById('asgResContent').innerHTML=passBar+plan+qhtml;
+  document.getElementById('asgResContent').innerHTML=passBar+plan+topicTable+qhtml;
   document.getElementById('assignResultModal').style.display='flex';
 }
 
