@@ -13683,7 +13683,15 @@ function buildPxHistoryRow(r){
   const pctOf=v=>total?Math.round(v/total*100):0;
   const d=new Date(r.date);
   const dateStr=d.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
-  const pool=({general:'General',airframe:'Airframe',powerplant:'Powerplant',mixed:'Mixed'})[r.subject]||(r.subject||'—');
+  // Pool label: official subject exams show the subject; topic-selected exams (stored as 'mixed')
+  // show the actual topic when it's a single one, or "Custom (N topics)" for several.
+  let pool;
+  if(r.subject && r.subject!=='mixed'){
+    pool=({general:'General',airframe:'Airframe',powerplant:'Powerplant'})[r.subject]||r.subject;
+  }else{
+    const tks=Object.keys(r.topicStats||{});
+    pool = tks.length===1 ? tks[0] : (tks.length>1 ? 'Custom ('+tks.length+' topics)' : 'Custom');
+  }
   const cW=pctOf(correct),iW=pctOf(incorrect),nW=pctOf(notAns);
   const bar='<div class="pxh-bar">'+
     (cW?'<span style="width:'+cW+'%;background:var(--cl)"></span>':'')+
@@ -13694,9 +13702,12 @@ function buildPxHistoryRow(r){
     ?(pct>=70?'<span class="pxh-pass" style="color:var(--cl)">Pass!</span>':'<span class="pxh-pass" style="color:var(--wl)">Fail</span>')
     :'<span class="pxh-pass" style="color:var(--blue)">Unfinished</span>';
   const areas=pxProblemAreas(r.topicStats,3);
+  // Problem areas are flagged per topic (<70%). When no topic trips the flag but the student still
+  // missed questions (common on single-topic exams), don't claim "solid" — point them to the
+  // missed questions. Only a clean, zero-miss run gets "None — solid!".
   const areasHtml=areas.length
     ?'<span class="pxh-areas">'+areas.join(' · ')+'</span>'
-    :'<span class="pxh-areas none">'+(answered?'None — solid!':'—')+'</span>';
+    :'<span class="pxh-areas none">'+(answered?(incorrect>0?(incorrect+' missed — review'):'None — solid!'):'—')+'</span>';
   return '<tr onclick="practiceOpenReview(\''+r._key+'\')">'+
     '<td data-label="#"><span class="pxh-num">'+r._num+'</span></td>'+
     '<td data-label="Date" class="pxh-mono" style="color:var(--muted);font-size:.73rem">'+dateStr+'</td>'+
