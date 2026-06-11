@@ -1533,7 +1533,7 @@ setTimeout(function(){
             <div>
               <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--accent)">Expected Practical Tasks</div>
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-              <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Ranked by exam frequency + your ACS code matches · updates as you add codes</div>
+              <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Ranked by your ACS code matches first, then DME exam frequency · updates as you add codes</div>
               <div id="practicalDataBadge"></div>
             </div>
             </div>
@@ -18048,11 +18048,16 @@ function acsPredictPracticals(studentCodes){
   const codeSet = new Set(studentCodes.map(c => c.toUpperCase().trim()));
   if(!codeSet.size) return [];
 
+  // DME frequency varies wildly (1–30+), so multiplying it by a tier weight let it swamp the code
+  // match and made everyone's list nearly identical. Instead: your matched ACS codes are the
+  // PRIMARY driver (personalizes the list), DME frequency is normalized to 0..1 and de-emphasized
+  // as a booster/tiebreaker, and matched-codes × high-frequency together score highest (→ HIGH).
+  const maxOcc = Math.max(1, ...PRACTICALS.map(p => p.occ || 0));
   const scored = PRACTICALS.map(p => {
     const matchCount = p.codes.filter(c => codeSet.has(c)).length;
     const matchRatio = matchCount / Math.max(p.codes.length, 1);
-    // Score: frequency × base tier weight + code match bonus
-    const score = (p.occ * TIER_SCORE[p.tier]) + (matchCount * 2);
+    const freqNorm = (p.occ || 0) / maxOcc;                       // 0..1, de-emphasized
+    const score = (matchCount * 4) + (freqNorm * 3) + (matchCount * freqNorm * 2);
     return { ...p, matchCount, matchRatio, score };
   });
 
@@ -18143,7 +18148,7 @@ function acsRenderPracticals(studentCodes){
 
   list.innerHTML = `
     <div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-bottom:10px;padding:0 2px">
-      ${predictions.length > 25 ? `Top 25 of ${predictions.length}` : `${predictions.length} task${predictions.length!==1?'s':''}`} matched · Ranked by exam frequency × ACS code overlap · Add more codes to refine
+      ${predictions.length > 25 ? `Top 25 of ${predictions.length}` : `${predictions.length} task${predictions.length!==1?'s':''}`} matched · Ranked by your ACS code matches first, then DME exam frequency · Add more codes to refine
     </div>
     <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">${rows}</div>`;
 }
