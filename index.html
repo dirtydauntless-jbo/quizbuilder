@@ -1379,7 +1379,7 @@ setTimeout(function(){
           <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Choose Exam Type</div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <button onclick="practiceSetCountMode('focused')" id="pxCountFocused" class="btn" style="text-align:left;padding:13px 15px;line-height:1.35;white-space:normal;height:auto">🎯 Focused FAA Written Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Full length (60 General / 100 Airframe / 100 Powerplant) · 50% FAA · 30% reworded · 20% O&P · on your topics</span></button>
-            <button onclick="practiceSetCountMode('all')" id="pxCountAll" class="btn" style="text-align:left;padding:13px 15px;line-height:1.35;white-space:normal;height:auto">📚 All Questions for Selected Topics<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Every stored question for the topics you picked — no limit</span></button>
+            <button onclick="practiceSetCountMode('all')" id="pxCountAll" class="btn" style="text-align:left;padding:13px 15px;line-height:1.35;white-space:normal;height:auto">📚 Selected Topics Only Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Every stored question for the topics you picked — no limit</span></button>
           </div>
         </div>
         <button onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
@@ -12930,6 +12930,9 @@ function practiceSetCountMode(mode){
     const b=document.getElementById(id); if(!b) return;
     const on=m===mode;
     b.style.background=on?'#0891b2':''; b.style.color=on?'#fff':''; b.style.borderColor=on?'#0891b2':'';
+    // Keep the subtitle readable: it hardcodes a muted color, which is illegible on the teal
+    // highlight — switch it to light when selected, back to muted when not.
+    const sub=b.querySelector('span'); if(sub) sub.style.color=on?'rgba(255,255,255,0.92)':'var(--muted)';
   });
 }
 
