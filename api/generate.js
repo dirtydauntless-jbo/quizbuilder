@@ -600,28 +600,6 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // TEMP diagnostic: inspect the O&P conversion path. Remove after debugging.
-  if (req.body && req.body.diag === 'op') {
-    const t = req.body.topic || 'Hydraulic and Pneumatic Systems';
-    const subject = TOPIC_SUBJECT[t] || 'general';
-    const opbank = getOPBank();
-    const pool = (opbank[subject] && opbank[subject][t]) || [];
-    const out = { topic: t, subject, poolSize: pool.length };
-    try {
-      // Raw fetch to Anthropic to capture the actual error body (callClaude hides it).
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY || '', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, messages: [{ role: 'user', content: 'Reply with the single word OK.' }] })
-      });
-      out.anthropicStatus = r.status;
-      out.anthropicBody = (await r.text()).slice(0, 500);
-      out.apiKeyPresent = !!process.env.ANTHROPIC_API_KEY;
-      out.apiKeyLen = (process.env.ANTHROPIC_API_KEY || '').length;
-    } catch (e) { out.error = String(e && e.message || e); }
-    return res.status(200).json(out);
-  }
-
   const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix } = req.body || {};
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
 
