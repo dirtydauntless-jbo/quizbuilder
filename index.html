@@ -805,7 +805,7 @@ setTimeout(function(){
         </div>
         <div id="asgTopicPanel" style="display:none">
           <div id="asgCountRow" style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><label style="font-family:monospace;font-size:.8rem;color:var(--muted)">Questions:</label><input id="asgCount" type="number" min="1" max="100" value="20" style="width:70px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text)"></div>
-          <div id="asgClassExamNote" style="display:none;font-family:monospace;font-size:.74rem;color:var(--accent);background:rgba(8,145,178,.08);border:1px solid var(--accent);border-radius:var(--r);padding:9px 12px;margin-bottom:10px;line-height:1.4">🧪 Full-length FAA-style exam — <b>60</b> questions (General) or <b>100</b> (Airframe / Powerplant), focused on the topics you pick. 50% known FAA · 30% reworded FAA variants · 20% O&P.</div>
+          <div id="asgClassExamNote" style="display:none;font-family:monospace;font-size:.74rem;color:var(--accent);background:rgba(8,145,178,.08);border:1px solid var(--accent);border-radius:var(--r);padding:9px 12px;margin-bottom:10px;line-height:1.4">🧪 Full-length FAA-style exam — <b>60</b> questions (General) or <b>100</b> (Airframe / Powerplant), focused on the topics you pick.</div>
           <div id="asgTopicPicker" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);padding:10px"></div>
         </div>
       </div>
@@ -1378,7 +1378,7 @@ setTimeout(function(){
         <div id="pxCountPanel" class="hidden" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
           <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Choose Exam Type</div>
           <div style="display:flex;flex-direction:column;gap:8px">
-            <button onclick="practiceSetCountMode('focused')" id="pxCountFocused" class="btn" style="text-align:left;padding:13px 15px;line-height:1.35;white-space:normal;height:auto">🎯 Focused FAA Written Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Full length (60 General / 100 Airframe / 100 Powerplant) · 50% FAA · 30% reworded · 20% O&P · on your topics</span></button>
+            <button onclick="practiceSetCountMode('focused')" id="pxCountFocused" class="btn" style="text-align:left;padding:13px 15px;line-height:1.35;white-space:normal;height:auto">🎯 Focused FAA Written Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Full-length FAA-style written exam (60 General / 100 Airframe / 100 Powerplant) on your selected topics</span></button>
             <button onclick="practiceSetCountMode('all')" id="pxCountAll" class="btn" style="text-align:left;padding:13px 15px;line-height:1.35;white-space:normal;height:auto">📚 Selected Topics Only Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Every stored question for the topics you picked — no limit</span></button>
           </div>
         </div>
@@ -7324,10 +7324,10 @@ async function assignSubmit(){
   if(_asgTarget==='classroom'){
     if(!_asgClass||!_asgClass.id){ st.style.color='var(--wl)'; st.textContent='Pick a classroom.'; return; }
     // Custom-topic class exams are always full length (60 General / 100 Airframe·Powerplant)
-    // with the focused 50% FAA · 30% reworded FAA variants · 20% O&P mix — no instructor-chosen count.
+    // with the focused FAA-style mix — applied server-side — and no instructor-chosen count.
     if(base.mode==='topic'){
       base.count=_asgTopicsFullLength(base.topics||[]);
-      base.faaRatio=0.5; base.varRatio=0.3; base.opRatio=0.2;
+      base.focusedMix=true;
       base.label=(base.topics.length===1?base.topics[0]:base.topics.length+' Topics')+' — Focused FAA Exam ('+base.count+'q)';
     }
     st.style.color='var(--muted)'; st.textContent='Assigning to class…';
@@ -12955,10 +12955,10 @@ async function practiceGenerate(){
       await pxRunExam(topics, 0, topicLabel+' — All Questions', {mode:'all'});
       return;
     }
-    // default: Focused FAA Written Exam — 50% FAA bank · 30% reworded FAA variants · 20% O&P
+    // default: Focused FAA Written Exam — the source mix is applied server-side (kept private)
     const sections=new Set(checked.map(cb=>cb.dataset.section));
     const total = (sections.has('airframe')||sections.has('powerplant')) ? 100 : 60;
-    await pxRunExam(topics, total, topicLabel+' — Focused FAA Exam ('+total+'q)', {faaRatio:0.5, varRatio:0.3, opRatio:0.2});
+    await pxRunExam(topics, total, topicLabel+' — Focused FAA Exam ('+total+'q)', {focusedMix:true});
     return;
   }
   _pxAssignId=null;
@@ -12966,7 +12966,7 @@ async function practiceGenerate(){
 }
 
 // Shared exam runner — used by both self-generated and instructor-assigned exams.
-// opts: {mode:'all'} = every stored question for the topics · {faaRatio,varRatio,opRatio} = focused 50/30/20 split
+// opts: {mode:'all'} = every stored question for the topics · {focusedMix:true} = focused FAA-style exam (the server applies the source mix)
 async function pxRunExam(topics, count, label, opts){
   opts = opts || {};
   const errEl=document.getElementById('pxError');
@@ -12981,7 +12981,7 @@ async function pxRunExam(topics, count, label, opts){
     const res=await fetch('https://classroomamt.vercel.app/api/generate',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.varRatio!=null?{varRatio:opts.varRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{})})
+      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.focusedMix?{focusedMix:true}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.varRatio!=null?{varRatio:opts.varRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{})})
     });
     const data=await res.json();
     if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
@@ -13047,8 +13047,9 @@ async function practiceStartAssigned(assignId){
     topics=a.topics||[]; count=a.count||topics.length||5;
     label=(a.label||(topics.length+' Topics'))+' — Assigned';
   }
-  // Pass the focused mix (50% FAA · 25% O&P · 25% AI) when the assignment specifies it
-  const opts={}; if(a.faaRatio!=null) opts.faaRatio=a.faaRatio; if(a.opRatio!=null) opts.opRatio=a.opRatio;
+  // Focused FAA-style assignment: pass the flag (server applies the mix). Older assignments may
+  // still carry explicit ratios — honor those too for backward compatibility.
+  const opts={}; if(a.focusedMix) opts.focusedMix=true; if(a.faaRatio!=null) opts.faaRatio=a.faaRatio; if(a.varRatio!=null) opts.varRatio=a.varRatio; if(a.opRatio!=null) opts.opRatio=a.opRatio;
   await pxRunExam(topics, count, label, opts);
 }
 

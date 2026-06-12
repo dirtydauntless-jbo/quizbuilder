@@ -600,7 +600,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { topics, count, mode, faaRatio, opRatio, varRatio } = req.body || {};
+  const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix } = req.body || {};
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
 
   // MODE: 'all' — return EVERY stored bank question for the selected topics (no AI, no cap).
@@ -617,11 +617,13 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ questions: all.filter(q => choicesAllDistinct(q.choices)) });
   }
 
-  // Focused exam passes faaRatio (0.5 = half verified FAA), varRatio (0.3 = reworded FAA
-  // variants) and opRatio (0.2 = O&P share); any remainder is AI from the 8083.
-  const fr = (typeof faaRatio === 'number' && faaRatio >= 0 && faaRatio <= 1) ? faaRatio : undefined;
-  const or = (typeof opRatio === 'number' && opRatio >= 0 && opRatio <= 1) ? opRatio : undefined;
-  const vr = (typeof varRatio === 'number' && varRatio >= 0 && varRatio <= 1) ? varRatio : undefined;
+  // The Focused FAA exam source mix is applied HERE, server-side, so it isn't exposed in the
+  // page source or the network request. The client only sends focusedMix:true. (Explicit ratios
+  // are still honored for backward compatibility with older stored assignments.)
+  let fr = (typeof faaRatio === 'number' && faaRatio >= 0 && faaRatio <= 1) ? faaRatio : undefined;
+  let or = (typeof opRatio === 'number' && opRatio >= 0 && opRatio <= 1) ? opRatio : undefined;
+  let vr = (typeof varRatio === 'number' && varRatio >= 0 && varRatio <= 1) ? varRatio : undefined;
+  if (focusedMix === true) { fr = 0.5; vr = 0.3; or = 0.2; }   // secret focused mix (50/30/20)
   const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
   const n = Math.min(topics.length, total);
   const selectedTopics = n < topics.length
