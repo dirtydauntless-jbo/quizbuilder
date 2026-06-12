@@ -600,6 +600,29 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // TEMP diagnostic: inspect the O&P conversion path. Remove after debugging.
+  if (req.body && req.body.diag === 'op') {
+    const t = req.body.topic || 'Hydraulic and Pneumatic Systems';
+    const subject = TOPIC_SUBJECT[t] || 'general';
+    const opbank = getOPBank();
+    const pool = (opbank[subject] && opbank[subject][t]) || [];
+    const out = { topic: t, subject, poolSize: pool.length };
+    try {
+      const batch = shuffle(pool.slice()).slice(0, 3);
+      const prompt = `Convert these FAA O&P study questions into 3-choice multiple-choice. Return ONLY a JSON array: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"..."}]\nItems:\n${JSON.stringify(batch.map(c => ({ question: c.q, answer: c.a })))}`;
+      const raw = await callClaude(prompt, 2048);
+      out.rawLen = (raw || '').length;
+      out.rawPreview = (raw || '').slice(0, 400);
+      let parsed = null; try { parsed = JSON.parse(raw); } catch { const m = (raw || '').match(/\[[\s\S]*\]/); if (m) { try { parsed = JSON.parse(m[0]); } catch {} } }
+      out.parsedIsArray = Array.isArray(parsed);
+      out.parsedLen = Array.isArray(parsed) ? parsed.length : null;
+      // also run the real generateFromOP
+      const real = await generateFromOP(t, 4);
+      out.generateFromOPCount = real.length;
+    } catch (e) { out.error = String(e && e.message || e); }
+    return res.status(200).json(out);
+  }
+
   const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix } = req.body || {};
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
 
