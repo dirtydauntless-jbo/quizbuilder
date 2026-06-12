@@ -1358,7 +1358,7 @@ setTimeout(function(){
         <!-- Mode tabs -->
         <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
           <button id="pxModeOfficial" onclick="practiceSetMode('official')" style="flex:1;padding:12px;border:none;cursor:pointer;font-family:monospace;font-size:.85rem;font-weight:700;letter-spacing:1px;background:#0891b2;color:#fff;transition:all .2s">OFFICIAL EXAM</button>
-          <button id="pxModeTopic" onclick="practiceSetMode('topic')" style="flex:1;padding:12px;border:none;cursor:pointer;font-family:monospace;font-size:.85rem;font-weight:700;letter-spacing:1px;background:var(--panel2);color:var(--muted);transition:all .2s">TOPIC PRACTICE</button>
+          <button id="pxModeTopic" onclick="practiceSetMode('topic')" style="flex:1;padding:12px;border:none;cursor:pointer;font-family:monospace;font-size:.85rem;font-weight:700;letter-spacing:1px;background:var(--panel2);color:var(--muted);transition:all .2s">STUDY (SELECT TOPICS)</button>
         </div>
         <!-- Official panel -->
         <div id="pxOfficialPanel" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
@@ -1374,15 +1374,7 @@ setTimeout(function(){
           <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Build a Custom Exam — Pick Your Topics</div>
           <div id="pxTopicPicker"></div>
         </div>
-        <!-- Count panel (topic mode only) -->
-        <div id="pxCountPanel" class="hidden" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
-          <div style="font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Choose Exam Type</div>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <button onclick="practiceSetCountMode('focused')" id="pxCountFocused" class="btn" style="text-align:left;padding:13px 15px;line-height:1.35;white-space:normal;height:auto">🎯 Focused FAA Written Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Full-length FAA-style written exam (60 General / 100 Airframe / 100 Powerplant) on your selected topics</span></button>
-            <button onclick="practiceSetCountMode('all')" id="pxCountAll" class="btn" style="text-align:left;padding:13px 15px;line-height:1.35;white-space:normal;height:auto">📚 Selected Topics Only Exam<br><span style="font-family:monospace;font-size:.7rem;color:var(--muted);white-space:normal">Every stored question for the topics you picked — no limit</span></button>
-          </div>
-        </div>
-        <button onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
+        <button id="pxGenerateBtn" onclick="practiceGenerate()" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;letter-spacing:2px;background:#0891b2;border-color:#0891b2">GENERATE PRACTICE EXAM</button>
         <div id="pxError" style="color:var(--wl);font-family:monospace;font-size:.8rem;margin-top:8px;text-align:center;min-height:18px"></div>
         <!-- History -->
         <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
@@ -12785,7 +12777,7 @@ function _betaApplyTag(){ const t=document.getElementById('betaTag'); if(t) t.st
 function practiceInitTab(){
   _pxMode='official'; _pxOfficialSubject=null; _pxQuestions=[]; _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxAssignId=null; _pxClassId=null; _pxClassExamId=null; _pxExamLive=false;
   practiceRenderTopicPicker();
-  practiceSetCountMode('focused'); // default topic-mode exam type
+  _pxCountMode='all'; // Study (Select Topics) = every stored question for the chosen topics
   practiceSetMode('official');
   ['practiceSetup','practiceLoading','practiceExam','practiceResults'].forEach((id,i)=>{
     const el=document.getElementById(id); if(el) el.classList.toggle('hidden',i!==0);
@@ -12800,19 +12792,21 @@ function practiceInitTab(){
 function practiceSetMode(mode){
   _pxMode=mode;
   const ob=document.getElementById('pxModeOfficial'), tb=document.getElementById('pxModeTopic');
-  const op=document.getElementById('pxOfficialPanel'), tp=document.getElementById('pxTopicPanel'), cp=document.getElementById('pxCountPanel');
+  const op=document.getElementById('pxOfficialPanel'), tp=document.getElementById('pxTopicPanel');
+  const gb=document.getElementById('pxGenerateBtn');
   if(mode==='official'){
     if(ob){ob.style.background='#0891b2';ob.style.color='#fff';}
     if(tb){tb.style.background='var(--panel2)';tb.style.color='var(--muted)';}
     if(op) op.classList.remove('hidden');
     if(tp) tp.classList.add('hidden');
-    if(cp) cp.classList.add('hidden');
+    if(gb) gb.textContent='GENERATE PRACTICE EXAM';
   } else {
     if(tb){tb.style.background='#0891b2';tb.style.color='#fff';}
     if(ob){ob.style.background='var(--panel2)';ob.style.color='var(--muted)';}
     if(tp) tp.classList.remove('hidden');
-    if(cp) cp.classList.remove('hidden');
     if(op) op.classList.add('hidden');
+    _pxCountMode='all';   // Study (Select Topics) = every stored question for the chosen topics
+    if(gb) gb.textContent='START STUDY SESSION';
   }
 }
 
@@ -12952,7 +12946,7 @@ async function practiceGenerate(){
     const topicLabel = topics.length===1?topics[0]:`${topics.length} Topics`;
     _pxAssignId=null; _pxClassId=null; _pxClassExamId=null;
     if(_pxCountMode==='all'){
-      await pxRunExam(topics, 0, topicLabel+' — All Questions', {mode:'all'});
+      await pxRunExam(topics, 0, topicLabel+' — Study Session', {mode:'all'});
       return;
     }
     // default: Focused FAA Written Exam — the source mix is applied server-side (kept private)
