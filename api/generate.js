@@ -678,7 +678,7 @@ module.exports = async function handler(req, res) {
   let fr = (typeof faaRatio === 'number' && faaRatio >= 0 && faaRatio <= 1) ? faaRatio : undefined;
   let or = (typeof opRatio === 'number' && opRatio >= 0 && opRatio <= 1) ? opRatio : undefined;
   let vr = (typeof varRatio === 'number' && varRatio >= 0 && varRatio <= 1) ? varRatio : undefined;
-  if (focusedMix === true) { fr = 0.5; vr = 0.3; or = 0.2; }   // secret focused mix (50/30/20)
+  if (focusedMix === true) { fr = 0.5; vr = 0.4; or = 0.1; }   // secret focused mix (50/40/10)
   const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
   const n = Math.min(topics.length, total);
   const selectedTopics = n < topics.length
