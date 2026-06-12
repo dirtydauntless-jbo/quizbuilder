@@ -1126,6 +1126,7 @@ setTimeout(function(){
       <button class="btn btn-ghost btn-sm" onclick="masterDashLoad()" style="margin-left:auto">↻ Refresh</button>
     </div>
     <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:20px">Platform-wide analytics · Master admin only</div>
+    <div id="aiHealthBanner" style="display:none"></div>
     <div id="masterDashCards"></div>
   </div>
 
@@ -3243,8 +3244,26 @@ function levenshtein(a, b){
   return dp[m][n];
 }
 // ── END ACRONYM QUIZ SYSTEM ───────────────────────────────────────────
+// Warn the admin if live AI question generation is failing (e.g., Anthropic credits exhausted),
+// in which case exams quietly fall back to bank questions only. Health is written by the server
+// (api/generate.js) to the aiHealth node on each generation.
+async function _renderAiHealthBanner(){
+  const b=document.getElementById('aiHealthBanner'); if(!b) return;
+  let h=null; try{ h=await dbGet('aiHealth'); }catch(e){}
+  const stale = !h || !h.ts || (Date.now()-h.ts > 48*60*60*1000); // ignore if no data / >48h old
+  if(!h || h.ok!==false || stale){ b.style.display='none'; b.innerHTML=''; return; }
+  const when=h.ts?new Date(h.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+  b.style.display='block';
+  b.innerHTML='<div style="background:rgba(204,68,68,.1);border:1px solid #cc4444;border-radius:var(--r);padding:12px 15px;margin-bottom:16px">'
+    +'<div style="font-family:monospace;font-size:.82rem;font-weight:700;color:#e06666;margin-bottom:4px">⚠ AI question generation is FAILING</div>'
+    +'<div style="font-family:monospace;font-size:.74rem;color:var(--text);line-height:1.5">Exams are currently falling back to <b>bank questions only</b> — no fresh O&amp;P, reworded variants, or 8083-AI questions. '
+    +'Anthropic API returned <b>'+(h.code||'error')+'</b>'+(h.message?': "'+_qEsc(String(h.message))+'"':'')+'.<br>'
+    +'Most likely <b>out of API credits</b> — top up at console.anthropic.com → Billing. '+(when?'<span style="color:var(--muted)">(last checked '+when+')</span>':'')+'</div></div>';
+}
+
 async function masterDashLoad(){
   if(!_isMasterAdmin) return;
+  _renderAiHealthBanner();
   const el = document.getElementById('masterDashCards');
   if(el) el.innerHTML = '<div class="empty-state">Loading platform data…</div>';
 
@@ -3412,11 +3431,12 @@ async function masterDashLoad(){
       <div id="qReviewList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, true)}
 
-    ${panel('md-variants','FAA Variant Pool (Cookie Jar)','🍪',`
-      <div style="font-family:monospace;font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Reworded FAA variants saved for reuse. <b>Pending</b> = on probation (auto-promotes after 5 clean, unflagged exam appearances). <b>Jar</b> = reliable &amp; reused. <b>Retired</b> = excluded from all exams. You can promote instantly (skip the 5-pass), edit a question, send back, retire/restore, or delete.</div>
+    ${panel('md-variants','Question Cookie Jar (Variants + O&P)','🍪',`
+      <div style="font-family:monospace;font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Reworded FAA <b>variants</b> and converted <b>O&amp;P</b> questions saved for reuse. <b>Pending</b> = on probation (auto-promotes after 5 clean, unflagged exam appearances). <b>Jar</b> = reliable &amp; reused. <b>Retired</b> = excluded from all exams. You can promote instantly (skip the 5-pass), edit a question, send back, retire/restore, or delete.</div>
       <div id="vpoolStats" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
         <select id="vpoolSubject" onchange="_vpoolRender()" class="input" style="width:auto;font-size:.78rem;padding:6px 10px"><option value="">All subjects</option><option value="general">General</option><option value="airframe">Airframe</option><option value="powerplant">Powerplant</option></select>
+        <select id="vpoolKind" onchange="_vpoolRender()" class="input" style="width:auto;font-size:.78rem;padding:6px 10px"><option value="">All types</option><option value="variant">Variants</option><option value="op">O&amp;P</option></select>
         <select id="vpoolStage" onchange="_vpoolRender()" class="input" style="width:auto;font-size:.78rem;padding:6px 10px"><option value="">All stages</option><option value="jar">Jar (reliable)</option><option value="pending">Pending</option><option value="retired">Retired</option></select>
         <input id="vpoolSearch" oninput="_vpoolRender()" class="input" placeholder="Search question text…" style="flex:1;min-width:130px;font-size:.78rem;padding:6px 10px"/>
         <button class="btn btn-ghost btn-sm" onclick="_vpoolLoad()">↻ Refresh</button>
@@ -3692,7 +3712,7 @@ async function _vpoolLoad(){
       for(const vid of Object.keys(vv)){
         const e=vv[vid];
         if(!e || !e.q || typeof e.q!=='object') continue;
-        rows.push({_i:rows.length, subject, topicKey, vid, q:e.q, stage:e.stage==='jar'?'jar':'pending', cleanDeploys:e.cleanDeploys||0, flagged:!!fl[vid]});
+        rows.push({_i:rows.length, subject, topicKey, vid, q:e.q, stage:e.stage==='jar'?'jar':'pending', cleanDeploys:e.cleanDeploys||0, flagged:!!fl[vid], kind:e.kind==='op'?'op':'variant'});
       }
     }
   }
@@ -3712,15 +3732,17 @@ function _vpoolRender(){
   }
   const fs=(document.getElementById('vpoolSubject')||{}).value||'';
   const fst=(document.getElementById('vpoolStage')||{}).value||'';
+  const fk=(document.getElementById('vpoolKind')||{}).value||'';
   const q=((document.getElementById('vpoolSearch')||{}).value||'').toLowerCase().trim();
   let rows=_vpoolData.slice();
   if(fs) rows=rows.filter(r=>r.subject===fs);
+  if(fk) rows=rows.filter(r=>r.kind===fk);
   if(fst==='retired') rows=rows.filter(r=>r.flagged);
   else if(fst==='jar') rows=rows.filter(r=>!r.flagged&&r.stage==='jar');
   else if(fst==='pending') rows=rows.filter(r=>!r.flagged&&r.stage==='pending');
   if(q) rows=rows.filter(r=>((r.q.question||'')+' '+(r.q.topic||'')).toLowerCase().includes(q));
   rows.sort((a,b)=>(a.flagged?1:0)-(b.flagged?1:0) || (a.stage===b.stage?0:a.stage==='jar'?-1:1) || (b.cleanDeploys-a.cleanDeploys));
-  if(!rows.length){ list.innerHTML='<div class="empty-state" style="font-size:.8rem">No variants match.</div>'; return; }
+  if(!rows.length){ list.innerHTML='<div class="empty-state" style="font-size:.8rem">No questions match.</div>'; return; }
   list.innerHTML=rows.slice(0,300).map(r=> r._i===_vpoolEditIdx ? _vpoolEditCard(r) : _vpoolViewCard(r)).join('')
     + (rows.length>300?`<div style="font-family:monospace;font-size:.7rem;color:var(--muted);text-align:center;padding:8px">Showing first 300 of ${rows.length}.</div>`:'');
 }
@@ -3737,6 +3759,7 @@ function _vpoolViewCard(r){
   return `<div style="border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px;background:var(--panel)${r.flagged?';opacity:.65':''}">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
       ${_vpoolBadge(r.stage,r.flagged)}
+      <span style="font-family:monospace;font-size:.58rem;font-weight:700;padding:2px 6px;border-radius:4px;background:${r.kind==='op'?'rgba(124,58,237,.15)':'rgba(34,184,216,.12)'};color:${r.kind==='op'?'#a78bfa':'#22b8d8'};border:1px solid ${r.kind==='op'?'#7c3aed':'#22b8d8'}">${r.kind==='op'?'O&P':'VARIANT'}</span>
       <span style="font-family:monospace;font-size:.64rem;color:var(--muted)">${prog}</span>
       <span style="font-family:monospace;font-size:.64rem;color:var(--muted)">· ${_qEsc(r.subject)} · ${_qEsc(r.q.topic||'')}</span>
     </div>
@@ -13159,8 +13182,8 @@ async function _pxFlagQuestion(q, studentAnswer, btn){
     });
     _pxLastFlagTs = Date.now();
     _pxFlagCount++;
-    // If a cookie-jar FAA variant was flagged, pull it from rotation so it's never reused.
-    if(q.source==='faa-variant' && q._vid){
+    // If a cookie-jar question (FAA variant or O&P) was flagged, pull it from rotation forever.
+    if(q._vid){
       _pxFlaggedVids.add(q._vid);
       db.ref('faaVariants/flagged/'+q._vid).set(true).catch(()=>{});
     }
@@ -13192,7 +13215,7 @@ function _vjRecordCleanDeploys(questions){
   if(!stuSession?.uid || !Array.isArray(questions)) return;
   const seen=new Set();
   questions.forEach(q=>{
-    if(!q || q.source!=='faa-variant' || !q._vid) return;
+    if(!q || !q._vid) return;                        // any cookie-jar question (variant or O&P)
     if(_pxFlaggedVids.has(q._vid)) return;          // flagged this exam → don't credit it
     if(seen.has(q._vid)) return; seen.add(q._vid);  // once per exam
     const ref=_vjRef(q); if(!ref) return;

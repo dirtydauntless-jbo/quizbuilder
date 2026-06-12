@@ -78,14 +78,24 @@ const HIGH_FAA_TOPICS = new Set([
 const HIGH_FAA_MIN = 0.75;
 
 // ── Shared utils ──────────────────────────────────────────────────────────────
+// Tracks the health of live AI generation so an admin banner can warn when it's down (e.g.,
+// Anthropic credits exhausted / auth). Persistent 4xx flips it unhealthy; success clears it.
+let _aiHealth = { ok: true, code: 200, message: '', ts: 0 };
 async function callClaude(prompt, maxTokens = 4096) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
   });
-  if (!r.ok) throw new Error(`API ${r.status}`);
+  if (!r.ok) {
+    if (r.status === 400 || r.status === 401 || r.status === 403) {       // credit/auth — persistent
+      let reason = ''; try { reason = (await r.json())?.error?.message || ''; } catch {}
+      _aiHealth = { ok: false, code: r.status, message: String(reason).slice(0, 220), ts: Date.now() };
+    }
+    throw new Error(`API ${r.status}`);
+  }
   const d = await r.json();
+  _aiHealth = { ok: true, code: 200, message: '', ts: Date.now() };
   return d.content?.[0]?.text || '';
 }
 
@@ -203,7 +213,7 @@ async function getVariantPool(subject, topic, flaggedMap){
     if (!e || fl[vid]) continue;
     const q = e.q;
     if (!q || !q.question || !q.choices || !q.correct || !(q.correct in q.choices)) continue;
-    out.push({ vid, q, stage: e.stage === 'jar' ? 'jar' : 'pending', cleanDeploys: e.cleanDeploys || 0 });
+    out.push({ vid, q, stage: e.stage === 'jar' ? 'jar' : 'pending', cleanDeploys: e.cleanDeploys || 0, kind: e.kind === 'op' ? 'op' : 'variant' });
   }
   return out;
 }
@@ -335,15 +345,18 @@ Format: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"
 
 // ── Convert O&P (oral & practical) study Q&A into 3-choice multiple-choice ────
 // The O&P answer becomes the correct choice; the AI writes two plausible wrong choices.
-async function generateFromOP(topic, qCount) {
+// Generate BRAND-NEW O&P multiple-choice from the O&P study bank, vetting each one (QC pass +
+// distinctness vet) so what we cache/serve is already clean. The pool-aware generateFromOP() below
+// reuses cached O&P from the cookie jar first and only calls this to top up.
+async function generateFreshOP(topic, qCount) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const op = getOPBank();
   const pool = op[subject] && op[subject][topic];
   if (!Array.isArray(pool) || !pool.length) return [];
   const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
-  const picks = shuffle(pool.slice()).slice(0, Math.min(qCount, pool.length));
-  const out = [];
+  const picks = shuffle(pool.slice()).slice(0, Math.min(qCount + 3, pool.length));  // extra; vetting drops some
+  let raw = [];
   for (let i = 0; i < picks.length; i += AI_BATCH) {
     const batch = picks.slice(i, i + AI_BATCH);
     const prompt = `You convert FAA oral & practical (O&P) study questions into 3-choice multiple-choice exam questions, all on the topic "${topic}".
@@ -357,10 +370,52 @@ Items:
 ${JSON.stringify(batch.map(c => ({ question: c.q, answer: c.a })))}`;
     try {
       const arr = parseJSON(await callClaude(prompt, 4096));
-      if (Array.isArray(arr)) arr.forEach(q => { if (q && q.question && q.choices) out.push({ ...q, topic, subject, handbook, source: 'op' }); });
+      if (Array.isArray(arr)) arr.forEach(q => { if (q && q.question && q.choices && q.correct && (q.correct in q.choices)) raw.push({ question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation || '' }); });
     } catch { /* skip this batch */ }
   }
-  return out.slice(0, qCount);
+  if (!raw.length) return [];
+  const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
+  raw = (await Promise.all(chunk(raw, 10).map(c => qcBatch(c)))).flat();
+  raw = (await Promise.all(chunk(raw, 10).map(c => vetDistinctChoices(c)))).flat();
+  raw = raw.filter(q => q && q.question && choicesAllDistinct(q.choices) && q.correct && (q.correct in q.choices));
+  return raw.slice(0, qCount).map(q => ({ question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation || '', topic, subject, handbook, source: 'op' }));
+}
+
+// Pool-aware O&P supplier — mirrors generateFaaVariants. Reuses vetted O&P from the SAME cookie
+// jar (entries tagged kind:'op'), generating fresh only to top up, and registers fresh ones so
+// they accrue clean deploys and graduate to the jar (reused instead of regenerated every exam).
+async function generateFromOP(topic, qCount, flaggedMap) {
+  if (qCount < 1) return [];
+  const subject = TOPIC_SUBJECT[topic] || 'general';
+  const safeT = _safeKey(topic);
+
+  const pool = (await getVariantPool(subject, topic, flaggedMap)).filter(p => p.kind === 'op');
+  const jar  = shuffle(pool.filter(p => p.stage === 'jar'));
+  const pend = shuffle(pool.filter(p => p.stage !== 'jar'));
+
+  let freshN;
+  if (pool.length >= qCount) freshN = (jar.length >= qCount * 4) ? 0 : Math.max(1, Math.round(qCount * 0.2));
+  else freshN = qCount - pool.length;
+  freshN = Math.max(0, Math.min(freshN, qCount));
+  const reuseN = qCount - freshN;
+
+  const pendCap = Math.min(pend.length, Math.ceil(reuseN * 0.4));
+  let reuse = [...pend.slice(0, pendCap), ...jar.slice(0, Math.max(0, reuseN - pendCap))];
+  if (reuse.length < reuseN) reuse = reuse.concat(pend.slice(pendCap, pendCap + (reuseN - reuse.length)));
+  reuse = reuse.slice(0, reuseN);
+  const reused = reuse.map(p => ({ ...p.q, topic, subject, source: 'op', _vid: p.vid, _vstage: p.stage }));
+
+  const fresh = freshN > 0 ? await generateFreshOP(topic, freshN) : [];
+  for (const q of fresh) {
+    const vid = _qHash(q.question);
+    q._vid = vid; q._vstage = 'pending';
+    await dbWrite(`faaVariants/pool/${subject}/${safeT}/${vid}`, {
+      q: { question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation || '', topic, subject, handbook: q.handbook || '' },
+      kind: 'op', cleanDeploys: 0, stage: 'pending', createdAt: Date.now()
+    }, 'PATCH');
+  }
+
+  return [...reused, ...fresh].slice(0, qCount);
 }
 
 // ── Pull random NO-FIGURE bank questions (full record) to seed variants ──────
@@ -456,7 +511,7 @@ async function generateFaaVariants(topic, qCount, overrides, flaggedMap) {
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const safeT = _safeKey(topic);
 
-  const pool = await getVariantPool(subject, topic, flaggedMap);
+  const pool = (await getVariantPool(subject, topic, flaggedMap)).filter(p => p.kind === 'variant');
   const jar  = shuffle(pool.filter(p => p.stage === 'jar'));
   const pend = shuffle(pool.filter(p => p.stage !== 'jar'));
 
@@ -484,7 +539,7 @@ async function generateFaaVariants(topic, qCount, overrides, flaggedMap) {
     q._vid = vid; q._vstage = 'pending';
     await dbWrite(`faaVariants/pool/${subject}/${safeT}/${vid}`, {
       q: { question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation || '', topic, subject, handbook: q.handbook || '' },
-      cleanDeploys: 0, stage: 'pending', createdAt: Date.now()
+      kind: 'variant', cleanDeploys: 0, stage: 'pending', createdAt: Date.now()
     }, 'PATCH');
   }
 
@@ -585,7 +640,7 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
   const [faaQuestions, varQuestions, opQuestions, aiQuestions] = await Promise.all([
     Promise.resolve(getFaaQuestions(topic, faaCount)),
     generateFaaVariants(topic, varCount, overrides, flaggedMap),
-    generateFromOP(topic, opCount),
+    generateFromOP(topic, opCount, flaggedMap),
     generateForTopic(topic, aiCount, content),
   ]);
 
@@ -654,10 +709,10 @@ module.exports = async function handler(req, res) {
 
     if (!questions.length) return res.status(502).json({ error: 'No questions generated. Please try again.' });
 
-    // Step 2: QC pass — on AI-from-8083 and O&P-converted questions. FAA variants are NOT
-    // re-vetted here: fresh ones are QC'd + distinctness-vetted at generation time, and reused
-    // cookie-jar variants are already vetted and frozen.
-    const isGen  = q => q.source === 'ai' || q.source === 'op';
+    // Step 2: QC pass — on AI-from-8083 questions only. FAA variants AND O&P are NOT re-vetted
+    // here: fresh ones are QC'd + distinctness-vetted at generation time, and reused cookie-jar
+    // entries (variants and O&P) are already vetted and frozen.
+    const isGen  = q => q.source === 'ai';
     const genQs  = questions.filter(isGen);
     const faaQs  = questions.filter(q => !isGen(q));
     const chunks = [];
@@ -704,6 +759,10 @@ module.exports = async function handler(req, res) {
     });
     shuffle(questions);
     questions = questions.slice(0, total);
+
+    // Record AI-generation health so the admin app can warn if live generation is failing
+    // (e.g., Anthropic credits exhausted), in which case exams fall back to bank questions.
+    try { await dbWrite('aiHealth', { ok: _aiHealth.ok, code: _aiHealth.code || 0, message: _aiHealth.message || '', ts: Date.now() }); } catch {}
 
     return res.status(200).json({ questions });
   } catch (err) {
