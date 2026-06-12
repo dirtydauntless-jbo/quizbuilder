@@ -608,17 +608,16 @@ module.exports = async function handler(req, res) {
     const pool = (opbank[subject] && opbank[subject][t]) || [];
     const out = { topic: t, subject, poolSize: pool.length };
     try {
-      const batch = shuffle(pool.slice()).slice(0, 3);
-      const prompt = `Convert these FAA O&P study questions into 3-choice multiple-choice. Return ONLY a JSON array: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"..."}]\nItems:\n${JSON.stringify(batch.map(c => ({ question: c.q, answer: c.a })))}`;
-      const raw = await callClaude(prompt, 2048);
-      out.rawLen = (raw || '').length;
-      out.rawPreview = (raw || '').slice(0, 400);
-      let parsed = null; try { parsed = JSON.parse(raw); } catch { const m = (raw || '').match(/\[[\s\S]*\]/); if (m) { try { parsed = JSON.parse(m[0]); } catch {} } }
-      out.parsedIsArray = Array.isArray(parsed);
-      out.parsedLen = Array.isArray(parsed) ? parsed.length : null;
-      // also run the real generateFromOP
-      const real = await generateFromOP(t, 4);
-      out.generateFromOPCount = real.length;
+      // Raw fetch to Anthropic to capture the actual error body (callClaude hides it).
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY || '', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, messages: [{ role: 'user', content: 'Reply with the single word OK.' }] })
+      });
+      out.anthropicStatus = r.status;
+      out.anthropicBody = (await r.text()).slice(0, 500);
+      out.apiKeyPresent = !!process.env.ANTHROPIC_API_KEY;
+      out.apiKeyLen = (process.env.ANTHROPIC_API_KEY || '').length;
     } catch (e) { out.error = String(e && e.message || e); }
     return res.status(200).json(out);
   }
