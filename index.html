@@ -3264,6 +3264,7 @@ async function _renderAiHealthBanner(){
 async function masterDashLoad(){
   if(!_isMasterAdmin) return;
   _renderAiHealthBanner();
+  _allStarsAdminRender();
   const el = document.getElementById('masterDashCards');
   if(el) el.innerHTML = '<div class="empty-state">Loading platform data…</div>';
 
@@ -3446,8 +3447,12 @@ async function masterDashLoad(){
 
     ${panel('md-leaderboard','All-Stars Leaderboard','🏆',`
       <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:10px;line-height:1.5">The leaderboard fills in automatically as students open the practice tab. If older students who already took exams aren't showing, click below to rebuild it now from every student's completed exams (also refreshes names and points).</div>
-      <button class="btn btn-primary btn-sm" onclick="allStarsRebuild()">🔄 Rebuild Leaderboard Now</button>
-      <div id="allStarsRebuildMsg" style="font-family:monospace;font-size:.75rem;margin-top:8px;color:var(--muted)"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <button class="btn btn-primary btn-sm" onclick="allStarsRebuild()">🔄 Rebuild Leaderboard Now</button>
+        <button class="btn btn-ghost btn-sm" onclick="_allStarsAdminRender()">↻ Refresh Rankings</button>
+      </div>
+      <div id="allStarsRebuildMsg" style="font-family:monospace;font-size:.75rem;margin-bottom:10px;color:var(--muted)"></div>
+      <div id="allStarsAdminList"><div class="empty-state" style="font-size:.8rem">Loading rankings…</div></div>
     `, true)}
 
     ${panel('md-users','User Directory — All Students & Instructors','👥',`
@@ -3682,6 +3687,7 @@ function masterDashToggle(id){
   if(!isOpen && id==='md-opsim') _opSimLoadAdminPanel();
   if(!isOpen && id==='md-qreview') _qReviewLoad();
   if(!isOpen && id==='md-variants') _vpoolLoad();
+  if(!isOpen && id==='md-leaderboard') _allStarsAdminRender();
   if(!isOpen && id==='md-users') _usersLoad();
   if(!isOpen && id==='md-announce') _announceAdminLoad();
 }
@@ -13568,6 +13574,36 @@ async function renderAllStars(){
   els.forEach(el=>{ el.innerHTML=rowHtml+standing; });
 }
 
+// Master-admin: render the FULL ranking board (every ranked student, not just top 10) in the admin panel.
+async function _allStarsAdminRender(){
+  const el=document.getElementById('allStarsAdminList');
+  if(!el) return;
+  let data; try { data=await dbGet('allStars'); } catch(e){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--wl)">Could not load rankings.</div>'; return; }
+  const ranked=_allStarRanked(data);
+  if(!ranked.length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No ranked students yet. Click “Rebuild Leaderboard Now”.</div>'; return; }
+  const head='<div style="display:flex;align-items:center;gap:9px;padding:6px 10px;font-family:monospace;font-size:.6rem;letter-spacing:1px;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">'+
+    '<span style="min-width:30px;text-align:right">#</span>'+
+    '<span style="flex:1">Student</span>'+
+    '<span style="min-width:54px;text-align:right">Pts</span>'+
+    '<span style="min-width:48px;text-align:right">Avg %</span>'+
+    '<span style="min-width:54px;text-align:right">Speed</span>'+
+    '<span style="min-width:54px;text-align:right">Exams</span>'+
+  '</div>';
+  const rows=ranked.map((r,i)=>{
+    const rank=i+1;
+    return '<div style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-bottom:1px solid var(--border)">'+
+      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:var(--muted);min-width:30px;text-align:right">'+rank+'</span>'+
+      '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:7px">'+_allStarBadgeSpan(rank)+
+        '<span style="font-weight:700;font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+'</span></div>'+
+      '<span style="min-width:54px;text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;font-weight:800;color:'+_allStarColor(rank)+'">'+Math.round(r.points).toLocaleString()+'</span>'+
+      '<span style="min-width:48px;text-align:right;font-family:monospace;font-size:.78rem;color:var(--text)">'+(typeof r.avgPct==='number'?r.avgPct+'%':'—')+'</span>'+
+      '<span style="min-width:54px;text-align:right;font-family:monospace;font-size:.78rem;color:var(--muted)">'+(r.avgSpq!=null?_fmtSpq(r.avgSpq):'—')+'</span>'+
+      '<span style="min-width:54px;text-align:right;font-family:monospace;font-size:.78rem;color:var(--muted)">'+(r.completed||0)+'</span>'+
+    '</div>';
+  }).join('');
+  el.innerHTML='<div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-bottom:6px">'+ranked.length+' students ranked</div>'+head+rows;
+}
+
 // Master-admin: rebuild the whole leaderboard from every student's completed exams.
 // Needed because each student normally only writes their OWN entry (on practice-tab visit),
 // so students who haven't returned since the feature shipped won't appear until backfilled.
@@ -13604,6 +13640,7 @@ async function allStarsRebuild(){
   try {
     await db.ref().update(updates);
     if(msg){ msg.style.color='#16a34a'; msg.textContent='✓ Rebuilt — '+n+' student'+(n===1?'':'s')+' ranked.'; }
+    if(typeof _allStarsAdminRender==='function') _allStarsAdminRender();
     if(typeof renderAllStars==='function') renderAllStars();
     if(typeof refreshMyAllStarBadge==='function') refreshMyAllStarBadge();
   } catch(e){ if(msg){ msg.style.color='var(--wl)'; msg.textContent='Write failed: '+(e&&e.message||e); } }
