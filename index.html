@@ -3452,7 +3452,7 @@ async function masterDashLoad(){
         <button class="btn btn-ghost btn-sm" onclick="_allStarsAdminRender()">↻ Refresh Rankings</button>
       </div>
       <div id="allStarsRebuildMsg" style="font-family:monospace;font-size:.75rem;margin-bottom:10px;color:var(--muted)"></div>
-      <div id="allStarsAdminList"><div class="empty-state" style="font-size:.8rem">Loading rankings…</div></div>
+      <div id="allStarsAdminList" style="max-height:360px;overflow-y:auto"><div class="empty-state" style="font-size:.8rem">Loading rankings…</div></div>
     `, true)}
 
     ${panel('md-users','User Directory — All Students & Instructors','👥',`
@@ -13581,7 +13581,7 @@ async function _allStarsAdminRender(){
   let data; try { data=await dbGet('allStars'); } catch(e){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--wl)">Could not load rankings.</div>'; return; }
   const ranked=_allStarRanked(data);
   if(!ranked.length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No ranked students yet. Click “Rebuild Leaderboard Now”.</div>'; return; }
-  const head='<div style="display:flex;align-items:center;gap:9px;padding:6px 10px;font-family:monospace;font-size:.6rem;letter-spacing:1px;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">'+
+  const head='<div style="position:sticky;top:0;z-index:1;background:var(--panel);display:flex;align-items:center;gap:9px;padding:6px 10px;font-family:monospace;font-size:.6rem;letter-spacing:1px;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)">'+
     '<span style="min-width:30px;text-align:right">#</span>'+
     '<span style="flex:1">Student</span>'+
     '<span style="min-width:54px;text-align:right">Pts</span>'+
