@@ -298,7 +298,8 @@ async function generateForTopic(topic, qCount, content) {
 Generate ${n} CHALLENGING multiple choice practice question${n > 1 ? 's' : ''} STRICTLY about the single topic: "${topic}" (${subject} subject). Every question must be specifically about ${topic} — do NOT write questions about any other ${subject} topic.${ctx}
 
 Rules:
-- DIFFICULTY (important): write at or above the real FAA written-test level. Favor questions that make the student APPLY or INTERPRET the material — scenarios ("a technician finds…/ what should be done"), cause-and-effect, limits/tolerances, procedures, comparisons, and calculations where appropriate — over simple "what is the definition of X" recall. Pull specific facts (values, steps, exceptions) from the reference passage so a student must actually know the material, not just eliminate silly options.
+- DIFFICULTY (important): write at or above the real FAA written-test level, testing genuine comprehension — cause-and-effect, limits/tolerances, procedures, comparisons, exceptions, and calculations where appropriate — over simple "what is the definition of X" recall. Pull specific facts (values, steps, exceptions) from the reference passage so a student must actually know the material. But create that difficulty through the CONCEPT, not through length — ask it directly and concisely per the FAA STYLE rule below.
+- FAA STYLE & BREVITY (critical): write questions the way the real FAA written test does — short and to the point. The stem must be ONE concise, direct question (aim for 25 words or fewer). Do NOT invent scenarios, personas, or narratives (no "a technician finds…", "the pilot reports…", "during an operational check…", "at sea level with full throttle applied…"). Strip the setup and ask the concept straight.
 - Each question has exactly 3 choices: A, B, C (this matches the real FAA AMT test format)
 - ACCURACY: the marked correct answer MUST be factually correct and supported by the reference text. Re-verify it against the passage before finalizing — never mark a wrong choice as correct.
 - EXACTLY ONE correct answer: the correct choice must be the ONLY true/defensible one; both wrong choices must be factually FALSE. Never let a distractor be an alternative correct statement or a second valid formula for what is asked (e.g., if the answer is P = V × I, do NOT use P = I² × R as a wrong choice since it is also correct — use a genuinely wrong formula like P = V / I). Before finalizing each question, re-read all three choices and confirm only one is correct.
@@ -313,6 +314,7 @@ Rules:
   * Still keep each wrong answer unambiguously incorrect to a knowledgeable A&P technician — there must be exactly one defensible answer
 - If the correct answer contains a number, ALL wrong answers must also contain a different specific number in the same units
 - If the correct answer contains units (psi, inches, degrees, volts, etc.), ALL wrong answers must use those same units
+- CHOICES MUST BE SHORT: each choice is a brief phrase or single clause (aim for 12 words or fewer), like the real FAA answer options. Do NOT write choices that are full explanatory sentences or that embed the reasoning/justification ("…because a naturally aspirated engine cannot…"). State the answer itself, not why it is right — the reasoning belongs only in the explanation field.
 - All choices should be similar in length and grammatical structure
 - For the explanation field: write 1-2 sentences explaining WHY the correct answer is correct per FAA standards. Do NOT reference any choice by its letter (never write "Choice A/B/C" or "option B") — the choice order is randomized afterward, so refer to options by their wording/content if you must mention them. Do NOT cite or include the handbook designation — never write "${handbook}" or "FAA-H-8083" in the explanation. Keep it about the concept itself; you may name the relevant subject/chapter topic in plain words if useful.
 - Return ONLY a valid JSON array, no markdown
@@ -362,8 +364,10 @@ async function generateFreshOP(topic, qCount) {
     const prompt = `You convert FAA oral & practical (O&P) study questions into 3-choice multiple-choice exam questions, all on the topic "${topic}".
 For EACH item below (a question and its correct answer), write ONE multiple-choice question:
 - Keep the question's meaning; you may lightly reword for a written-test format.
+- FAA STYLE & BREVITY (critical): keep the stem short and direct (aim ≤ 25 words). Do NOT add scenarios, personas, or narrative setup ("a technician…", "the pilot reports…") — ask the concept straight, like a real FAA written-test question.
 - The CORRECT choice must be a concise statement of the provided correct answer.
 - Write TWO incorrect but plausible distractors in the same style and length. They must be factually FALSE, stay on the "${topic}" topic, and leave EXACTLY ONE correct choice — never make a distractor that is also true. All three choices must be DISTINCT IN MEANING — no two may be paraphrases or convey the same idea.
+- Keep every choice SHORT — a brief phrase or single clause (aim ≤ 12 words). Never write choices that are full explanatory sentences or embed the reasoning; state the answer itself, not why it is right.
 - explanation: 1-2 sentences on why the answer is correct. Do NOT reference choices by letter (no "Choice A/B/C") since order is randomized, and do NOT mention any handbook number.
 Return ONLY a JSON array, same order as the items: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"A","explanation":"..."}]
 Items:
@@ -465,8 +469,10 @@ For EACH original question below (its choices are given with the correct one mar
 
 Rules for EVERY variant:
 - Must be answerable on its own, WITHOUT any figure or the original question in view.
-- Factually correct per FAA standards; EXACTLY ONE choice correct, the other two factually FALSE (never a second defensible answer).
+- FAA STYLE & BREVITY (critical): keep the stem short and direct (aim ≤ 25 words), like the original FAA question. Do NOT add scenarios, personas, or narrative setup ("a technician finds…", "during an operational check…") — the real FAA bank asks concepts straight. Match the terse style of the original.
+- Factually correct per FAA standards; EXACTLY ONE choice correct, the other two factually FALSE (never a second defensible answer). Avoid "which is NOT / prohibited / must be avoided" stems where more than one option is genuinely true — they create double answers.
 - All three choices DISTINCT IN MEANING — no synonyms, paraphrases, or numerically/dimensionally equal values.
+- Keep every choice SHORT — a brief phrase or single clause (aim ≤ 12 words). Never write choices that are full explanatory sentences or embed the reasoning; state the answer itself, not why it is right.
 - Match choice length, units, and style; if the answer has a number, all choices have a different number in the same units.
 - explanation: 1-2 sentences on WHY the answer is correct. Do NOT reference choices by letter (order is randomized later) and do NOT cite any handbook number.
 - Do not copy the original verbatim — it must read as a genuinely new question.
