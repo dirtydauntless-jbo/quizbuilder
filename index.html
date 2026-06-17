@@ -4439,11 +4439,19 @@ async function opSimAdminClearSignups(){
   if(!confirm('Clear ALL O&P Simulator sign-ups? This cannot be undone.')) return;
   const msgEl = document.getElementById('opSimAdminMsg');
   try{
-    await dbSet('opSimSignups', null);
+    // Security rules only grant write on each $uid child, not the opSimSignups root —
+    // so delete each sign-up individually via a multi-path update rather than nulling the root.
+    const signups = await dbGet('opSimSignups').catch(()=>null) || {};
+    const keys = Object.keys(signups);
+    if(keys.length){
+      const updates = {};
+      keys.forEach(k => { updates['opSimSignups/' + k] = null; });
+      await db.ref().update(updates);
+    }
     await _opSimLoadAdminPanel();
     if(msgEl){ msgEl.style.color='#16a34a'; msgEl.textContent='✓ Sign-ups cleared.'; }
   }catch(e){
-    if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='Error clearing.'; }
+    if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='Error clearing — '+(e&&e.message||e); }
   }
 }
 
