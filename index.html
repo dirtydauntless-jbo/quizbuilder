@@ -2455,6 +2455,15 @@ async function doOAuthSignIn(provider){
       msg = 'Google sign-in is not authorized for this domain. Please contact your administrator. (Error: unauthorized-domain)';
     } else if(e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request'){
       return; // silently reset — user just closed the popup
+    } else if(e.code === 'auth/account-exists-with-different-credential'){
+      let methods = [];
+      try { methods = await auth.fetchSignInMethodsForEmail(e.email); } catch(_){}
+      const who = e.email ? ('“' + e.email + '”') : 'this email';
+      msg = methods.includes('password')
+        ? 'You already have an account for ' + who + ' that uses email & password. Sign in with your email and password instead of Google.'
+        : 'An account already exists for ' + who + ' using a different sign-in method. Use the method you signed up with.';
+    } else if(e.code === 'auth/network-request-failed'){
+      msg = 'Network error during Google sign-in. Check your connection and try again, or use email/password.';
     } else {
       msg = (e.message || e.code || 'Sign-in failed') + ' — try email/password sign-in instead.';
     }
@@ -2477,6 +2486,7 @@ function friendlyAuthError(code){
     'auth/too-many-requests':'Too many failed attempts. Please wait a moment and try again.',
     'auth/network-request-failed':'Network error. Please check your connection and try again.',
     'auth/user-disabled':'This account has been disabled. Contact your instructor.',
+    'auth/account-exists-with-different-credential':'This email is already registered with a different sign-in method. Try signing in with your email and password.',
   };
   return map[code] || 'Sign-in failed. Please try again.';
 }
@@ -2832,6 +2842,18 @@ async function doStuOAuth(provider){
       msg = 'Google sign-in is not authorized for this domain. (Error: unauthorized-domain) — use email/password instead.';
     } else if(e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request'){
       return; // silently reset — user just closed the popup
+    } else if(e.code === 'auth/account-exists-with-different-credential'){
+      // They already registered this email a different way (almost always email/password).
+      let methods = [];
+      try { methods = await auth.fetchSignInMethodsForEmail(e.email); } catch(_){}
+      const who = e.email ? ('“' + e.email + '”') : 'this email';
+      if(methods.includes('password')){
+        msg = 'You already have an account for ' + who + ' that uses email & password. Sign in with your email and password instead of Google.';
+      } else {
+        msg = 'An account already exists for ' + who + ' using a different sign-in method. Use the method you signed up with.';
+      }
+    } else if(e.code === 'auth/network-request-failed'){
+      msg = 'Network error during Google sign-in. Check your connection and try again, or use email/password.';
     } else {
       msg = (e.message || e.code || 'Sign-in failed') + ' — try email/password sign-in instead.';
     }
