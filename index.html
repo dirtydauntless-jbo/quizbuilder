@@ -4525,6 +4525,10 @@ async function _opSimLoadArchive(){
 async function _opSimLoadAdminPanel(){
   const listEl = document.getElementById('opSimSignupList');
   if(!listEl) return;
+  // The panel body is capped at 500px with overflow:hidden, which clips the roster + history.
+  // Lift the cap and let it scroll so all sign-ups are visible (same pattern as the review panel).
+  const _opBody = document.getElementById('md-opsim-body');
+  if(_opBody){ _opBody.style.maxHeight='3000px'; _opBody.style.overflowY='auto'; }
   listEl.innerHTML = '<div style="font-size:.78rem;color:var(--muted)">Loading…</div>';
 
   // Load config into form
