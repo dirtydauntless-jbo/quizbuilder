@@ -5184,15 +5184,11 @@ function applyRoleTitles(app, level){
   if(sub) sub.textContent = level==='master' ? 'Master Administrator' : level==='super' ? 'Administrator' : def;
   if(tag){ if(level){ tag.innerHTML=_roleTitleTag(level); tag.style.display='inline-flex'; } else { tag.innerHTML=''; tag.style.display='none'; } }
 }
-// Students can be admins too — check their own config flags and reflect the title
+// The student view is always shown as a plain "Student" — even for accounts that are
+// also admins/instructors. Admin rights still apply on the instructor/admin side; this
+// just keeps the student-facing screens clean (no admin badge when testing as a student).
 async function _checkStudentAdmin(){
-  if(!stuSession?.uid){ applyRoleTitles('stu', null); return; }
-  let level=null;
-  try {
-    if(await dbGet('config/masterAdmins/'+stuSession.uid)) level='master';
-    else if(await dbGet('config/superAdmins/'+stuSession.uid)) level='super';
-  } catch(e){ level=null; }
-  applyRoleTitles('stu', level);
+  applyRoleTitles('stu', null);
 }
 
 function adminSubTab(tab){
