@@ -10318,7 +10318,10 @@ async function loadStudentQuizzes(){
 
     if(!quiz || !quiz.questions) return null;
 
-    const progress = await dbGet(`quizProgress/${entryClassId}/${qid}/${stuKey}`);
+    // A denied/failed progress read must not crash the whole quiz list — just show the card with no progress.
+    let progress = null;
+    try { progress = await dbGet(`quizProgress/${entryClassId}/${qid}/${stuKey}`); }
+    catch(e){ console.warn('quizProgress read failed for', entryClassId, qid, stuKey, '-', e&&e.message||e); }
     const pct = progress ? Math.round((progress.answeredCount/(progress.totalCount||1))*100) : 0;
 
     // Show the most up-to-date score: re-derive from answers for MC, use stored for FIB/overrides
@@ -10358,12 +10361,6 @@ async function loadStudentQuizzes(){
   }));
 
   const validCards = cards.filter(Boolean);
-
-  // DEBUG: show card results
-  const newSecDbg3 = document.getElementById('stuNewQuizSection');
-  if(newSecDbg3) newSecDbg3.innerHTML += `<div style="font-family:monospace;font-size:.7rem;color:var(--cl);padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:4px;margin-bottom:8px">
-    ✓ cards resolved: ${validCards.length} valid, ${cards.length - validCards.length} null (dropped)
-  </div>`;
 
   // Store ordered quiz list for prev/next navigation on results screen
   stuQuizNavList = entries
