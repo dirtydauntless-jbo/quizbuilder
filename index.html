@@ -13405,7 +13405,7 @@ function practiceRenderQuestion(idx){
       <div style="font-family:monospace;font-size:.72rem;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px">QUESTION ${idx+1} of ${_pxQuestions.length}</div>
       ${figHtml}<div style="font-weight:700;margin-bottom:16px;line-height:1.5;font-size:.95rem">${q.question}</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        ${Object.keys(q.choices).map(l => `
+        ${Object.keys(q.choices||{}).map(l => `
           <button onclick="practiceSelectAnswer('${l}')" id="pxBtn${l}"
             style="text-align:left;padding:11px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);cursor:pointer;font-family:monospace;font-size:.85rem;transition:all .15s;width:100%">
             <span style="font-weight:700;margin-right:10px">${l}.</span>${q.choices[l]}
@@ -13897,15 +13897,32 @@ function buildPxHistoryRow(r){
 
 async function practiceOpenReview(key){
   if(!stuSession?.uid) return;
-  try {
+  // ── Step 1: LOAD the exam (retry once on a transient failure) ──
+  // Separated from rendering so a load error and a render error give different, accurate messages.
+  let summary, examData;
+  async function _load(){
     const [summSnap,dataSnap]=await Promise.all([
       db.ref('practiceHistory/'+stuSession.uid+'/'+key).once('value'),
       db.ref('practiceExamData/'+stuSession.uid+'/'+key).once('value')
     ]);
-    const summary=summSnap.val();
-    const examData=dataSnap.val();
-    if(!summary){ showToast('Exam not found.','error'); return; }
-    _pxRevKey=key; _pxRevSummary=summary; _pxRevData=examData;
+    return [summSnap.val(), dataSnap.val()];
+  }
+  try {
+    [summary, examData] = await _load();
+  } catch(e){
+    // One retry — covers a momentary network/token blip
+    try { await new Promise(r=>setTimeout(r,600)); [summary, examData] = await _load(); }
+    catch(e2){
+      console.error('practiceOpenReview load',e2);
+      const why = (e2 && (e2.code||e2.message)) || 'connection';
+      showToast('Could not load this exam ('+why+'). Refresh the page (Ctrl+Shift+R) and try again.','error');
+      return;
+    }
+  }
+  if(!summary){ showToast('Exam not found.','error'); return; }
+  _pxRevKey=key; _pxRevSummary=summary; _pxRevData=examData;
+  // ── Step 2: RESUME (unfinished) or REVIEW (finished) ──
+  try {
     // Unfinished exams go straight back to the exam — never reveal answers via a review
     if(summary.status !== 'complete'){
       if(!examData || !(examData.questions||[]).length){ showToast("This exam can't be resumed (its questions weren't saved).",'warn'); return; }
@@ -13919,8 +13936,8 @@ async function practiceOpenReview(key){
     modal.style.display='flex';
     practiceRenderReview(summary,examData);
   } catch(e){
-    console.error('practiceOpenReview',e);
-    showToast('Could not load this exam. If it was created before exam saving was enabled, newer exams will open normally.','error');
+    console.error('practiceOpenReview render',e);
+    showToast('Problem opening this exam: '+(e&&e.message||e)+' — try refreshing the page (Ctrl+Shift+R).','error');
   }
 }
 
