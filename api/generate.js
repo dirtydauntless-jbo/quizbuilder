@@ -378,6 +378,8 @@ ${JSON.stringify(batch.map(c => ({ question: c.q, answer: c.a })))}`;
     } catch { /* skip this batch */ }
   }
   if (!raw.length) return [];
+  raw = await filterOnTopic(raw, topic, subject); // topic guard (see generateFreshVariants)
+  if (!raw.length) return [];
   const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
   raw = (await Promise.all(chunk(raw, 10).map(c => qcBatch(c)))).flat();
   raw = (await Promise.all(chunk(raw, 10).map(c => vetDistinctChoices(c)))).flat();
@@ -444,6 +446,27 @@ function getFaaNoFigure(topic, n) {
 // Output is tagged source:'faa-variant' so it still flows through qcBatch + the distinctness vet.
 // This produces BRAND-NEW variants (the expensive path). The pool-aware generateFaaVariants()
 // below reuses jar/pending variants first and only calls this to top up.
+// TOPIC GUARD — drop generated questions whose subject matter doesn't actually belong to the
+// assigned topic. Defends against a misfiled bank seed producing an off-topic variant/question
+// (e.g., a fire-detection question reworded under "Ice and Rain"). One cheap batched classifier
+// call; on any failure it returns the input unchanged so it can never block generation.
+async function filterOnTopic(items, topic, subject) {
+  if (!Array.isArray(items) || items.length < 1) return items || [];
+  const prompt = `You are classifying FAA A&P (${subject}) exam questions by topic. The intended topic is "${topic}".
+For EACH question, decide if its SUBJECT MATTER genuinely belongs to "${topic}" — NOT to some other ${subject} topic. Judge by what the question is actually about, not by incidental words.
+Return ONLY a JSON array of booleans IN ORDER (true = on-topic, false = belongs to a different topic), e.g. [true,false,true].
+
+Questions:
+${items.map((q, i) => `[${i}] ${q.question}`).join('\n')}`;
+  try {
+    const arr = parseJSON(await callClaude(prompt, 512));
+    if (Array.isArray(arr) && arr.length === items.length) {
+      return items.filter((_, i) => arr[i] !== false);
+    }
+  } catch { /* fall through */ }
+  return items; // never drop everything on a parse/API failure
+}
+
 async function generateFreshVariants(topic, qCount, overrides) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
@@ -493,6 +516,12 @@ ${JSON.stringify(batch.map(q => ({ question: q.question, choices: q.choices, cor
       });
     } catch { /* skip this batch */ }
   }
+  if (!raw.length) return [];
+
+  // TOPIC GUARD: drop any variant whose subject matter doesn't actually belong to this topic
+  // (defense-in-depth against a misfiled seed producing an off-topic variant). Runs before QC so
+  // we don't waste vetting on questions we'll discard.
+  raw = await filterOnTopic(raw, topic, subject);
   if (!raw.length) return [];
 
   // Vet fresh variants NOW (QC pass + dedicated distinctness vet), in chunks of 10, so what we
