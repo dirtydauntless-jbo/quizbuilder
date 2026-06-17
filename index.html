@@ -10185,6 +10185,24 @@ async function loadStudentQuizzes(){
     return;
   }
 
+  // Self-heal roster membership: older joins (or profile-only memberships) can miss the
+  // classroomStudents entry, which then denies the student's own quizProgress reads. Ensure
+  // this student is registered in every classroom they belong to. Rules allow writing one's own entry.
+  const _selfUid = stuSession?.uid;
+  if(_selfUid){
+    await Promise.all(myClassrooms.map(async c=>{
+      try {
+        const existing = await dbGet(`classroomStudents/${c.classroomId}/${_selfUid}`);
+        if(!existing){
+          await dbSet(`classroomStudents/${c.classroomId}/${_selfUid}`, {
+            name: stuSession?.name || 'Student',
+            email: (stuAuthUser && stuAuthUser.email) || '',
+            uid: _selfUid, joinedAt: ts(), classroomId: c.classroomId });
+        }
+      } catch(e){ console.warn('roster self-heal failed for', c.classroomId, '-', e&&e.message||e); }
+    }));
+  }
+
   // Build classroom cards with instructor names
   if(banner){
     const classroomCardPromises = myClassrooms.map(async c=>{
