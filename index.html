@@ -7979,7 +7979,7 @@ async function loadAssignedQuizzes(classId){
           </div>
           <div style="font-family:monospace;font-size:.6rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap">
             <span>${e.quiz.questions?.length||0} questions</span>
-            <span class="tag ${e.quiz.questionType==='fib'?'tag-fib':e.quiz.questionType?.startsWith('acr')?'tag-mc':'tag-mc'}">${e.quiz.questionType==='fib'?'Fill-in-Blank':e.quiz.questionType==='acr_mc'?'✈ Acronym MC':e.quiz.questionType==='acr_fib'?'✈ Acronym FIB':'Multiple Choice'}</span>
+            <span class="tag ${e.quiz.questionType==='fib'?'tag-fib':e.quiz.questionType?.startsWith('acr')?'tag-mc':'tag-mc'}">${e.quiz.questionType==='fib'?'Fill-in-Blank':e.quiz.questionType==='acr_mc'?'✈ Acronym MC':e.quiz.questionType==='acr_fib'?'✈ Acronym FIB':e.quiz.questionType==='mixed'?'Mixed (FIB + MC)':'Multiple Choice'}</span>
             <span class="tag ${e.assignTo==='all'?'tag-all':'tag-mc'}">${e.assignTo==='all'?'All Students':'Selected'}</span>
           </div>
         </div>
@@ -8286,7 +8286,7 @@ async function loadQuizBank(){
       <div class="quiz-item-name">${esc(q.title)}</div>
       <div class="quiz-item-meta">
         <span>${q.questions?.length||0}q</span>
-        <span class="tag ${(q.questionType==='fib'||q.questionType==='acr_fib')?'tag-fib':'tag-mc'}">${q.questionType==='fib'?'FIB':q.questionType==='acr_fib'?'✈ ACR FIB':q.questionType==='acr_mc'?'✈ ACR MC':'MC'}</span>
+        <span class="tag ${(q.questionType==='fib'||q.questionType==='acr_fib')?'tag-fib':'tag-mc'}">${q.questionType==='fib'?'FIB':q.questionType==='acr_fib'?'✈ ACR FIB':q.questionType==='acr_mc'?'✈ ACR MC':q.questionType==='mixed'?'Mixed':'MC'}</span>
         <span>${q.questions?'v Ready':'! Draft'}</span>
       </div>
       <div class="qi-actions">
@@ -8320,6 +8320,7 @@ async function selectQuiz(id){
   const quiz = await dbGet(`quizzes/${instUser.uid}/${id}`);
   editingQuiz = { ...quiz, id };
   renderBuilderPanel(quiz, id);
+  onTypeChange();
   loadQuizBank();
   autoTestApi();
   // On mobile, close the sidebar so builder panel is fully visible
@@ -8333,6 +8334,7 @@ async function startNewQuiz(){
   selectedQuizId = id;
   await loadQuizBank();
   renderBuilderPanel(q, id);
+  onTypeChange();
   autoTestApi();
 }
 
@@ -8379,6 +8381,7 @@ function renderBuilderPanel(quiz, id){
             <select class="select" id="qzType" onchange="onTypeChange()">
               <option value="mc" ${(quiz.questionType||'mc')==='mc'?'selected':''}>Multiple Choice (A/B/C)</option>
               <option value="fib" ${quiz.questionType==='fib'?'selected':''}>Fill in the Blank</option>
+              <option value="mixed" ${quiz.questionType==='mixed'?'selected':''}>Mixed — Fill-in-Blank + Multiple Choice</option>
               <option value="acr_mc" ${quiz.questionType==='acr_mc'?'selected':''}>✈ Acronym Quiz — Multiple Choice</option>
               <option value="acr_fib" ${quiz.questionType==='acr_fib'?'selected':''}>✈ Acronym Quiz — Fill in the Blank</option>
             </select>
@@ -8392,6 +8395,12 @@ function renderBuilderPanel(quiz, id){
             No topic selection needed — acronyms are fetched automatically when the quiz is taken.<br>
             The spreadsheet is checked each time so new acronyms appear automatically.
           </div>
+          <div id="mixFibWrap" style="display:none">
+            <label class="label">Fill-in-the-Blank Questions</label>
+            <input class="input" id="qzFibCount" type="number" min="0" max="100" value="${quiz.fibCount!=null?quiz.fibCount:Math.round((quiz.questionCount||10)/2)}" />
+            <div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:4px;line-height:1.45">of the total above — the rest are multiple choice. FIB answers are graded leniently (AI checks comprehension if the wording differs from the answer on file).</div>
+          </div>
+          <div id="choicesWrap">
             <label class="label">Answer Choices</label>
             <select class="select" id="qzChoices">
               <option value="2" ${quiz.choiceCount==2?'selected':''}>2 (A, B)</option>
@@ -8448,13 +8457,15 @@ function renderBuilderPanel(quiz, id){
 function onTypeChange(){
   const t = document.getElementById('qzType')?.value || 'mc';
   const isAcr = t.startsWith('acr_');
-  const isMC  = t === 'mc' || t === 'acr_mc';
+  const needsChoices = t === 'mc' || t === 'acr_mc' || t === 'mixed';
   const cw = document.getElementById('choicesWrap');
   const tw = document.getElementById('topicsWrap');
   const an = document.getElementById('acrQuizNote');
-  if(cw) cw.style.display = isMC ? 'block' : 'none';
+  const mf = document.getElementById('mixFibWrap');
+  if(cw) cw.style.display = needsChoices ? 'block' : 'none';
   if(tw) tw.style.display = isAcr ? 'none' : 'block';
   if(an) an.style.display = isAcr ? 'block' : 'none';
+  if(mf) mf.style.display = t === 'mixed' ? 'block' : 'none';
 }
 
 function expandQuizPreview(quizId){
@@ -8490,10 +8501,11 @@ async function saveCurrentSettings(id){
   const qType = document.getElementById('qzType')?.value||'mc';
   const qCount = Math.max(1,Math.min(100,parseInt(document.getElementById('qzCount')?.value)||10));
   const choiceCount = parseInt(document.getElementById('qzChoices')?.value||3);
+  const fibCount = Math.max(0,Math.min(qCount,parseInt(document.getElementById('qzFibCount')?.value)||0));
   const topics = [...document.querySelectorAll('#quizBuilderPanel input[type=checkbox]:checked')].map(cb=>cb.dataset.topic);
   const timeLimit = parseInt(document.getElementById('qzTimeLimit')?.value||0);
-  await dbUpdate(`quizzes/${instUser.uid}/${id}`, { title, questionType:qType, questionCount:qCount, choiceCount, topics, timeLimit });
-  return { title, qType, qCount, choiceCount, topics, timeLimit };
+  await dbUpdate(`quizzes/${instUser.uid}/${id}`, { title, questionType:qType, questionCount:qCount, choiceCount, fibCount, topics, timeLimit });
+  return { title, qType, qCount, choiceCount, fibCount, topics, timeLimit };
 }
 
 async function deleteQuiz(id){
@@ -8565,7 +8577,7 @@ Enter number:`);
 }
 
 async function generateAndSaveQuiz(id){
-  const { title, qType, qCount, choiceCount, topics } = await saveCurrentSettings(id);
+  const { title, qType, qCount, choiceCount, fibCount, topics } = await saveCurrentSettings(id);
 
   // ── ACRONYM QUIZ ──────────────────────────────────────────────────
   if(qType === 'acr_mc' || qType === 'acr_fib'){
@@ -8601,6 +8613,40 @@ async function generateAndSaveQuiz(id){
     const questions = selected.map((item,i)=>({ id:i, q:fixAMTText(item.q), topic:item.topic, type:'fib', answer:fixAMTText(item.a) }));
     await dbUpdate(`quizzes/${instUser.uid}/${id}`, { questions, updatedAt:Date.now() });
     selectQuiz(id); loadQuizBank(); return;
+  }
+
+  // ── MIXED: some questions fill-in-blank, the rest multiple choice ──
+  if(qType === 'mixed'){
+    const fibN = Math.max(0, Math.min(fibCount||0, selected.length));
+    const fibItems = selected.slice(0, fibN);
+    const mcItems  = selected.slice(fibN);
+    // FIB questions need no AI; build them directly.
+    const fibQs = fibItems.map(item=>({ q:fixAMTText(item.q), topic:item.topic, type:'fib', answer:fixAMTText(item.a) }));
+    show('genOverlay');
+    document.getElementById('genProg').textContent = `Generating ${mcItems.length} multiple-choice questions...`;
+    const dbgEl = document.getElementById('genDebugLog'); if(dbgEl){ dbgEl.innerHTML=''; dbgEl.style.display='none'; }
+    try{
+      const mcQs = [];
+      const BATCH = 8;
+      for(let i=0;i<mcItems.length;i+=BATCH){
+        const batch = mcItems.slice(i, i+BATCH);
+        document.getElementById('genProg').textContent = `MC questions ${i+1}-${Math.min(i+BATCH,mcItems.length)} of ${mcItems.length}...`;
+        const results = await generateDistractors(batch, choiceCount);
+        mcQs.push(...results);
+      }
+      // Interleave FIB + MC by shuffling, then assign stable ids.
+      let combined = [...fibQs, ...mcQs];
+      shuffle(combined);
+      combined = combined.map((q,i)=>({ ...q, id:i }));
+      await dbUpdate(`quizzes/${instUser.uid}/${id}`, { questions:combined, updatedAt:Date.now() });
+      hide('genOverlay');
+      selectQuiz(id); loadQuizBank();
+      openPrintPreview(id, true);
+      if(window._lastGenFallbackError){
+        alert(`⚠️ Quiz generated but AI distractor generation failed for the multiple-choice portion — those questions used the local fallback instead.\n\nError: ${window._lastGenFallbackError}`);
+      }
+    }catch(e){ hide('genOverlay'); alert('Error: ' + e.message); }
+    return;
   }
 
   show('genOverlay');
@@ -10095,7 +10141,7 @@ async function openStuClassroomPanel(classroomId, classroomName, instName){
         <div style="font-weight:600;font-size:.97rem;color:var(--text)">${esc(quiz.title)}</div>
         ${statusBadge}
       </div>
-      <div style="font-size:.83rem;color:var(--muted);margin-bottom:8px">${quiz.questions.length} questions · ${quiz.questionType==='fib'?'Fill-in-Blank':quiz.questionType==='acr_fib'?'✈ Acronym FIB':quiz.questionType==='acr_mc'?'✈ Acronym MC':'Multiple Choice'}${quiz.timeLimit?' · '+quiz.timeLimit+' min':''}</div>
+      <div style="font-size:.83rem;color:var(--muted);margin-bottom:8px">${quiz.questions.length} questions · ${quiz.questionType==='fib'?'Fill-in-Blank':quiz.questionType==='acr_fib'?'✈ Acronym FIB':quiz.questionType==='acr_mc'?'✈ Acronym MC':quiz.questionType==='mixed'?'Mixed (FIB + MC)':'Multiple Choice'}${quiz.timeLimit?' · '+quiz.timeLimit+' min':''}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${!progress?.finished ? `<button class="btn btn-primary btn-sm" onclick="openStudentQuiz('${qid}','${iid}','${classroomId}');closeStuClassroomModal();" style="font-size:.8rem;padding:5px 14px">${progress?.answeredCount>0?'Continue':'Start Quiz'}</button>` : ''}
         ${retakeBtn}
@@ -10463,7 +10509,7 @@ async function loadStudentQuizzes(){
     return `<div class="quiz-card" onclick="openStudentQuiz('${qid}','${resolvedIid}','${entryClassId}')">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
         <div class="quiz-card-title">${esc(quiz.title)}</div>
-        <span class="tag ${(quiz.questionType==='fib'||quiz.questionType==='acr_fib')?'tag-fib':'tag-mc'}">${quiz.questionType==='fib'?'Fill-in-Blank':quiz.questionType==='acr_fib'?'✈ Acronym FIB':quiz.questionType==='acr_mc'?'✈ Acronym MC':'Multiple Choice'}</span>
+        <span class="tag ${(quiz.questionType==='fib'||quiz.questionType==='acr_fib')?'tag-fib':'tag-mc'}">${quiz.questionType==='fib'?'Fill-in-Blank':quiz.questionType==='acr_fib'?'✈ Acronym FIB':quiz.questionType==='acr_mc'?'✈ Acronym MC':quiz.questionType==='mixed'?'Mixed (FIB + MC)':'Multiple Choice'}</span>
       </div>
       <div class="quiz-card-meta">
         <span>${quiz.questions.length} questions</span>
@@ -12070,7 +12116,7 @@ function renderSpAssigned(){
           <div style="font-weight:600;font-size:.88rem;margin-bottom:5px">${esc(quiz.title)}</div>
           <div style="font-family:monospace;font-size:.6rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <span>${quiz.questions?.length||0} questions</span>
-            <span class="tag ${(quiz.questionType==='fib'||quiz.questionType==='acr_fib')?'tag-fib':'tag-mc'}">${quiz.questionType==='fib'?'Fill-in-Blank':quiz.questionType==='acr_fib'?'✈ Acronym FIB':quiz.questionType==='acr_mc'?'✈ Acronym MC':'Multiple Choice'}</span>
+            <span class="tag ${(quiz.questionType==='fib'||quiz.questionType==='acr_fib')?'tag-fib':'tag-mc'}">${quiz.questionType==='fib'?'Fill-in-Blank':quiz.questionType==='acr_fib'?'✈ Acronym FIB':quiz.questionType==='acr_mc'?'✈ Acronym MC':quiz.questionType==='mixed'?'Mixed (FIB + MC)':'Multiple Choice'}</span>
             ${statusLabel}
           </div>
         </div>
