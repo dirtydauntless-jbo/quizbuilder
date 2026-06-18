@@ -8339,7 +8339,7 @@ async function startNewQuiz(){
 }
 
 function renderBuilderPanel(quiz, id){
-  function bankSection(label, color, topics, qb){
+  function bankSection(label, color, topics, qb, key){
     if(!topics.length) return '';
     const cards = topics.map(t=>`
       <label class="topic-check ${(quiz.topics||[]).includes(t)?'selected':''}" id="tc-${t.replace(/\s+/g,'_')}">
@@ -8347,14 +8347,17 @@ function renderBuilderPanel(quiz, id){
         <span class="topic-name">${t}</span>
         <span class="topic-count">${qb[t].length}q</span>
       </label>`).join('');
-    return `<div style="margin-bottom:14px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:${color};margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${color}55">${label}</div>
+    return `<div style="margin-bottom:14px" id="qbsec-${key}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${color}55">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:${color}">${label}</span>
+        <button type="button" onclick="_qbToggleSection('${key}')" style="background:transparent;border:1px solid ${color}88;color:${color};border-radius:5px;font-family:monospace;font-size:.66rem;font-weight:700;letter-spacing:.5px;padding:3px 11px;cursor:pointer;white-space:nowrap">Select all</button>
+      </div>
       ${cards}
     </div>`;
   }
-  const topicHTML = bankSection('📋 General', 'var(--accent)', TOPICS, QB)
-    + bankSection('✈ Airframe', 'var(--blue)', TOPICS_AIRFRAME, QB_AIRFRAME)
-    + bankSection('⚙ Powerplant', '#cc4444', TOPICS_POWERPLANT, QB_POWERPLANT);
+  const topicHTML = bankSection('📋 General', 'var(--accent)', TOPICS, QB, 'general')
+    + bankSection('✈ Airframe', 'var(--blue)', TOPICS_AIRFRAME, QB_AIRFRAME, 'airframe')
+    + bankSection('⚙ Powerplant', '#cc4444', TOPICS_POWERPLANT, QB_POWERPLANT, 'powerplant');
 
   document.getElementById('quizBuilderPanel').innerHTML = `
     <div class="builder-main">
@@ -8495,6 +8498,18 @@ function autoTestApi(){
 }
 
 function toggleTopic(cb){ const label=cb.closest('.topic-check'); if(label) label.classList.toggle('selected',cb.checked); }
+
+// Select-all / clear toggle for a whole topic section (General / Airframe / Powerplant)
+function _qbToggleSection(key){
+  const sec = document.getElementById('qbsec-'+key);
+  if(!sec) return;
+  const boxes = [...sec.querySelectorAll('input[type=checkbox]')];
+  if(!boxes.length) return;
+  const allChecked = boxes.every(b=>b.checked);   // if all on → clear; otherwise select all
+  boxes.forEach(b=>{ b.checked = !allChecked; toggleTopic(b); });
+  const btn = sec.querySelector('button');
+  if(btn) btn.textContent = allChecked ? 'Select all' : 'Clear all';
+}
 
 async function saveCurrentSettings(id){
   const title = document.getElementById('qzTitle')?.value.trim()||'Untitled';
