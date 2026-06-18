@@ -1969,7 +1969,7 @@ setTimeout(function(){
     <label class="label">Select Quiz</label>
     <select class="select" id="assignQuizSelect" style="margin-bottom:16px"></select>
     <label class="label">Assign to Classroom</label>
-    <select class="select" id="assignClassSelect" style="margin-bottom:16px" onchange="onAssignClassChange()"></select>
+    <select class="select" id="quizAssignClassSelect" style="margin-bottom:16px" onchange="onAssignClassChange()"></select>
     <label class="label">Assign to</label>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn btn-sm" id="assignAllBtn" onclick="setAssignMode('all')" style="background:rgba(240,165,0,.12);color:var(--accent);border:1px solid rgba(240,165,0,.3)">All Students</button>
@@ -8217,7 +8217,7 @@ async function showAssignModal(preselectedQuizId){
     const c = await dbGet(`classrooms/${id}`);
     return c ? { ...c, id } : null;
   }))).filter(Boolean);
-  const classSel = document.getElementById('assignClassSelect');
+  const classSel = document.getElementById('quizAssignClassSelect');
   classSel.innerHTML = classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
   // Pre-select current open classroom if any
   if(selectedClassId && classIds.includes(selectedClassId)) classSel.value = selectedClassId;
@@ -8238,7 +8238,7 @@ async function showAssignModal(preselectedQuizId){
 }
 
 async function onAssignClassChange(){
-  const classId = document.getElementById('assignClassSelect').value;
+  const classId = document.getElementById('quizAssignClassSelect').value;
   if(!classId) return;
   const students = await dbGet(`classroomStudents/${classId}`) || {};
   const stuList = document.getElementById('assignStudentList');
@@ -8278,7 +8278,7 @@ async function doAssignQuiz(){
     assignTo = specificStudents;
   }
 
-  const targetClassId = document.getElementById('assignClassSelect').value;
+  const targetClassId = document.getElementById('quizAssignClassSelect').value;
   if(!targetClassId){ showErr(errEl, 'Please select a classroom.'); return; }
 
   // Find which instructor UID actually owns this quiz
