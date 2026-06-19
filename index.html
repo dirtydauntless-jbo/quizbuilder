@@ -15245,27 +15245,32 @@ async function startListenMode(topicKey){
 
 function lmPickVoice(){
   const voices = window.speechSynthesis.getVoices();
-  // Prefer calm male English voices by platform
+  if(!voices.length) return null;
+  // 1. Honor the student's saved choice if it's still available on this device
+  let saved = null; try { saved = localStorage.getItem('lm_voice'); } catch(e){}
+  if(saved){ const v = voices.find(v => v.name === saved); if(v) return v; }
+  // 2. Prefer the most REALISTIC voices the device offers — neural / "Natural"
+  //    (Edge & Windows 11 "Online (Natural)", Android neural) then macOS premium/enhanced.
+  const en = voices.filter(v => (v.lang||'').toLowerCase().startsWith('en'));
+  const pool = en.length ? en : voices;
+  const natural = pool.find(v => /natural|neural/i.test(v.name))
+              || pool.find(v => /premium|enhanced/i.test(v.name));
+  if(natural) return natural;
+  // 3. Known-good named voices by platform (older but acceptable)
   const preferred = [
-    'Google US English',        // Chrome on Windows/Android — tends to be male
-    'Microsoft Guy Online',     // Edge/Windows — male
-    'Microsoft David',          // Windows — calm male
-    'Microsoft Mark',           // Windows — male
-    'Microsoft Christopher',    // Windows — male
-    'Alex',                     // macOS/iOS — calm male (default system voice)
-    'Daniel',                   // macOS UK English — calm male
-    'Fred',                     // macOS — male
-    'Google UK English Male',   // Chrome — explicit male
-    'Microsoft George',         // Edge UK — male
-    'Oliver',                   // some systems
-    'Tom',                      // some systems
+    'Google US English','Microsoft Guy Online','Microsoft David','Microsoft Mark',
+    'Microsoft Christopher','Alex','Daniel','Fred','Google UK English Male',
+    'Microsoft George','Oliver','Tom',
   ];
-  for(const name of preferred){
-    const v = voices.find(v => v.name === name);
-    if(v) return v;
-  }
-  // Fall back to any en-US or en voice
+  for(const name of preferred){ const v = voices.find(v => v.name === name); if(v) return v; }
+  // 4. Fall back to any en-US or en voice
   return voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang?.startsWith('en')) || voices[0] || null;
+}
+
+// Student picks a voice from the player dropdown — remembered across sessions.
+// Applies to the next phrase spoken (lmSpeak re-reads the saved choice each call).
+function lmSetVoice(name){
+  try { localStorage.setItem('lm_voice', name); } catch(e){}
 }
 
 function lmSpeak(text, onEnd){
@@ -15424,6 +15429,18 @@ function renderListenPlayer(){
   const bankLabel = bankId2 === 'airframe' ? 'Airframe' : bankId2 === 'powerplant' ? 'Powerplant' : 'General';
   const topicDisplay = topicPart === '__all__' ? 'All Topics' : topicPart;
 
+  // Build the voice picker options — English voices, realistic ones flagged with ⭐.
+  const _curVoice = lmPickVoice();
+  const _allVoices = (window.speechSynthesis.getVoices && window.speechSynthesis.getVoices()) || [];
+  let _vList = _allVoices.filter(v => (v.lang||'').toLowerCase().startsWith('en'));
+  if(!_vList.length) _vList = _allVoices;
+  const voiceOpts = _vList.map(v => {
+    const realistic = /natural|neural|premium|enhanced/i.test(v.name);
+    const label = v.name.replace(/\s*-\s*English.*$/i,'').replace(/\s*\(United States\)/i,'');
+    const sel = _curVoice && v.name === _curVoice.name ? ' selected' : '';
+    return `<option value="${esc(v.name)}"${sel}>${realistic?'⭐ ':''}${esc(label)}</option>`;
+  }).join('') || '<option value="">(default device voice)</option>';
+
   el.innerHTML = `<div class="study-wrap">
     <!-- Top nav -->
     <div class="fc-nav">
@@ -15435,6 +15452,14 @@ function renderListenPlayer(){
     <!-- Topic label -->
     <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:10px">
       ${esc(bankLabel)} — ${esc(topicDisplay)}
+    </div>
+
+    <!-- Voice picker (⭐ = most realistic on this device) -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <span style="font-family:monospace;font-size:.62rem;letter-spacing:1px;color:var(--muted)">🔊 VOICE</span>
+      <select onchange="lmSetVoice(this.value)" title="⭐ = most realistic. Change applies to the next question/answer." style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:5px;font-family:monospace;font-size:.72rem;padding:4px 9px;max-width:240px;cursor:pointer">
+        ${voiceOpts}
+      </select>
     </div>
 
     <!-- Progress bar -->
