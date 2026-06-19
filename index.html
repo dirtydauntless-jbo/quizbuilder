@@ -8389,7 +8389,7 @@ function renderBuilderPanel(quiz, id){
     return `<div style="margin-bottom:14px" id="qbsec-${key}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${color}55">
         <span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:${color}">${label}</span>
-        <button type="button" onclick="_qbToggleSection('${key}')" style="background:transparent;border:1px solid ${color}88;color:${color};border-radius:5px;font-family:monospace;font-size:.66rem;font-weight:700;letter-spacing:.5px;padding:3px 11px;cursor:pointer;white-space:nowrap">Select all</button>
+        <button type="button" onclick="_qbToggleSection('${key}')" onmouseover="this.style.background='${color}';this.style.color='#0a0c0f'" onmouseout="this.style.background='transparent';this.style.color='${color}'" style="background:transparent;border:1.5px solid ${color};color:${color};border-radius:6px;font-family:monospace;font-size:.68rem;font-weight:700;letter-spacing:.5px;padding:4px 13px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s">✓ Select all</button>
       </div>
       ${cards}
     </div>`;
@@ -8547,7 +8547,7 @@ function _qbToggleSection(key){
   const allChecked = boxes.every(b=>b.checked);   // if all on → clear; otherwise select all
   boxes.forEach(b=>{ b.checked = !allChecked; toggleTopic(b); });
   const btn = sec.querySelector('button');
-  if(btn) btn.textContent = allChecked ? 'Select all' : 'Clear all';
+  if(btn) btn.textContent = allChecked ? '✓ Select all' : '✕ Clear all';
 }
 
 async function saveCurrentSettings(id){
