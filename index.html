@@ -7482,6 +7482,10 @@ async function assignSubmit(){
     if(!topics.length){ st.style.color='var(--wl)'; st.textContent='Pick at least one topic.'; return; }
     const count=Math.max(1,Math.min(100,parseInt(document.getElementById('asgCount').value)||topics.length));
     base.mode='topic'; base.topics=topics; base.count=count; base.label=topics.length===1?topics[0]:topics.length+' Topics';
+    // Use the focused FAA blend (50% verbatim / 40% reworded variants / 10% O&P) for ALL topic
+    // assignments — single-student remediation included — so the exam actually drills the reworded
+    // variant questions that trip students up (not just plain bank + AI). Server applies the mix.
+    base.focusedMix=true;
   }
   // ── Whole classroom: fan out one copy per student, tagged with a shared classExamId ──
   if(_asgTarget==='classroom'){
