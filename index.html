@@ -2058,9 +2058,19 @@ setTimeout(function(){
 
 <!-- My Profile Modal (Student) -->
 <div id="stuMyProfileModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('stuMyProfileModal')">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:460px">
     <div class="modal-title">My Profile</div>
     <div id="stuMyProfileBody" style="font-family:monospace;font-size:.85rem"></div>
+
+    <!-- Share my practice results -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+      <div style="font-weight:700;font-size:.95rem;margin-bottom:3px">📤 Share My Practice Results</div>
+      <div style="font-family:monospace;font-size:.72rem;color:var(--muted);line-height:1.45;margin-bottom:10px">Let an instructor see your practice exam scores so they can help you — even if you’re not in their class. You can stop sharing anytime.</div>
+      <input id="shareSearch" oninput="shareSearchInstructors()" placeholder="Search instructor by name…" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.9rem;box-sizing:border-box">
+      <div id="shareSearchResults" style="margin-top:8px"></div>
+      <div id="shareGrantList" style="margin-top:12px"></div>
+    </div>
+
     <div style="margin-top:18px">
       <button class="btn btn-ghost" style="width:100%" onclick="closeModal('stuMyProfileModal')">Close</button>
     </div>
@@ -2565,6 +2575,9 @@ function stuShowMyProfile(){
       }
     </div>`;
   show('stuMyProfileModal');
+  const ss=document.getElementById('shareSearch'); if(ss) ss.value='';
+  const sr=document.getElementById('shareSearchResults'); if(sr) sr.innerHTML='';
+  shareRenderGrants(); // populate the "currently sharing with" list
 }
 
 function instShowMyProfile(){
@@ -3126,6 +3139,14 @@ function stuLogout(){
   showLanding();
 }
 
+// Publish this instructor's display name to the public directory so students can search for them
+// when choosing who to share their practice results with. Name only — no email.
+function _mirrorInstructorDirectory(){
+  if(!instUser?.uid) return;
+  const name = (instProfile && instProfile.name) || instUser.displayName || (instUser.email||'').split('@')[0] || 'Instructor';
+  try{ db.ref('instructorDirectory/'+instUser.uid).set(String(name).slice(0,80)).catch(()=>{}); }catch(e){}
+}
+
 // ===============================================
 // INSTRUCTOR APP INIT
 // ===============================================
@@ -3141,6 +3162,7 @@ function initInstApp(){
   const savedClassId = localStorage.getItem('instLastClassId_'+instUser.uid) || null;
 
   loadQuizBank();
+  _mirrorInstructorDirectory(); // keep the public name directory current so students can find me to share
   _linkPendingCoInstructor();
   _checkInstNotifications();
   _checkSuperAdmin();
@@ -13329,6 +13351,55 @@ function pxRecordSeen(questions){
 async function pxLoadSeenIds(){
   if(!stuSession?.uid) return [];
   try{ const o=await dbGet('seenQuestions/'+stuSession.uid)||{}; return Object.values(o).map(String); }catch(e){ return []; }
+}
+// ── Practice-results sharing (student-controlled, pure consent) ───────────────
+// A student explicitly grants an instructor read access to ALL their practice results.
+// practiceShares/{stuUid}/{instUid} = true. Rescindable anytime. Without a grant, no instructor
+// can read the student's practiceHistory/practiceExamData (exams an instructor ASSIGNED stay
+// visible to that instructor separately via assignedExams). Works cross-class.
+let _shareDirCache=null;
+async function shareLoadDirectory(){
+  if(_shareDirCache) return _shareDirCache;
+  try{ _shareDirCache = await dbGet('instructorDirectory')||{}; }catch(e){ _shareDirCache={}; }
+  return _shareDirCache;
+}
+async function shareSearchInstructors(){
+  const q=(document.getElementById('shareSearch')?.value||'').trim().toLowerCase();
+  const box=document.getElementById('shareSearchResults'); if(!box) return;
+  if(q.length<2){ box.innerHTML=''; return; }
+  const dir=await shareLoadDirectory();
+  const granted=stuSession?.uid ? (await dbGet('practiceShares/'+stuSession.uid).catch(()=>({}))||{}) : {};
+  const matches=Object.entries(dir).filter(([uid,name])=>typeof name==='string' && name.toLowerCase().includes(q)).slice(0,12);
+  box.innerHTML = matches.length ? matches.map(([uid,name])=>{
+    const has=granted[uid]===true;
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:5px;background:var(--panel2)"><span><b>'+esc(name)+'</b></span>'+
+      (has?'<span style="font-family:monospace;font-size:.7rem;color:var(--cl)">✓ shared</span>'
+          :'<button onclick="shareGrant(\''+uid+'\',\''+esc(name).replace(/\x27/g,"")+'\')" style="background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:monospace;font-size:.72rem;font-weight:700;padding:5px 11px;cursor:pointer">+ Share</button>')+'</div>';
+  }).join('') : '<div style="font-family:monospace;font-size:.75rem;color:var(--muted)">No instructors found.</div>';
+}
+async function shareGrant(instUid,name){
+  if(!stuSession?.uid) return;
+  try{ await db.ref('practiceShares/'+stuSession.uid+'/'+instUid).set(true);
+    if(typeof showToast==='function') showToast('Sharing your practice results with '+(name||'this instructor')+'.','success');
+  }catch(e){ if(typeof showToast==='function') showToast('Could not share: '+(e&&e.message||e),'error'); }
+  const s=document.getElementById('shareSearch'); if(s) s.value='';
+  const box=document.getElementById('shareSearchResults'); if(box) box.innerHTML='';
+  shareRenderGrants();
+}
+async function shareRevoke(instUid){
+  if(!stuSession?.uid) return;
+  try{ await db.ref('practiceShares/'+stuSession.uid+'/'+instUid).remove(); }catch(e){}
+  shareRenderGrants();
+}
+async function shareRenderGrants(){
+  const el=document.getElementById('shareGrantList'); if(!el) return;
+  if(!stuSession?.uid){ el.innerHTML=''; return; }
+  const granted=await dbGet('practiceShares/'+stuSession.uid).catch(()=>({}))||{};
+  const dir=await shareLoadDirectory();
+  const uids=Object.keys(granted).filter(u=>granted[u]===true);
+  if(!uids.length){ el.innerHTML='<div style="font-family:monospace;font-size:.78rem;color:var(--muted)">You haven’t shared your results with anyone yet.</div>'; return; }
+  el.innerHTML='<div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:7px">Currently sharing with</div>'+
+    uids.map(uid=>'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--cl);border-radius:var(--r);margin-bottom:5px;background:rgba(58,170,102,.08)"><span><b>'+esc(dir[uid]||'Instructor')+'</b></span><button onclick="shareRevoke(\''+uid+'\')" style="background:rgba(204,68,68,.15);color:var(--wl);border:1px solid rgba(204,68,68,.3);border-radius:var(--r);font-family:monospace;font-size:.72rem;font-weight:700;padding:5px 11px;cursor:pointer">Stop sharing</button></div>').join('');
 }
 
 // Shared exam runner — used by both self-generated and instructor-assigned exams.

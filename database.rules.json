@@ -170,10 +170,26 @@
       ".read": "auth != null && (root.child('config/masterAdmins').child(auth.uid).val() === true || root.child('config/superAdmins').child(auth.uid).val() === true)",
       ".write": false
     },
+    "instructorDirectory": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        ".validate": "newData.isString() && newData.val().length <= 80"
+      }
+    },
+    "practiceShares": {
+      "$stuUid": {
+        ".read": "auth != null && (auth.uid === $stuUid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        "$instUid": {
+          ".write": "auth != null && (auth.uid === $stuUid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    },
     "practiceHistory": {
       ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
       "$uid": {
-        ".read": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        ".read": "auth != null && (auth.uid === $uid || root.child('practiceShares').child($uid).child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".write": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".indexOn": ["date"]
       }
@@ -181,7 +197,7 @@
     "practiceExamData": {
       ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
       "$uid": {
-        ".read": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        ".read": "auth != null && (auth.uid === $uid || root.child('practiceShares').child($uid).child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".write": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)"
       }
     },
