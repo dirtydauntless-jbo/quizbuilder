@@ -13311,6 +13311,22 @@ async function practiceGenerate(){
   await pxRunExam(topics, count, label);
 }
 
+// ── Seen-question tracking (drives prefer-unseen rotation / remediation) ──────
+// Stored at seenQuestions/{uid}/{safeKey} = rawId, where rawId is the FAA bank id or variant vid
+// exactly as the generator emits it. We key by a sanitized copy (RTDB keys can't contain .#$[]/),
+// but the VALUE is the raw id so what we send back to the server matches the bank/pool.
+function _seenKey(raw){ return String(raw).replace(/[.#$\[\]\/]/g,'_'); }
+function pxRecordSeen(questions){
+  if(!stuSession?.uid || !Array.isArray(questions)) return;
+  const upd={};
+  questions.forEach(q=>{ let raw=null; if(q&&q.id!=null) raw=String(q.id); else if(q&&q._vid) raw=String(q._vid); if(raw) upd['seenQuestions/'+stuSession.uid+'/'+_seenKey(raw)]=raw; });
+  if(Object.keys(upd).length) db.ref().update(upd).catch(e=>console.warn('seen-record failed:',e&&e.message||e));
+}
+async function pxLoadSeenIds(){
+  if(!stuSession?.uid) return [];
+  try{ const o=await dbGet('seenQuestions/'+stuSession.uid)||{}; return Object.values(o).map(String); }catch(e){ return []; }
+}
+
 // Shared exam runner — used by both self-generated and instructor-assigned exams.
 // opts: {mode:'all'} = every stored question for the topics · {focusedMix:true} = focused FAA-style exam (the server applies the source mix)
 async function pxRunExam(topics, count, label, opts){
@@ -13324,14 +13340,19 @@ async function pxRunExam(topics, count, label, opts){
     else msgEl.textContent=`Generating ${count} question${count>1?'s':''} across ${topics.length} topic${topics.length>1?'s':''}...`;
   }
   try {
+    // Prefer-unseen rotation: tell the generator which questions this student has already seen so
+    // it serves fresh items first (esp. reworded variants). 'all' mode returns everything anyway.
+    let seenIds=[];
+    if(stuSession?.uid && opts.mode!=='all'){ try{ seenIds=await pxLoadSeenIds(); }catch(e){} }
     const res=await fetch('https://classroomamt.vercel.app/api/generate',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.focusedMix?{focusedMix:true}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.varRatio!=null?{varRatio:opts.varRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{})})
+      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.focusedMix?{focusedMix:true}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.varRatio!=null?{varRatio:opts.varRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{}),...(seenIds.length?{seenIds}:{})})
     });
     const data=await res.json();
     if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
     _pxQuestions=data.questions;
+    pxRecordSeen(_pxQuestions); // remember these so future exams rotate to fresh questions
     await pxApplyOverrides(_pxQuestions); // apply any admin answer corrections before grading/saving
     _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxFlagCount=0; _pxFlaggedVids=new Set();
     if(stuSession?.uid){

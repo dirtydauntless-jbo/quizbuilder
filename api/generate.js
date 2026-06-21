@@ -239,7 +239,7 @@ function shuffleChoicePositions(q){
 }
 
 // ── Pull random FAA questions for a topic ────────────────────────────────────
-function getFaaQuestions(topic, n) {
+function getFaaQuestions(topic, n, seenSet) {
   if (n < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const bank = getFaaBank();
@@ -252,7 +252,20 @@ function getFaaQuestions(topic, n) {
   const pool = allPool.filter(q => (!q.figureNum || available.has(q.figureNum)) && !q.needsReview);
   if (!pool.length) return [];
   const take = Math.min(n, pool.length);
-  const indices = shuffle([...Array(pool.length).keys()]).slice(0, take);
+  // Prefer-unseen ordering: when the caller passes a per-student seenSet, list questions this
+  // student hasn't seen FIRST, then fall back to already-seen ones (so they still reach `n` and
+  // verbatim FAA repeats only resume once they've cycled the pool — memorization is preserved).
+  let indices;
+  if (seenSet && seenSet.size) {
+    const unseen = [], seen = [];
+    for (let i = 0; i < pool.length; i++) {
+      const id = pool[i].id != null ? String(pool[i].id) : null;
+      (id && seenSet.has(id) ? seen : unseen).push(i);
+    }
+    indices = shuffle(unseen).concat(shuffle(seen)).slice(0, take);
+  } else {
+    indices = shuffle([...Array(pool.length).keys()]).slice(0, take);
+  }
   const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
   return indices.map(i => ({
     question:    pool[i].question,
@@ -541,14 +554,22 @@ ${JSON.stringify(batch.map(q => ({ question: q.question, choices: q.choices, cor
 // Pool-aware variant supplier: reuse vetted variants from the cookie jar (and give pending ones
 // exam exposure so they can graduate), generating fresh only to cover the shortfall + a small
 // "grow" trickle while the jar is still thin. Fresh variants are registered into the pool here.
-async function generateFaaVariants(topic, qCount, overrides, flaggedMap) {
+async function generateFaaVariants(topic, qCount, overrides, flaggedMap, seenSet) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const safeT = _safeKey(topic);
 
   const pool = (await getVariantPool(subject, topic, flaggedMap)).filter(p => p.kind === 'variant');
-  const jar  = shuffle(pool.filter(p => p.stage === 'jar'));
-  const pend = shuffle(pool.filter(p => p.stage !== 'jar'));
+  // Prefer-unseen ordering for remediation: variants this student hasn't seen come first, so a
+  // reworded-question exam keeps surfacing NEW comprehension checks (their weak spot) before repeats.
+  const _ord = arr => {
+    if (!seenSet || !seenSet.size) return shuffle(arr);
+    const u = [], s = [];
+    for (const p of arr) (p.vid && seenSet.has(String(p.vid)) ? s : u).push(p);
+    return shuffle(u).concat(shuffle(s));
+  };
+  const jar  = _ord(pool.filter(p => p.stage === 'jar'));
+  const pend = _ord(pool.filter(p => p.stage !== 'jar'));
 
   // Decide how many to generate fresh. If the pool can already cover the request, only trickle
   // a few new candidates until the jar is comfortably stocked (≥4× this topic's per-exam need).
@@ -647,7 +668,7 @@ ${JSON.stringify(questions)}`;
 }
 
 // ── Mix FAA + O&P + AI questions for one topic ───────────────────────────────
-async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride, varRatioOverride, overrides, flaggedMap) {
+async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride, varRatioOverride, overrides, flaggedMap, seenSet) {
   if (total < 1) return [];
 
   const bank = getFaaBank();
@@ -673,8 +694,8 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
   let aiCount  = Math.max(0, total - faaCount - varCount - opCount);
 
   const [faaQuestions, varQuestions, opQuestions, aiQuestions] = await Promise.all([
-    Promise.resolve(getFaaQuestions(topic, faaCount)),
-    generateFaaVariants(topic, varCount, overrides, flaggedMap),
+    Promise.resolve(getFaaQuestions(topic, faaCount, seenSet)),
+    generateFaaVariants(topic, varCount, overrides, flaggedMap, seenSet),
     generateFromOP(topic, opCount, flaggedMap),
     generateForTopic(topic, aiCount, content),
   ]);
@@ -690,8 +711,15 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix } = req.body || {};
+  const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix, seenIds } = req.body || {};
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
+
+  // Per-student "already seen" question IDs (FAA bank id + variant vid). When present, selection
+  // prefers questions this student hasn't seen yet (rotation) before repeating — used by
+  // remediation exams. Absent → behavior is unchanged. Cap defensively to bound request work.
+  const seenSet = (Array.isArray(seenIds) && seenIds.length)
+    ? new Set(seenIds.slice(0, 5000).map(String))
+    : null;
 
   // MODE: 'all' — return EVERY stored bank question for the selected topics (no AI, no cap).
   if (mode === 'all') {
@@ -738,7 +766,7 @@ module.exports = async function handler(req, res) {
 
     // Step 1: Build each topic's question mix in parallel
     const batches = await Promise.all(
-      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr, or, vr, overrides, flaggedMap))
+      selectedTopics.map((t, i) => buildTopicQuestions(t, counts[i], content, fr, or, vr, overrides, flaggedMap, seenSet))
     );
     let questions = batches.flat();
 
@@ -771,11 +799,16 @@ module.exports = async function handler(req, res) {
       const used = new Set(questions.map(q => q.question));
       const extras = [];
       for (const t of selectedTopics) {
-        for (const q of getFaaQuestions(t, 1000)) {        // whole available pool for the topic
+        for (const q of getFaaQuestions(t, 1000, seenSet)) {  // whole available pool for the topic
           if (!used.has(q.question) && choicesAllDistinct(q.choices)) { used.add(q.question); extras.push(q); }
         }
       }
-      shuffle(extras);
+      // Prefer-unseen even in backfill (plain shuffle would erase getFaaQuestions' ordering).
+      if (seenSet && seenSet.size) {
+        const u = [], s = [];
+        for (const q of extras) (q.id != null && seenSet.has(String(q.id)) ? s : u).push(q);
+        shuffle(u); shuffle(s); extras.length = 0; extras.push(...u, ...s);
+      } else { shuffle(extras); }
       for (const q of extras) { if (questions.length >= total) break; questions.push(q); }
     }
 
