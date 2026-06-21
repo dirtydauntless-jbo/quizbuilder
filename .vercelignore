@@ -1,0 +1,9 @@
+node_modules/
+functions/node_modules/
+*.pdf
+extract-8083.js
+extract-questions.js
+extract-figures.js
+generate-explanations.js
+package.json
+package-lock.json

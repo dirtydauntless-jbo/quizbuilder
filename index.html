@@ -7117,11 +7117,15 @@ async function loadCdPerfTab(){
       }
     }catch(e){}
     try { opts += await _classExamOptions(selectedClassId); } catch(e){}
+    opts = '<option value="classwide">📊 Class-Wide Weak Spots (all exams)</option>' + opts;
     picker.innerHTML = opts || '<option value="">No data yet</option>';
   }
 
   const val = picker.value;
   if(!val){ content.innerHTML = '<div class="empty-state">Select a quiz or session.</div>'; return; }
+
+  // Route to class-wide weak spots (aggregate across every assigned practice exam)
+  if(val==='classwide'){ await loadClassWideWeakSpots(selectedClassId); return; }
 
   // Route to sim performance if selected
   if(val.startsWith('sim::')){
@@ -7527,6 +7531,109 @@ async function assignSubmit(){
   }catch(e){ st.style.color='var(--wl)'; st.textContent='Failed: '+(e.message||e); }
 }
 function _asgExamLabel(a){ return a.mode==='official'?(({general:'General',airframe:'Airframe',powerplant:'Powerplant'})[a.subject]||a.subject)+' Official':(a.label||'Custom'); }
+
+// ════════════════════════════════════════════════════════════════════════════
+// REMEDIATION — turn a student's (or class's) weak topics into a targeted exam
+// ════════════════════════════════════════════════════════════════════════════
+// Merge every per-topic result a student has accumulated, across all their exams.
+// Source of truth is practiceHistory (every taken exam lands there); assignedExams
+// are only added when their examKey isn't already counted (avoids double-counting).
+async function _remStudentTopicAgg(uid){
+  const agg={}; // topic -> {correct,total}
+  const add=(ts)=>{ if(!ts||typeof ts!=='object') return;
+    Object.entries(ts).forEach(([t,v])=>{ if(!v||typeof v.total!=='number'||v.total<=0) return;
+      if(!agg[t]) agg[t]={correct:0,total:0};
+      agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); };
+  const seen=new Set();
+  try{ const ph=await dbGet('practiceHistory/'+uid)||{};
+    Object.entries(ph).forEach(([k,r])=>{ seen.add(k); add(r&&r.topicStats); }); }catch(e){}
+  try{ const ex=await dbGet('assignedExams/'+uid)||{};
+    Object.entries(ex).forEach(([aid,a])=>{ const key=(a&&a.examKey)||aid; if(seen.has(key)) return; seen.add(key); add(a&&a.topicStats); }); }catch(e){}
+  return agg;
+}
+// Weak topics = below the FAA 70% line, with enough exposure to be meaningful.
+function _remWeakTopics(agg, opts){
+  const minTotal=(opts&&opts.minTotal)||2, thresh=(opts&&opts.thresh!=null?opts.thresh:70);
+  return Object.entries(agg)
+    .map(([t,v])=>({topic:t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)}))
+    .filter(r=>r.total>=minTotal && r.pct<thresh)
+    .sort((a,b)=>a.pct-b.pct);
+}
+// One-click: open the Assign tab pre-filled with this student's weakest topics.
+// Reads window._remTarget when called with no args (avoids onclick string-escaping).
+async function startRemediationExam(uid, name){
+  if(!uid && window._remTarget){ uid=window._remTarget.uid; name=window._remTarget.name; }
+  const rm=document.getElementById('assignResultModal'); if(rm) rm.style.display='none';
+  const agg=await _remStudentTopicAgg(uid);
+  const weak=_remWeakTopics(agg,{minTotal:2});
+  instSwitchTab('assign');               // resets the tab synchronously, then we prime it
+  assignSetTarget('student');
+  _asgStudent={uid,name:name||'',email:''};
+  const selBox=document.getElementById('assignSelected');
+  if(selBox) selBox.innerHTML='<div style="padding:9px 12px;border:1px solid var(--cl);border-radius:var(--r);background:rgba(58,170,102,.1)">Selected: <b>'+esc(name||'(student)')+'</b> <button onclick="_asgStudent=null;document.getElementById(\'assignSelected\').innerHTML=\'\'" style="margin-left:8px;background:none;border:none;color:var(--wl);cursor:pointer">✕ clear</button></div>';
+  assignSetMode('topic');
+  assignRenderTopicPicker();
+  const st=document.getElementById('assignStatus');
+  if(!weak.length){
+    if(st){ st.style.color='var(--muted)'; st.textContent='No weak topics yet for '+(name||'this student')+' (needs a few graded exams first). Pick topics manually.'; }
+    const panel=document.getElementById('asgTopicPanel'); if(panel) panel.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  const pick=weak.slice(0,6);            // keep the exam focused — top-6 weakest
+  const wanted=new Set(pick.map(w=>w.topic));
+  const pickerVals=new Set([...document.querySelectorAll('.asgTopic')].map(c=>c.value));
+  let matched=0;
+  document.querySelectorAll('.asgTopic').forEach(cb=>{ if(wanted.has(cb.value)){ cb.checked=true; matched++; } });
+  const unmatched=pick.filter(w=>!pickerVals.has(w.topic)).map(w=>w.topic);
+  const cnt=document.getElementById('asgCount'); if(cnt) cnt.value=Math.min(60,Math.max(10,matched*5));
+  if(st){ st.style.color='var(--cl)';
+    st.innerHTML='🎯 Pre-selected '+matched+' weak topic'+(matched===1?'':'s')+' for <b>'+esc(name||'student')+'</b>: '+pick.filter(w=>pickerVals.has(w.topic)).map(w=>esc(w.topic)+' <span style="color:var(--muted)">('+w.pct+'%)</span>').join(', ')+'. Review and click <b>ASSIGN EXAM →</b>.'+(unmatched.length?'<br><span style="color:var(--wl)">Couldn\'t auto-select: '+unmatched.map(esc).join(', ')+' — not in the topic list.</span>':''); }
+  const panel=document.getElementById('asgTopicPanel'); if(panel) panel.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+// Class-wide weak spots: aggregate every student's class-exam topic results in one classroom.
+async function loadClassWideWeakSpots(classId){
+  const el=document.getElementById('cdPerfContent'); if(!el) return;
+  el.innerHTML='<div class="empty-state">Loading class-wide data…</div>';
+  const stu=await dbGet('classroomStudents/'+classId)||{};
+  const roster=Object.entries(stu).filter(([,v])=>v&&typeof v==='object').map(([k,v])=>({uid:(v&&v.uid)||k}));
+  if(!roster.length){ el.innerHTML='<div class="empty-state">No students in this class.</div>'; return; }
+  const agg={}; let studentsWithData=0, examsCounted=0;
+  for(const u of roster){
+    let any=false;
+    const ex=await dbGet('assignedExams/'+u.uid).catch(()=>null)||{};
+    Object.values(ex).forEach(a=>{ if(!a||a.classId!==classId) return; const ts=a.topicStats; if(!ts||typeof ts!=='object') return; examsCounted++; any=true;
+      Object.entries(ts).forEach(([t,v])=>{ if(!v||!v.total) return; if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); });
+    if(any) studentsWithData++;
+  }
+  const rows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
+  if(!rows.length){ el.innerHTML='<div class="empty-state">No completed class exams with topic data yet. Assign a practice exam and have students take it — weak spots show up here.</div>'; return; }
+  const weak=rows.filter(r=>r.pct<70);
+  window._classRemTopics=weak.slice(0,8).map(r=>r.t);
+  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across all assigned exams in this class · '+studentsWithData+' student'+(studentsWithData===1?'':'s')+' with data · '+examsCounted+' exam'+(examsCounted===1?'':'s')+' counted</div></div>';
+  if(weak.length){
+    html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Topics the class struggles with most</div>'+weak.slice(0,8).map(r=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:3px">'+esc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+'<button onclick="startClassRemediation(\''+classId+'\')" class="btn btn-primary" style="margin-top:10px;font-size:.82rem;padding:9px 16px;letter-spacing:.5px">🎯 Assign Remediation Exam to Whole Class</button></div>';
+  } else {
+    html+='<div style="background:rgba(58,170,102,.08);border:1px solid rgba(58,170,102,.3);border-radius:var(--r);padding:12px 15px;margin-bottom:12px;font-weight:700;color:var(--cl)">✓ No class-wide weak topics — every topic is above 70%.</div>';
+  }
+  html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px"><div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:9px">All Topics — class aggregate (weakest first)</div>'+rows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.t)+'</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted)">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>';
+  el.innerHTML=html;
+}
+// Pre-fill the Assign tab in CLASSROOM mode with the class's weakest topics.
+async function startClassRemediation(classId){
+  const topics=window._classRemTopics||[];
+  instSwitchTab('assign');
+  assignSetTarget('classroom');
+  assignSetMode('topic');
+  assignRenderTopicPicker();
+  await assignLoadClasses();
+  const sel=document.getElementById('assignClassSelect'); if(sel){ sel.value=classId; await assignSelectClass(classId); }
+  const wanted=new Set(topics);
+  let matched=0; document.querySelectorAll('.asgTopic').forEach(cb=>{ if(wanted.has(cb.value)){cb.checked=true;matched++;} });
+  const st=document.getElementById('assignStatus');
+  if(st){ st.style.color='var(--cl)'; st.innerHTML='🎯 Pre-selected '+matched+' class weak topic'+(matched===1?'':'s')+'. This sends a focused full-length FAA exam to everyone. Review and click <b>ASSIGN EXAM →</b>.'; }
+  const panel=document.getElementById('asgTopicPanel'); if(panel) panel.scrollIntoView({behavior:'smooth',block:'center'});
+}
 async function assignLoadList(){
   const el=document.getElementById('assignList'); if(!el) return;
   let all={}; try{ all=await dbGet('assignedExams')||{}; }catch(e){ el.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.8rem">Could not load assignments.</div>'; return; }
@@ -7589,7 +7696,9 @@ async function assignViewResult(stuUid,aid){
   const topicRows=Object.entries(topicAgg).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
   const topicTable=topicRows.length?'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin:14px 0"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px">Performance By Topic — every topic (weakest first)</div>'+topicRows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.t)+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>':'';
   const qhtml='<div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px">Question-by-question</div>'+questions.map((q,i)=>{const sel=answers[i];const ok=sel===q.correct;const ans=sel!==undefined;return buildRevQuestionCard(q,i,sel,ok,ans);}).join('');
-  document.getElementById('asgResContent').innerHTML=passBar+plan+topicTable+qhtml;
+  window._remTarget={uid:stuUid, name:a.studentName||''};
+  const remBtn='<button onclick="startRemediationExam()" class="btn btn-primary" style="width:100%;margin-bottom:14px;font-size:.86rem;padding:11px;letter-spacing:.5px">🎯 Assign Remediation Exam — target this student\'s weak topics</button>';
+  document.getElementById('asgResContent').innerHTML=passBar+remBtn+plan+topicTable+qhtml;
   document.getElementById('assignResultModal').style.display='flex';
 }
 
@@ -15202,6 +15311,8 @@ let _lmStopped = false;
 let _lmAnswerDelay = 5; // seconds student has to answer before voice reads it
 let _lmUtterance = null;
 let _lmTimer = null;
+let _lmKeepAlive = null;   // pause/resume interval — defeats Chrome's ~15s cutoff
+let _lmSpeakTimer = null;  // safety timeout — advance if onend/onerror never fire (mobile)
 let _lmTopic = null;
 
 async function startListenMode(topicKey){
