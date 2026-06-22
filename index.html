@@ -1535,6 +1535,9 @@ setTimeout(function(){
       <!-- Powerplant Section -->
       <div id="acsSecPowerplant" style="margin-bottom:20px"></div>
 
+      <!-- ACS → Practice Exam bridge (turns missed codes into a targeted written exam) -->
+      <div id="acsBridgeSection" style="display:none;margin-bottom:20px"></div>
+
       <div id="acsEmpty" style="text-align:center;padding:48px 0;font-family:monospace;font-size:.85rem;color:var(--muted)">
         No codes added yet. Upload your AKTR or type in your missed codes above.
       </div>
@@ -7710,7 +7713,7 @@ async function assignLoadList(){
         if((v.correct||0)/v.total<0.7) o.weak++; }); });
       s.topics=Object.entries(tp).map(([t,o])=>({t,...o,pct:Math.round(o.correct/o.total*100)}))
         .sort((a,b)=>(b.weak-a.weak)||(a.pct-b.pct));
-      s.recurring=s.topics.filter(x=>x.weak>=3); // weak across 3+ exams = reliable deficiency
+      s.recurring=s.topics.filter(x=>x.weak>=2); // weak across 2+ exams = deficiency worth attacking
       return s;
     }).sort((a,b)=>{
       const ar=a.recurring.length?1:0, br=b.recurring.length?1:0; if(ar!==br) return br-ar;     // recurring first
@@ -7722,14 +7725,14 @@ async function assignLoadList(){
     html+=students.map(s=>{
       const recSummary = s.recurring.length
         ? '<span style="color:var(--wl)">⚠ Recurring weak: '+s.recurring.slice(0,3).map(x=>esc(x.t)+' ('+x.weak+'×)').join(', ')+'</span>'
-        : (s.examCount>=3 ? '<span style="color:var(--cl)">✓ No recurring weak topics</span>'
-           : '<span style="color:var(--muted)">'+(s.examCount===0?'no completed exams yet':s.examCount+' completed — need ≥3 for a reliable read')+'</span>');
+        : (s.examCount>=2 ? '<span style="color:var(--cl)">✓ No recurring weak topics</span>'
+           : '<span style="color:var(--muted)">'+(s.examCount===0?'no completed exams yet':'1 completed — need ≥2 to spot a pattern')+'</span>');
       const avgCol = s.avg==null?'var(--muted)':(s.avg>=70?'var(--cl)':'var(--wl)');
       const avgStr = s.avg==null?'—':('avg '+s.avg+'%');
       const topicTable = s.topics.length
         ? '<div style="font-family:monospace;font-size:.64rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:4px 0 6px">Cumulative weak areas — across '+s.examCount+' exam'+(s.examCount===1?'':'s')+' (weakest first)</div>'+
           s.topics.map(x=>{ const col=x.pct>=70?'var(--cl)':x.pct>=50?'#f59e0b':'var(--wl)';
-            const rec=x.weak>=3?'<span style="background:rgba(204,68,68,.18);color:var(--wl);font-family:monospace;font-size:.58rem;font-weight:700;border-radius:8px;padding:1px 6px;margin-left:6px">RECURRING</span>':'';
+            const rec=x.weak>=2?'<span style="background:rgba(204,68,68,.18);color:var(--wl);font-family:monospace;font-size:.58rem;font-weight:700;border-radius:8px;padding:1px 6px;margin-left:6px">RECURRING</span>':'';
             return '<div style="display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-size:.82rem">'+esc(x.t)+rec+'</div><div style="font-family:monospace;font-size:.72rem;color:var(--muted);white-space:nowrap">weak in '+x.weak+'/'+x.seen+'</div><div style="width:44px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+x.pct+'%</div></div>'; }).join('')
         : '<div style="font-family:monospace;font-size:.75rem;color:var(--muted)">No completed exams yet.</div>';
       const examList = s.items.map(it=>{ const dn=it.a.status==='complete';
@@ -18079,6 +18082,93 @@ const _acsNewCodes = new Set();
 
 // ACS codes stored in Firebase under studentProfiles/$uid/acsCodes
 // Falls back to localStorage for guests / offline
+// ── ACS → Practice-exam bridge ───────────────────────────────────────────────
+// Crosswalk: FAA-S-ACS-1 subject name (as stored in ACS_LOOKUP) → our practice-bank topic
+// (OFFICIAL_TOPICS). Lets a student's MISSED real-exam ACS codes generate a targeted written exam
+// on exactly those areas. Name-based; reviewed against the bank's topic list.
+const ACS_SUBJECT_TOPIC = {
+  // General
+  'A. Fundamentals of Electricity':'Fundamentals of Electricity',
+  'B. Aircraft Drawings':'Aircraft Drawings',
+  'C. Weight and Balance':'Weight and Balance',
+  'D. Fluid Lines and Fittings':'Fluid Lines and Fittings',
+  'E. Aircraft Materials, Hardware, and Processes':'Aircraft Material Hardware and Processes',
+  'F. Ground Operations and Servicing':'Ground Operations and Servicing',
+  'G. Cleaning and Corrosion Control':'Cleaning and Corrosion Control',
+  'H. Mathematics':'Mathematics',
+  'I. Regulations, Forms, Records, and Publications':'Forms and Regulations',
+  'J. Physics for Aviation':'Physics',
+  'K. Inspection Concepts and Techniques':'Inspection Concepts and Techniques',
+  'L. Human Factors':'Human Factors',
+  // Airframe
+  'A. Metallic Structures':'Metallic Structures',
+  'B. Non-Metallic Structures':'Nonmetallic Structures',
+  'C. Flight Controls':'Flight Controls',
+  'D. Airframe Inspection':'Airframe Inspection',
+  'E. Landing Gear Systems':'Landing Gear',
+  'F. Hydraulic and Pneumatic Systems':'Hydraulic and Pneumatic Systems',
+  'G. Environmental Systems':'Environmental Systems',
+  'H. Aircraft Instrument Systems':'Aircraft Instrument Systems',
+  'I. Communication and Navigation Systems':'Communications and Navigation Systems',
+  'I. Communications and Navigation Systems':'Communications and Navigation Systems',
+  'J. Aircraft Fuel Systems':'Aircraft Fuel Systems',
+  'K. Aircraft Electrical Systems':'Aircraft Electrical Systems',
+  'L. Ice and Rain Control Systems':'Ice and Rain Control Systems',
+  'M. Airframe Fire Protection Systems':'Fire Protection',
+  'M. Fire Protection Systems':'Fire Protection',
+  'N. Rotorcraft Fundamentals':'Rotorcraft',
+  'O. Water and Waste Systems':'Environmental Systems', // no dedicated bank topic — nearest match
+  // Powerplant
+  'A. Reciprocating Engines':'Reciprocating Engines',
+  'B. Turbine Engines':'Turbine Engines',
+  'C. Engine Inspection':'Engine Inspection',
+  'D. Engine Instrument Systems':'Engine Instrument Systems',
+  'E. Engine Fire Protection Systems':'Engine Fire Protection Systems',
+  'F. Engine Electrical Systems':'Engine Electrical Systems',
+  'G. Engine Lubrication Systems':'Engine Lubrication Systems',
+  'H. Ignition and Starting Systems':'Ignition and Starting Systems',
+  'I. Engine Fuel and Fuel Metering Systems':'Engine Fuel and Fuel Metering Systems',
+  'J. Reciprocating Engine Induction and Cooling Systems':'Reciprocating Engine Induction and Cooling',
+  'K. Turbine Engine Air Systems':'Turbine Engine Air Systems',
+  'L. Engine Exhaust and Reverser Systems':'Engine Exhaust and Reverser Systems',
+  'M. Propellers':'Propellers'
+};
+// Map a list of missed ACS codes → {bankTopic: count of missed codes}
+function acsTopicsFromCodes(codes){
+  const tc={};
+  (codes||[]).forEach(c=>{ const info=ACS_LOOKUP[c]; if(!info) return;
+    const topic=ACS_SUBJECT_TOPIC[info.subject]; if(!topic) return;
+    tc[topic]=(tc[topic]||0)+1; });
+  return tc;
+}
+// Render the "turn your missed codes into a practice exam" panel.
+function acsRenderBridge(codes){
+  const el=document.getElementById('acsBridgeSection'); if(!el) return;
+  const tc=acsTopicsFromCodes(codes||[]);
+  const ordered=Object.entries(tc).sort((a,b)=>b[1]-a[1]);
+  if(!ordered.length){ el.style.display='none'; el.innerHTML=''; return; }
+  window._acsBridgeTopics=ordered.map(([t])=>t);
+  const mapped=(codes||[]).filter(c=>{const i=ACS_LOOKUP[c];return i&&ACS_SUBJECT_TOPIC[i.subject];}).length;
+  const chips=ordered.map(([t,n])=>'<span style="display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:14px;padding:3px 10px;margin:0 5px 6px 0;font-size:.8rem">'+esc(t)+' <span style="font-family:monospace;font-size:.7rem;color:var(--muted)">·'+n+'</span></span>').join('');
+  el.style.display='block';
+  el.innerHTML='<div style="background:var(--panel);border:2px solid rgba(74,158,255,.35);border-radius:var(--r);overflow:hidden">'+
+    '<div style="padding:14px 18px;background:rgba(74,158,255,.08);border-bottom:1px solid rgba(74,158,255,.2);display:flex;align-items:center;gap:10px">'+
+      '<span style="font-size:1.3rem">📝</span><div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--blue)">Practice What You Missed</div>'+
+      '<div style="font-family:monospace;font-size:.7rem;color:var(--muted)">We mapped your '+mapped+' missed code'+(mapped===1?'':'s')+' to '+ordered.length+' study topic'+(ordered.length===1?'':'s')+' — generate a written exam aimed right at them.</div></div></div>'+
+    '<div style="padding:14px 18px">'+chips+
+      '<button onclick="acsStartExam()" class="btn btn-primary" style="width:100%;margin-top:8px;font-size:.9rem;padding:12px;letter-spacing:.5px">🎯 Generate a Practice Exam on These Areas</button>'+
+    '</div></div>';
+}
+// Launch a focused written exam (verbatim FAA + reworded variants + O&P) on the mapped topics.
+function acsStartExam(){
+  const topics=(window._acsBridgeTopics||[]).slice();
+  if(!topics.length){ if(typeof showToast==='function') showToast('Add your missed ACS codes first.','error'); return; }
+  if(typeof stuSwitchTab==='function') stuSwitchTab('practice');
+  _pxMode='topic'; _pxOfficialSubject=null; _pxAssignId=null; _pxClassId=null; _pxClassExamId=null;
+  const count=Math.min(80, Math.max(20, topics.length*6));
+  pxRunExam(topics, count, 'ACS Targeted Exam — '+topics.length+' area'+(topics.length===1?'':'s'), {focusedMix:true});
+}
+
 function acsGetKey(){ return 'acsCodes_' + (stuAuthUser?.uid || 'guest'); }
 
 // Sync read of current codes for immediate use (e.g. after sheet reload)
@@ -18380,6 +18470,8 @@ async function acsRenderAll(){
 
   // Render practical predictions
   acsRenderPracticals(codes);
+  // Render the "turn missed codes into a practice exam" bridge
+  acsRenderBridge(codes);
 
   const sections = ['General','Airframe','Powerplant'];
   const sectionIds = {'General':'acsSecGeneral','Airframe':'acsSecAirframe','Powerplant':'acsSecPowerplant'};
