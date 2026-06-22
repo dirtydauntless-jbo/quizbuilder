@@ -2067,8 +2067,8 @@ setTimeout(function(){
 
     <!-- Share my practice results -->
     <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
-      <div style="font-weight:700;font-size:.95rem;margin-bottom:3px">📤 Share My Practice Results</div>
-      <div style="font-family:monospace;font-size:.72rem;color:var(--muted);line-height:1.45;margin-bottom:10px">Let an instructor see your practice exam scores so they can help you — even if you’re not in their class. You can stop sharing anytime.</div>
+      <div style="font-weight:700;font-size:.95rem;margin-bottom:3px">📤 Share My Results & Test Codes</div>
+      <div style="font-family:monospace;font-size:.72rem;color:var(--muted);line-height:1.45;margin-bottom:10px">Let an instructor see your practice exam scores <b>and your ACS test codes</b> so they can target what you missed — even if you’re not in their class. You can stop sharing anytime.</div>
       <input id="shareSearch" oninput="shareSearchInstructors()" placeholder="Search instructor by name…" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.9rem;box-sizing:border-box">
       <div id="shareSearchResults" style="margin-top:8px"></div>
       <div id="shareGrantList" style="margin-top:12px"></div>
@@ -7431,7 +7431,37 @@ function assignSelectStudent(uid){
   _asgStudent={uid,name:p.name||'',email:p.email||''};
   document.getElementById('assignSearchResults').innerHTML='';
   document.getElementById('assignSearch').value='';
-  document.getElementById('assignSelected').innerHTML='<div style="padding:9px 12px;border:1px solid var(--cl);border-radius:var(--r);background:rgba(58,170,102,.1)">Selected: <b>'+esc(_asgStudent.name||'(no name)')+'</b> <span style="color:var(--muted);font-family:monospace;font-size:.75rem">'+esc(_asgStudent.email)+'</span> <button onclick="_asgStudent=null;document.getElementById(\'assignSelected\').innerHTML=\'\'" style="margin-left:8px;background:none;border:none;color:var(--wl);cursor:pointer">✕ clear</button></div>';
+  document.getElementById('assignSelected').innerHTML='<div style="padding:9px 12px;border:1px solid var(--cl);border-radius:var(--r);background:rgba(58,170,102,.1)">Selected: <b>'+esc(_asgStudent.name||'(no name)')+'</b> <span style="color:var(--muted);font-family:monospace;font-size:.75rem">'+esc(_asgStudent.email)+'</span> <button onclick="_asgStudent=null;document.getElementById(\'assignSelected\').innerHTML=\'\';var a=document.getElementById(\'asgAcsPanel\');if(a)a.innerHTML=\'\'" style="margin-left:8px;background:none;border:none;color:var(--wl);cursor:pointer">✕ clear</button></div><div id="asgAcsPanel" style="margin-top:8px"></div>';
+  _asgShowSharedAcs(uid, _asgStudent.name||'');
+}
+// If this student SHARED their ACS test codes, show the mapped weak topics + a one-click button to
+// load them as the exam topics. Read is denied unless the student granted a share → panel stays empty.
+async function _asgShowSharedAcs(uid, name){
+  const el=document.getElementById('asgAcsPanel'); if(!el) return; el.innerHTML='';
+  let codes=null;
+  try{ codes=await dbGet('acsCodes/'+uid); }catch(e){ return; } // denied (not shared) → nothing
+  if(!Array.isArray(codes)||!codes.length) return;
+  const tc=(typeof acsTopicsFromCodes==='function')?acsTopicsFromCodes(codes):{};
+  const ordered=Object.entries(tc).sort((a,b)=>b[1]-a[1]);
+  if(!ordered.length) return;
+  window._asgAcsTopics=ordered.map(([t])=>t);
+  const chips=ordered.map(([t,n])=>'<span style="display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:14px;padding:2px 9px;margin:0 5px 5px 0;font-size:.78rem">'+esc(t)+' <span style="font-family:monospace;font-size:.68rem;color:var(--muted)">·'+n+'</span></span>').join('');
+  el.innerHTML='<div style="background:rgba(74,158,255,.06);border:1px solid rgba(74,158,255,.3);border-radius:var(--r);padding:11px 13px">'+
+    '<div style="font-family:monospace;font-size:.72rem;color:var(--blue);margin-bottom:7px">📋 '+esc(name||'This student')+' shared their ACS test codes — '+codes.length+' missed code'+(codes.length===1?'':'s')+' across '+ordered.length+' topic'+(ordered.length===1?'':'s')+'</div>'+
+    chips+
+    '<button onclick="_asgUseAcsTopics()" class="btn" style="display:block;margin-top:6px;font-size:.78rem;padding:7px 12px;border:1px solid var(--blue);color:var(--blue)">Use these as the exam topics →</button>'+
+  '</div>';
+}
+// Switch the assign builder to Custom-Topics mode and check the ACS-mapped topics.
+function _asgUseAcsTopics(){
+  const topics=window._asgAcsTopics||[]; if(!topics.length) return;
+  assignSetMode('topic');
+  assignRenderTopicPicker();
+  const cnt=document.getElementById('asgCount'); if(cnt) cnt.value=Math.min(60,Math.max(10,topics.length*5));
+  const wanted=new Set(topics); let matched=0;
+  document.querySelectorAll('.asgTopic').forEach(cb=>{ if(wanted.has(cb.value)){ cb.checked=true; matched++; } });
+  const st=document.getElementById('assignStatus'); if(st){ st.style.color='var(--cl)'; st.textContent='🎯 Loaded '+matched+' topic'+(matched===1?'':'s')+' from the student’s ACS codes. Review and click ASSIGN EXAM →.'; }
+  const panel=document.getElementById('asgTopicPanel'); if(panel) panel.scrollIntoView({behavior:'smooth',block:'center'});
 }
 function assignSetTarget(t){
   _asgTarget=t;
@@ -18179,8 +18209,13 @@ function acsGetCurrentCodes(){
 async function acsLoad(){
   if(stuAuthUser?.uid){
     try{
-      const data = await dbGet('studentProfiles/' + stuAuthUser.uid + '/acsCodes');
+      const data = await dbGet('acsCodes/' + stuAuthUser.uid);   // consent-gated node (shareable)
       if(Array.isArray(data)) return data;
+    }catch(e){}
+    // One-time migration from the old location (studentProfiles/$uid/acsCodes)
+    try{
+      const legacy = await dbGet('studentProfiles/' + stuAuthUser.uid + '/acsCodes');
+      if(Array.isArray(legacy) && legacy.length){ try{ await dbSet('acsCodes/' + stuAuthUser.uid, legacy); }catch(e){} return legacy; }
     }catch(e){}
   }
   // Fallback to localStorage (offline or guest)
@@ -18190,9 +18225,9 @@ async function acsLoad(){
 async function acsSave(codes){
   // Always write to localStorage as immediate cache
   localStorage.setItem(acsGetKey(), JSON.stringify(codes));
-  // Persist to Firebase if logged in
+  // Persist to Firebase if logged in — gated node so instructors only see it when shared
   if(stuAuthUser?.uid){
-    try{ await dbSet('studentProfiles/' + stuAuthUser.uid + '/acsCodes', codes); }catch(e){}
+    try{ await dbSet('acsCodes/' + stuAuthUser.uid, codes); }catch(e){}
   }
 }
 
@@ -18446,10 +18481,10 @@ async function acsMigrateAndRender(){
     const localCodes = (() => { try{ return JSON.parse(localStorage.getItem(localKey)||'[]'); }catch(e){ return []; } })();
     if(localCodes.length){
       try{
-        const fbCodes = await dbGet('studentProfiles/' + stuAuthUser.uid + '/acsCodes') || [];
+        const fbCodes = (await dbGet('acsCodes/' + stuAuthUser.uid)) || (await dbGet('studentProfiles/' + stuAuthUser.uid + '/acsCodes')) || [];
         const merged = [...new Set([...fbCodes, ...localCodes])];
         if(merged.length > fbCodes.length){
-          await dbSet('studentProfiles/' + stuAuthUser.uid + '/acsCodes', merged);
+          await dbSet('acsCodes/' + stuAuthUser.uid, merged);
         }
         // Clear localStorage after successful migration
         localStorage.removeItem(localKey);

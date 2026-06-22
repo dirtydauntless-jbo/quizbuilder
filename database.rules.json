@@ -186,6 +186,12 @@
         }
       }
     },
+    "acsCodes": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('practiceShares').child($uid).child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+      }
+    },
     "practiceHistory": {
       ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
       "$uid": {
