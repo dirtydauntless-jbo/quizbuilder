@@ -15240,9 +15240,9 @@ function renderFlashcard(){
     + '<div style="display:flex;gap:8px;margin-top:6px"><button onclick="fcSaveNote()" class="btn btn-primary btn-sm" style="flex:1">Save note</button><button onclick="fcToggleNote()" class="btn btn-ghost btn-sm">Cancel</button></div></div>';
   let noteAreaHtml;
   if(noteHidden){
-    noteAreaHtml = '<div style="max-width:520px;margin:10px auto 0;text-align:center"><button onclick="fcShowNote()" style="background:none;border:none;color:var(--muted);font-family:monospace;font-size:.72rem;cursor:pointer;text-decoration:underline">📝 Show note'+(fcHideAllNotes?'s':'')+'</button></div>';
+    noteAreaHtml = '<div style="max-width:520px;margin:16px auto;text-align:center"><button onclick="fcShowNote()" style="background:none;border:none;color:var(--muted);font-family:monospace;font-size:.72rem;cursor:pointer;text-decoration:underline">📝 Show note'+(fcHideAllNotes?'s':'')+'</button></div>';
   } else if(note){
-    noteAreaHtml = '<div style="max-width:520px;margin:10px auto 0">'
+    noteAreaHtml = '<div style="max-width:520px;margin:16px auto">'
       + '<div style="background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.35);border-left:3px solid var(--blue);border-radius:0 var(--r) var(--r) 0;padding:10px 12px;font-size:.84rem;line-height:1.5;white-space:pre-wrap">'+esc(note)+'</div>'
       + '<div style="display:flex;gap:14px;justify-content:flex-end;margin-top:5px;font-family:monospace;font-size:.68rem">'
         + '<button onclick="fcToggleNote()" style="background:none;border:none;color:var(--blue);cursor:pointer">✏️ Edit</button>'
@@ -15250,8 +15250,8 @@ function renderFlashcard(){
         + '<button onclick="fcSetHideAll(true)" style="background:none;border:none;color:var(--muted);cursor:pointer">Hide all</button>'
       + '</div>' + _noteEditor + '</div>';
   } else {
-    noteAreaHtml = '<div style="max-width:520px;margin:10px auto 0">'
-      + '<button onclick="fcToggleNote()" style="width:100%;text-align:center;background:var(--accent);border:1px solid var(--accent);border-radius:var(--r);padding:10px 12px;cursor:pointer;font-family:monospace;font-size:.8rem;font-weight:700;color:#000;letter-spacing:.5px">📝 Add Note</button>'
+    noteAreaHtml = '<div style="max-width:520px;margin:16px auto;text-align:center">'
+      + '<button onclick="fcToggleNote()" style="display:inline-block;background:var(--accent);border:none;border-radius:var(--r);padding:8px 24px;cursor:pointer;font-family:monospace;font-size:.78rem;font-weight:700;color:#000;letter-spacing:.5px">📝 Add Note</button>'
       + _noteEditor + '</div>';
   }
 
