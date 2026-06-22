@@ -7657,7 +7657,8 @@ function _asgExamLabel(a){ return a.mode==='official'?(({general:'General',airfr
 async function _remStudentTopicAgg(uid){
   const agg={}; // topic -> {correct,total}
   const add=(ts)=>{ if(!ts||typeof ts!=='object') return;
-    Object.entries(ts).forEach(([t,v])=>{ if(!v||typeof v.total!=='number'||v.total<=0) return;
+    Object.entries(ts).forEach(([t0,v])=>{ if(!v||typeof v.total!=='number'||v.total<=0) return;
+      const t=_normTopic(t0);
       if(!agg[t]) agg[t]={correct:0,total:0};
       agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); };
   const seen=new Set();
@@ -7708,6 +7709,10 @@ async function startRemediationExam(uid, name){
 }
 
 // Class-wide weak spots: aggregate every student's class-exam topic results in one classroom.
+// Fold legacy / non-standard topic labels into the canonical topic when building breakdowns.
+const TOPIC_ALIASES = { 'Aircraft Engine Instruments':'Aircraft Instrument Systems' };
+function _normTopic(t){ return TOPIC_ALIASES[t] || t; }
+
 async function loadClassWideWeakSpots(classId, targetElId){
   const el=document.getElementById(targetElId||'cdPerfContent'); if(!el) return;
   el.innerHTML='<div class="empty-state">Loading class-wide data…</div>';
@@ -7719,7 +7724,7 @@ async function loadClassWideWeakSpots(classId, targetElId){
     let any=false;
     const ex=await dbGet('assignedExams/'+u.uid).catch(()=>null)||{};
     Object.values(ex).forEach(a=>{ if(!a||a.classId!==classId) return; const ts=a.topicStats; if(!ts||typeof ts!=='object') return; examsCounted++; any=true;
-      Object.entries(ts).forEach(([t,v])=>{ if(!v||!v.total) return; if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); });
+      Object.entries(ts).forEach(([t0,v])=>{ if(!v||!v.total) return; const t=_normTopic(t0); if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); });
     if(any) studentsWithData++;
   }
   const rows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
@@ -7797,7 +7802,7 @@ async function assignLoadList(){
       s.avg=completed.length?Math.round(completed.reduce((x,it)=>x+(it.a.pct||0),0)/completed.length):null;
       // cumulative per-topic: overall accuracy + how many exams the topic was weak (<70%) in
       const tp={};
-      completed.forEach(it=>{ const ts=it.a.topicStats||{}; Object.entries(ts).forEach(([t,v])=>{ if(!v||!v.total) return;
+      completed.forEach(it=>{ const ts=it.a.topicStats||{}; Object.entries(ts).forEach(([t0,v])=>{ if(!v||!v.total) return; const t=_normTopic(t0);
         const o=tp[t]=tp[t]||{correct:0,total:0,weak:0,seen:0}; o.correct+=(v.correct||0); o.total+=v.total; o.seen++;
         if((v.correct||0)/v.total<0.7) o.weak++; }); });
       s.topics=Object.entries(tp).map(([t,o])=>({t,...o,pct:Math.round(o.correct/o.total*100)}))
@@ -7868,7 +7873,7 @@ async function assignViewResult(stuUid,aid){
   // Comprehensive per-topic breakdown — every topic on the exam (weakest first), in addition to
   // the Top-3 study plan above. Computed from the actual questions/answers.
   const topicAgg={};
-  questions.forEach((q,i)=>{const t=q.topic||'General';if(!topicAgg[t])topicAgg[t]={correct:0,total:0};topicAgg[t].total++;if(answers[i]===q.correct)topicAgg[t].correct++;});
+  questions.forEach((q,i)=>{const t=_normTopic(q.topic||'General');if(!topicAgg[t])topicAgg[t]={correct:0,total:0};topicAgg[t].total++;if(answers[i]===q.correct)topicAgg[t].correct++;});
   const topicRows=Object.entries(topicAgg).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
   const topicTable=topicRows.length?'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin:14px 0"><div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px">Performance By Topic — every topic (weakest first)</div>'+topicRows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.t)+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>':'';
   const qhtml='<div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px">Question-by-question</div>'+questions.map((q,i)=>{const sel=answers[i];const ok=sel===q.correct;const ans=sel!==undefined;return buildRevQuestionCard(q,i,sel,ok,ans);}).join('');
@@ -8409,7 +8414,7 @@ async function loadExamPerformance(classId, classExamId){
   const done=rows.filter(r=>r.a&&r.a.status==='complete');
   if(!done.length){ el.innerHTML='<div class="empty-state">No completed exams yet.</div>'; return; }
   const agg={}; let totC=0,totQ=0;
-  done.forEach(r=>{ const ts=r.a.topicStats||{}; Object.entries(ts).forEach(([t,v])=>{ if(!v||typeof v.total!=='number')return; if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); totC+=(r.a.score||0); totQ+=(r.a.total||0); });
+  done.forEach(r=>{ const ts=r.a.topicStats||{}; Object.entries(ts).forEach(([t0,v])=>{ if(!v||typeof v.total!=='number')return; const t=_normTopic(t0); if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); totC+=(r.a.score||0); totQ+=(r.a.total||0); });
   const topicRows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
   const classPct=totQ?Math.round(totC/totQ*100):0;
   const weak=topicRows.filter(r=>r.pct<70 && r.total>=2).slice(0,5);
@@ -14077,8 +14082,9 @@ async function pxComprehensive(subject){
   const agg={}; let totCorrect=0, totQ=0;
   exams.forEach(r=>{
     const ts=r.topicStats||{};
-    Object.entries(ts).forEach(([t,v])=>{
+    Object.entries(ts).forEach(([t0,v])=>{
       if(!v||typeof v.total!=='number') return;
+      const t=_normTopic(t0);
       if(!agg[t]) agg[t]={correct:0,total:0};
       agg[t].correct += (v.correct||0); agg[t].total += v.total;
     });
@@ -14342,7 +14348,7 @@ function pxProblemAreas(topicStats,n){
 function pxAnalyzeTopics(questions,answers){
   const m={};
   (questions||[]).forEach((q,i)=>{
-    const t=q.topic||'General';
+    const t=_normTopic(q.topic||'General');
     if(!m[t]) m[t]={topic:t,correct:0,total:0,missed:[]};
     m[t].total++;
     if(answers[i]===q.correct) m[t].correct++; else m[t].missed.push(q);
