@@ -852,6 +852,17 @@ setTimeout(function(){
       <button onclick="assignSubmit()" class="btn btn-primary" style="font-size:.9rem;padding:12px 22px;letter-spacing:1px">ASSIGN EXAM →</button>
       <span id="assignStatus" style="margin-left:12px;font-family:monospace;font-size:.82rem"></span>
 
+      <!-- Class performance breakdown — see where a class is weak without leaving this tab -->
+      <div style="margin-top:30px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+          <div class="section-head" style="font-size:1.1rem;margin:0">📊 Class Performance</div>
+          <select id="asgPerfClassSelect" onchange="asgPerfLoad()" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.9rem;cursor:pointer;max-width:260px">
+            <option value="">— Select a classroom —</option>
+          </select>
+        </div>
+        <div id="asgPerfContent"><div style="font-family:monospace;font-size:.8rem;color:var(--muted)">Pick a classroom to see its weakest topics (across every assigned exam).</div></div>
+      </div>
+
       <!-- Assigned exams + results -->
       <div style="margin-top:30px">
         <div class="section-head" style="font-size:1.1rem;margin:0 0 10px">Assigned Exams</div>
@@ -7451,6 +7462,8 @@ function assignInitTab(){
   ['general','airframe','powerplant'].forEach(x=>{const b=document.querySelector('.asgSubj[data-subj="'+x+'"]');if(b){b.style.background='var(--panel2)';b.style.borderColor='var(--border)';b.style.color='var(--text)';}});
   assignRenderTopicPicker();
   assignLoadList();
+  assignLoadClasses();  // populates both the target picker and the Class Performance dropdown
+  const pc=document.getElementById('asgPerfContent'); if(pc) pc.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted)">Pick a classroom to see its weakest topics (across every assigned exam).</div>';
 }
 async function assignSearchStudents(){
   const q=(document.getElementById('assignSearch').value||'').trim().toLowerCase();
@@ -7525,7 +7538,17 @@ async function assignLoadClasses(){
       _asgClassList=cls.filter(Boolean).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
     }catch(e){ _asgClassList=[]; }
   }
-  sel.innerHTML='<option value="">— Select a classroom —</option>'+_asgClassList.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
+  const opts='<option value="">— Select a classroom —</option>'+_asgClassList.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
+  sel.innerHTML=opts;
+  // Also fill the Class Performance dropdown (same tab) so weak spots are reachable here
+  const pf=document.getElementById('asgPerfClassSelect'); if(pf){ const cur=pf.value; pf.innerHTML=opts; if(cur) pf.value=cur; }
+}
+// Render the selected class's weak-spot breakdown inline in the Assign tab
+function asgPerfLoad(){
+  const cid=document.getElementById('asgPerfClassSelect')?.value;
+  const el=document.getElementById('asgPerfContent'); if(!el) return;
+  if(!cid){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted)">Pick a classroom to see its weakest topics (across every assigned exam).</div>'; return; }
+  loadClassWideWeakSpots(cid,'asgPerfContent');
 }
 async function assignSelectClass(classId){
   const info=document.getElementById('asgClassInfo');
@@ -7685,8 +7708,8 @@ async function startRemediationExam(uid, name){
 }
 
 // Class-wide weak spots: aggregate every student's class-exam topic results in one classroom.
-async function loadClassWideWeakSpots(classId){
-  const el=document.getElementById('cdPerfContent'); if(!el) return;
+async function loadClassWideWeakSpots(classId, targetElId){
+  const el=document.getElementById(targetElId||'cdPerfContent'); if(!el) return;
   el.innerHTML='<div class="empty-state">Loading class-wide data…</div>';
   const stu=await dbGet('classroomStudents/'+classId)||{};
   const roster=Object.entries(stu).filter(([,v])=>v&&typeof v==='object').map(([k,v])=>({uid:(v&&v.uid)||k}));
@@ -7701,7 +7724,9 @@ async function loadClassWideWeakSpots(classId){
   }
   const rows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
   if(!rows.length){ el.innerHTML='<div class="empty-state">No completed class exams with topic data yet. Assign a practice exam and have students take it — weak spots show up here.</div>'; return; }
-  const weak=rows.filter(r=>r.pct<70);
+  // Only flag a topic as a problem area if it was asked at least twice — one missed question
+  // out of a single asking isn't a reliable signal.
+  const weak=rows.filter(r=>r.pct<70 && r.total>=2);
   window._classRemTopics=weak.slice(0,8).map(r=>r.t);
   let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across all assigned exams in this class · '+studentsWithData+' student'+(studentsWithData===1?'':'s')+' with data · '+examsCounted+' exam'+(examsCounted===1?'':'s')+' counted</div></div>';
   if(weak.length){
@@ -8387,7 +8412,7 @@ async function loadExamPerformance(classId, classExamId){
   done.forEach(r=>{ const ts=r.a.topicStats||{}; Object.entries(ts).forEach(([t,v])=>{ if(!v||typeof v.total!=='number')return; if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); totC+=(r.a.score||0); totQ+=(r.a.total||0); });
   const topicRows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
   const classPct=totQ?Math.round(totC/totQ*100):0;
-  const weak=topicRows.filter(r=>r.pct<70).slice(0,5);
+  const weak=topicRows.filter(r=>r.pct<70 && r.total>=2).slice(0,5);
   let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;letter-spacing:1px;color:var(--accent)">Class Average: '+classPct+'%</div><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">'+done.length+' student'+(done.length===1?'':'s')+' completed · '+totC+'/'+totQ+' total</div></div>';
   if(weak.length){ html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Class needs the most work on</div>'+weak.map(r=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:3px">'+esc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+'</div>'; }
   html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px"><div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:9px">All Topics — class aggregate (weakest first)</div>'+topicRows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.t)+'</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted)">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>';
@@ -14028,7 +14053,7 @@ async function pxComprehensive(subject){
     .sort((a,b)=>a.pct-b.pct);
   const overallPct=totQ?Math.round(totCorrect/totQ*100):0;
   const oc=overallPct>=70?'var(--cl)':overallPct>=50?'#f59e0b':'var(--wl)';
-  const weak=rows.filter(r=>r.pct<70).slice(0,3);
+  const weak=rows.filter(r=>r.pct<70 && r.total>=2).slice(0,3);
   _pxCompLast={subject,subjLabel,examCount:exams.length,overallPct,totCorrect,totQ,rows,weak}; // for Print/PDF
   let html='<div style="text-align:right;margin-bottom:10px"><button onclick="pxComprehensivePrint()" class="btn btn-ghost btn-sm" style="font-size:.78rem">🖨 Print / Save as PDF</button></div>'+
     '<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'+
@@ -14265,11 +14290,12 @@ async function adminRegradeQuestion(){
   } catch(e){ if(msg){ msg.style.color='var(--wl)'; msg.textContent='Failed: '+(e&&e.message||e); } }
 }
 
-// Top N topics where the student scored below 70% (worst first)
+// Top N topics where the student scored below 70% (worst first). Requires ≥2 questions on the
+// topic — one miss out of a single asking isn't a meaningful problem area.
 function pxProblemAreas(topicStats,n){
   const ts=topicStats||{};
   return Object.entries(ts)
-    .filter(([,v])=>v&&v.total>0&&(v.correct/v.total)<0.7)
+    .filter(([,v])=>v&&v.total>=2&&(v.correct/v.total)<0.7)
     .sort((a,b)=>(a[1].correct/a[1].total)-(b[1].correct/b[1].total))
     .slice(0,n||3)
     .map(([t])=>t);
