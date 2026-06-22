@@ -13199,6 +13199,8 @@ let fcAnimating = false;  // prevent double-click during fly animation
 let fcHistory = [];       // [{card, wasKnown}] — track each marked card for Back
 let fcStarred = new Set();// set of card keys "bankId::topic_idx" that are starred
 let fcNotes = {};        // card key → student's note (e.g. "AC 43.13-1B Ch 4" / "FAR 91.207")
+let fcHiddenNotes = new Set(); // card keys whose note box the student chose to hide
+let fcHideAllNotes = false;    // student hid note boxes on ALL cards
 let fcTotalCards = 0;     // fixed total at session start for counter display
 let fcCardNum = 0;        // how many cards shown so far (increments each new card, decrements on Back)
 
@@ -15230,6 +15232,28 @@ function renderFlashcard(){
   const cardKey = (card.bankId||'general')+'::'+card.topic+'_'+card.idx;
   const isStarred = fcStarred.has(cardKey);
   const note = fcNotes[cardKey] || '';
+  // ── Note area: orange "Add Note" → blue editor box; saved note always shows in the blue box;
+  // student can hide the box on this card or on all cards ──
+  const noteHidden = fcHideAllNotes || fcHiddenNotes.has(cardKey);
+  const _noteEditor = '<div id="fcNoteEditor" style="display:none;margin-top:8px">'
+    + '<textarea id="fcNoteInput" placeholder="e.g. FAA-H-8083-31B Ch 7 (Fuel Systems) · AC 43.13-1B §4-13 · 14 CFR 43.9 — where/how to find this on the practical" style="width:100%;min-height:70px;padding:10px 12px;border:1px solid rgba(74,158,255,.4);border-radius:var(--r);background:rgba(74,158,255,.06);color:var(--text);font-family:monospace;font-size:.82rem;box-sizing:border-box;resize:vertical">'+esc(note)+'</textarea>'
+    + '<div style="display:flex;gap:8px;margin-top:6px"><button onclick="fcSaveNote()" class="btn btn-primary btn-sm" style="flex:1">Save note</button><button onclick="fcToggleNote()" class="btn btn-ghost btn-sm">Cancel</button></div></div>';
+  let noteAreaHtml;
+  if(noteHidden){
+    noteAreaHtml = '<div style="max-width:520px;margin:10px auto 0;text-align:center"><button onclick="fcShowNote()" style="background:none;border:none;color:var(--muted);font-family:monospace;font-size:.72rem;cursor:pointer;text-decoration:underline">📝 Show note'+(fcHideAllNotes?'s':'')+'</button></div>';
+  } else if(note){
+    noteAreaHtml = '<div style="max-width:520px;margin:10px auto 0">'
+      + '<div style="background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.35);border-left:3px solid var(--blue);border-radius:0 var(--r) var(--r) 0;padding:10px 12px;font-size:.84rem;line-height:1.5;white-space:pre-wrap">'+esc(note)+'</div>'
+      + '<div style="display:flex;gap:14px;justify-content:flex-end;margin-top:5px;font-family:monospace;font-size:.68rem">'
+        + '<button onclick="fcToggleNote()" style="background:none;border:none;color:var(--blue);cursor:pointer">✏️ Edit</button>'
+        + '<button onclick="fcHideNote()" style="background:none;border:none;color:var(--muted);cursor:pointer">🙈 Hide on this card</button>'
+        + '<button onclick="fcSetHideAll(true)" style="background:none;border:none;color:var(--muted);cursor:pointer">Hide all</button>'
+      + '</div>' + _noteEditor + '</div>';
+  } else {
+    noteAreaHtml = '<div style="max-width:520px;margin:10px auto 0">'
+      + '<button onclick="fcToggleNote()" style="width:100%;text-align:center;background:var(--accent);border:1px solid var(--accent);border-radius:var(--r);padding:10px 12px;cursor:pointer;font-family:monospace;font-size:.8rem;font-weight:700;color:#000;letter-spacing:.5px">📝 Add Note</button>'
+      + _noteEditor + '</div>';
+  }
 
   el.innerHTML = `<div class="study-wrap">
     <div class="fc-nav">
@@ -15270,17 +15294,8 @@ function renderFlashcard(){
       </div>
     </div>
 
-    <!-- Note (where to find the answer: 8083 / 43.13-1B / FARs) — button reveals the editor box -->
-    <div style="max-width:520px;margin:10px auto 0">
-      <button onclick="fcToggleNote()" style="width:100%;text-align:left;background:rgba(74,158,255,.10);border:1px solid rgba(74,158,255,.4);border-radius:var(--r);padding:9px 12px;cursor:pointer;font-family:monospace;font-size:.78rem;color:var(--blue)">📝 ${note?'Note saved — tap to view / edit':'Add a note (e.g. where to find this answer)'}</button>
-      <div id="fcNoteEditor" style="display:none;margin-top:8px">
-        <textarea id="fcNoteInput" placeholder="e.g. FAA-H-8083-31B Ch 7 (Fuel Systems) · AC 43.13-1B §4-13 · 14 CFR 43.9 — where/how to find this on the practical" style="width:100%;min-height:70px;padding:10px 12px;border:1px solid rgba(74,158,255,.4);border-radius:var(--r);background:rgba(74,158,255,.06);color:var(--text);font-family:monospace;font-size:.82rem;box-sizing:border-box;resize:vertical">${esc(note)}</textarea>
-        <div style="display:flex;gap:8px;margin-top:6px">
-          <button onclick="fcSaveNote()" class="btn btn-primary btn-sm" style="flex:1">Save note</button>
-          <button onclick="fcToggleNote()" class="btn btn-ghost btn-sm">Cancel</button>
-        </div>
-      </div>
-    </div>
+    <!-- Note (where to find the answer: 8083 / 43.13-1B / FARs) -->
+    ${noteAreaHtml}
 
     <!-- Action buttons — always visible, work before AND after flip -->
     <div class="fc-actions" id="fcActions">
@@ -15471,17 +15486,28 @@ async function fcLoadNotes(){
   if(uid){
     try{
       const data = await dbGet('studentProfiles/' + uid + '/cardNotes');
-      if(data && typeof data === 'object'){ fcNotes = data; localStorage.setItem(sk, JSON.stringify(data)); return; }
+      if(data && typeof data === 'object'){ fcNotes = data; localStorage.setItem(sk, JSON.stringify(data)); }
+      const hid = await dbGet('studentProfiles/' + uid + '/cardNotesHidden');
+      fcHiddenNotes = new Set(Array.isArray(hid) ? hid : []);
+      fcHideAllNotes = (await dbGet('studentProfiles/' + uid + '/cardNotesHideAll')) === true;
+      if(data && typeof data === 'object') return;
     }catch(e){}
   }
   try{ fcNotes = JSON.parse(localStorage.getItem(sk) || '{}') || {}; }
   catch(e){ fcNotes = {}; }
+  try{ fcHiddenNotes = new Set(JSON.parse(localStorage.getItem('fcNotesHidden_'+(uid||'guest'))||'[]')); }catch(e){ fcHiddenNotes=new Set(); }
+  try{ fcHideAllNotes = localStorage.getItem('fcNotesHideAll_'+(uid||'guest'))==='1'; }catch(e){ fcHideAllNotes=false; }
 }
 async function fcSaveNotes(){
   const uid = stuAuthUser?.uid;
   const sk = 'fcNotes_' + (uid || 'guest');
   try{ localStorage.setItem(sk, JSON.stringify(fcNotes)); }catch(e){}
   if(uid){ try{ await dbSet('studentProfiles/' + uid + '/cardNotes', fcNotes); }catch(e){} }
+}
+async function fcSaveNoteFlags(){
+  const uid = stuAuthUser?.uid;
+  try{ localStorage.setItem('fcNotesHidden_'+(uid||'guest'), JSON.stringify([...fcHiddenNotes])); localStorage.setItem('fcNotesHideAll_'+(uid||'guest'), fcHideAllNotes?'1':'0'); }catch(e){}
+  if(uid){ try{ await dbSet('studentProfiles/'+uid+'/cardNotesHidden',[...fcHiddenNotes]); await dbSet('studentProfiles/'+uid+'/cardNotesHideAll',fcHideAllNotes); }catch(e){} }
 }
 function _fcCardKey(card){ return (card.bankId||'general')+'::'+card.topic+'_'+card.idx; }
 function fcToggleNote(){
@@ -15500,6 +15526,10 @@ async function fcSaveNote(){
   await fcSaveNotes();
   renderFlashcard();
 }
+// Hide the note box on this card; show it again; or hide/show on every card.
+async function fcHideNote(){ const c=fcDeck[fcCur]; if(!c) return; fcHiddenNotes.add(_fcCardKey(c)); await fcSaveNoteFlags(); renderFlashcard(); }
+async function fcShowNote(){ const c=fcDeck[fcCur]; if(!c) return; if(fcHideAllNotes) fcHideAllNotes=false; else fcHiddenNotes.delete(_fcCardKey(c)); await fcSaveNoteFlags(); renderFlashcard(); }
+async function fcSetHideAll(v){ fcHideAllNotes=!!v; await fcSaveNoteFlags(); renderFlashcard(); }
 
 async function fcToggleStar(){
   const card = fcDeck[fcCur];
