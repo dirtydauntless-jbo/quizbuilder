@@ -71,6 +71,15 @@ for (const [subj, topics] of Object.entries(SUBJECT_TOPICS)) {
   for (const t of topics) TOPIC_SUBJECT[t] = subj;
 }
 
+// Topic guard: fold legacy / non-standard topic labels into their canonical area so generated
+// questions are NEVER stamped with an off-standard topic. Mirrors the client TOPIC_ALIASES.
+const TOPIC_ALIASES = {
+  'Aircraft Engine Instruments': 'Aircraft Instrument Systems',
+  'Aircraft Classification':     'Forms and Regulations',
+  'Composite Structures':        'Nonmetallic Structures'
+};
+function normTopic(t) { return TOPIC_ALIASES[t] || t; }
+
 // Calculation-heavy topics: use ONLY the verified FAA bank (never AI-generated), so we never
 // ship a question whose "correct" choice has an arithmetic error. The bank has plenty here
 // (Mathematics 96, Physics 96, Weight and Balance 43).
@@ -726,6 +735,9 @@ module.exports = async function handler(req, res) {
 
   const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix, seenIds } = req.body || {};
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
+  // Topic guard: normalize non-standard requested topics to their canonical area before any
+  // bank/content lookup or labeling, so questions are never stamped with an off-standard topic.
+  const reqTopics = [...new Set(topics.map(t => normTopic(String(t))))];
 
   // Per-student "already seen" question IDs (FAA bank id + variant vid). When present, selection
   // prefers questions this student hasn't seen yet (rotation) before repeating — used by
@@ -738,7 +750,7 @@ module.exports = async function handler(req, res) {
   if (mode === 'all') {
     const seen = new Set();
     const all = [];
-    for (const t of topics) {
+    for (const t of reqTopics) {
       for (const q of getFaaQuestions(t, 100000)) {
         if (!seen.has(q.question)) { seen.add(q.question); all.push(q); }
       }
@@ -756,10 +768,10 @@ module.exports = async function handler(req, res) {
   let vr = (typeof varRatio === 'number' && varRatio >= 0 && varRatio <= 1) ? varRatio : undefined;
   if (focusedMix === true) { fr = 0.5; vr = 0.4; or = 0.1; }   // secret focused mix (50/40/10)
   const total = Math.min(Math.max(parseInt(count) || 5, 1), 100);
-  const n = Math.min(topics.length, total);
-  const selectedTopics = n < topics.length
-    ? shuffle(topics.slice()).slice(0, n)
-    : topics;
+  const n = Math.min(reqTopics.length, total);
+  const selectedTopics = n < reqTopics.length
+    ? shuffle(reqTopics.slice()).slice(0, n)
+    : reqTopics;
   const base = Math.floor(total / n);
   const rem  = total % n;
   const counts = selectedTopics.map((_, i) => i < rem ? base + 1 : base);
@@ -844,6 +856,7 @@ module.exports = async function handler(req, res) {
     });
     shuffle(questions);
     questions = questions.slice(0, total);
+    questions.forEach(q => { if (q && q.topic) q.topic = normTopic(q.topic); }); // final topic-label guard
 
     // Record AI-generation health so the admin app can warn if live generation is failing
     // (e.g., Anthropic credits exhausted), in which case exams fall back to bank questions.
