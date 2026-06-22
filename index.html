@@ -3526,6 +3526,12 @@ async function masterDashLoad(){
       <div id="qReviewList"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, true)}
 
+    ${panel('md-gencost','Exam Generation Cost','💸',`
+      <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Estimated Anthropic spend (Claude Haiku 4.5) to generate practice exams. Verbatim FAA bank questions are free — only AI / variant / O&amp;P generation is billed, and cached questions reused from the cookie jar cost nothing again. Estimates use list pricing; confirm exact spend at console.anthropic.com.</div>
+      <div style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" onclick="_genCostLoad()">↻ Refresh</button></div>
+      <div id="genCostBody"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
+    `)}
+
     ${panel('md-variants','Question Cookie Jar (Variants + O&P)','🍪',`
       <div style="font-family:monospace;font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Reworded FAA <b>variants</b> and converted <b>O&amp;P</b> questions saved for reuse. <b>Pending</b> = on probation (auto-promotes after 5 clean, unflagged exam appearances). <b>Jar</b> = reliable &amp; reused. <b>Retired</b> = excluded from all exams. You can promote instantly (skip the 5-pass), edit a question, send back, retire/restore, or delete.</div>
       <div id="vpoolStats" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
@@ -3780,10 +3786,38 @@ function masterDashToggle(id){
   if(arrow) arrow.textContent=isOpen?'▼':'▲';
   if(!isOpen && id==='md-opsim'){ _opSimLoadAdminPanel(); _opSimLoadArchive(); }
   if(!isOpen && id==='md-qreview') _qReviewLoad();
+  if(!isOpen && id==='md-gencost') _genCostLoad();
   if(!isOpen && id==='md-variants') _vpoolLoad();
   if(!isOpen && id==='md-leaderboard') _allStarsAdminRender();
   if(!isOpen && id==='md-users') _usersLoad();
   if(!isOpen && id==='md-announce') _announceAdminLoad();
+}
+
+// ── Exam Generation Cost — master-admin spend view (reads genCostLog) ────────
+async function _genCostLoad(){
+  const el=document.getElementById('genCostBody'); if(!el) return;
+  el.innerHTML='<div class="empty-state" style="font-size:.8rem">Loading…</div>';
+  let rows=[];
+  try{ const snap=await db.ref('genCostLog').orderByChild('ts').limitToLast(1000).once('value'); rows=Object.values(snap.val()||{}); }
+  catch(e){ el.innerHTML='<div class="empty-state" style="font-size:.8rem;color:var(--wl)">Could not load ('+(e&&e.message||e)+').</div>'; return; }
+  if(!rows.length){ el.innerHTML='<div class="empty-state" style="font-size:.8rem">No generation logged yet. Costs show up here as exams are generated.</div>'; return; }
+  const now=Date.now(), DAY=86400000, sum=(a,f)=>a.reduce((s,r)=>s+(f(r)||0),0);
+  const total=sum(rows,r=>r.costUsd), exams=rows.length;
+  const l7=rows.filter(r=>r.ts>now-7*DAY), l30=rows.filter(r=>r.ts>now-30*DAY);
+  const avg=exams?total/exams:0, inTok=sum(rows,r=>r.inTok), outTok=sum(rows,r=>r.outTok);
+  const fmt=n=>'$'+((n||0)<0.01?(n||0).toFixed(4):(n||0).toFixed(2));
+  const stat=(l,v,s)=>'<div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px"><div style="font-family:monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">'+l+'</div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:var(--accent);letter-spacing:1px">'+v+'</div>'+(s?'<div style="font-family:monospace;font-size:.6rem;color:var(--muted)">'+s+'</div>':'')+'</div>';
+  let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:12px">'+
+    stat('Last 7 days',fmt(sum(l7,r=>r.costUsd)),l7.length+' exams')+
+    stat('Last 30 days',fmt(sum(l30,r=>r.costUsd)),l30.length+' exams')+
+    stat('Logged total',fmt(total),exams+' exams')+
+    stat('Avg / exam',fmt(avg),Math.round((inTok+outTok)/Math.max(1,exams)).toLocaleString()+' tok')+
+  '</div>';
+  const recent=rows.slice().sort((a,b)=>b.ts-a.ts).slice(0,15);
+  html+='<div style="font-family:monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Recent generations</div>'+
+    recent.map(r=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-family:monospace;font-size:.7rem"><span style="color:var(--muted);min-width:96px">'+fmtDateTime(r.ts)+'</span><span style="flex:1">'+(r.delivered||r.requested||'?')+'q · '+esc(r.mode||'')+'</span><span style="color:var(--muted)">'+(r.calls||0)+' calls</span><span style="font-weight:700;color:'+((r.costUsd||0)>0.05?'#f59e0b':'var(--cl)')+';min-width:54px;text-align:right">'+fmt(r.costUsd)+'</span></div>').join('')+
+    '<div style="font-family:monospace;font-size:.6rem;color:var(--muted);margin-top:10px;line-height:1.5">Totals cover up to the last 1,000 logged generations. $0.00 exams were served entirely from the bank + cookie-jar cache (no API spend). Estimates at Haiku 4.5 list price ($1 / $5 per Mtok in/out).</div>';
+  el.innerHTML=html;
 }
 
 // ── FAA Variant Pool (cookie jar) — master-admin management screen ───────────

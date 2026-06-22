@@ -2,6 +2,16 @@ module.exports.config = { maxDuration: 60 };
 
 const path = require('path');
 const fs   = require('fs');
+const { AsyncLocalStorage } = require('async_hooks');
+
+// ── Per-request token/cost accounting ────────────────────────────────────────
+// callClaude adds each call's usage into the request-scoped store (AsyncLocalStorage isolates
+// concurrent requests). The handler reads the total and logs a cost entry per exam generation.
+const _usageStore = new AsyncLocalStorage();
+// Claude Haiku 4.5 list price (USD per token). Update if Anthropic pricing changes.
+const HAIKU_IN_PER_TOK  = 1.0  / 1e6;   // $1.00 / MTok input
+const HAIKU_OUT_PER_TOK = 5.0  / 1e6;   // $5.00 / MTok output
+function _usageCostUsd(inTok, outTok){ return inTok * HAIKU_IN_PER_TOK + outTok * HAIKU_OUT_PER_TOK; }
 
 // ── Lazy-load reference content (8083 text) ──────────────────────────────────
 let _content = null;
@@ -96,6 +106,9 @@ async function callClaude(prompt, maxTokens = 4096) {
   }
   const d = await r.json();
   _aiHealth = { ok: true, code: 200, message: '', ts: Date.now() };
+  // Accrue token usage into the request-scoped tally (for per-exam cost logging)
+  const st = _usageStore.getStore();
+  if (st) { const u = d.usage || {}; st.in += (u.input_tokens || 0); st.out += (u.output_tokens || 0); st.calls += 1; }
   return d.content?.[0]?.text || '';
 }
 
@@ -753,6 +766,10 @@ module.exports = async function handler(req, res) {
 
   const content = getContent();
 
+  // Begin per-request token accounting (callClaude accrues into this store).
+  const _usage = { in: 0, out: 0, calls: 0 };
+  _usageStore.enterWith(_usage);
+
   try {
     // Fetch master-admin corrections + the variant flag list once. Corrections seed reworded
     // variants from the CORRECTED bank (never a question a student already got fixed); the flag
@@ -832,6 +849,19 @@ module.exports = async function handler(req, res) {
     // (e.g., Anthropic credits exhausted), in which case exams fall back to bank questions.
     try { await dbWrite('aiHealth', { ok: _aiHealth.ok, code: _aiHealth.code || 0, message: _aiHealth.message || '', ts: Date.now() }); } catch {}
 
+    // Log this generation's token usage + estimated cost (one compact entry per exam).
+    try {
+      const costUsd = _usageCostUsd(_usage.in, _usage.out);
+      const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const key = Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      await dbWrite(`genCostLog/${key}`, {
+        ts: Date.now(), day,
+        topics: selectedTopics.length, requested: total, delivered: questions.length,
+        mode: focusedMix ? 'focused' : (mode || 'mixed'),
+        inTok: _usage.in, outTok: _usage.out, calls: _usage.calls,
+        costUsd: Math.round(costUsd * 1e6) / 1e6,
+      }, 'PUT');
+    } catch { /* logging must never break generation */ }
     return res.status(200).json({ questions });
   } catch (err) {
     console.error('generate error', err);
