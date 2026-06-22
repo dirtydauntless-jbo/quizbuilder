@@ -7768,7 +7768,9 @@ async function assignLoadList(){
       const examList = s.items.map(it=>{ const dn=it.a.status==='complete';
         const sc=dn?(it.a.score+'/'+it.a.total+' · '+it.a.pct+'%'):(it.a.status==='in_progress'?'in progress':'not started');
         const col=dn?(it.a.pct>=70?'var(--cl)':'var(--wl)'):'var(--muted)';
-        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="font-size:.8rem">'+esc(_asgExamLabel(it.a))+' <span style="font-family:monospace;font-size:.66rem;color:var(--muted)">'+(it.a.createdAt?fmtDate(it.a.createdAt):'')+'</span></span><span style="display:flex;gap:8px;align-items:center"><span style="font-family:monospace;font-size:.76rem;font-weight:700;color:'+col+'">'+sc+'</span>'+(dn?'<button onclick="assignViewResult(\''+it.stuUid+'\',\''+it.aid+'\')" class="btn" style="font-size:.7rem;padding:3px 8px">Breakdown</button>':'')+'</span></div>'; }).join('');
+        const tb=dn?examTimeBrief(it.a):''; const tp=dn?examPace(it.a):null;
+        const timeStr=tb?' <span style="font-family:monospace;font-size:.64rem;color:'+(tp&&tp.flag?'var(--wl)':'var(--muted)')+'" title="'+(tp?tp.label:'')+'">· '+tb+'</span>':'';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="font-size:.8rem">'+esc(_asgExamLabel(it.a))+' <span style="font-family:monospace;font-size:.66rem;color:var(--muted)">'+(it.a.createdAt?fmtDate(it.a.createdAt):'')+'</span>'+timeStr+'</span><span style="display:flex;gap:8px;align-items:center"><span style="font-family:monospace;font-size:.76rem;font-weight:700;color:'+col+'">'+sc+'</span>'+(dn?'<button onclick="assignViewResult(\''+it.stuUid+'\',\''+it.aid+'\')" class="btn" style="font-size:.7rem;padding:3px 8px">Breakdown</button>':'')+'</span></div>'; }).join('');
       return '<div class="asg-stu-card" data-name="'+esc((s.name||'').toLowerCase())+'" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer" onclick="var r=document.getElementById(\'asgstu_'+s.uid+'\');if(r){var o=r.style.display===\'none\';r.style.display=o?\'block\':\'none\';this.querySelector(\'.asg-caret\').textContent=o?\'▲\':\'▼\';}">'+
           '<div><div style="font-weight:700;font-size:.95rem">'+esc(s.name)+'</div><div style="font-family:monospace;font-size:.7rem;margin-top:2px">'+recSummary+'</div></div>'+
@@ -7796,6 +7798,13 @@ async function assignViewResult(stuUid,aid){
   document.getElementById('asgResTitle').textContent=(a.studentName||'Student')+' — '+(a.pct||0)+'%';
   const pass=(a.pct||0)>=70;
   const passBar='<div style="background:'+(pass?'rgba(34,197,94,.1)':'rgba(204,68,68,.1)')+';border:1px solid '+(pass?'rgba(34,197,94,.3)':'rgba(204,68,68,.3)')+';border-radius:var(--r);padding:11px 15px;margin-bottom:14px;font-family:monospace;font-size:.86rem;color:'+(pass?'var(--cl)':'var(--wl)')+'">'+(a.score||0)+'/'+(a.total||questions.length)+' — '+(a.pct||0)+'% · '+(pass?'PASSING':'NOT PASSING (FAA requires 70%)')+'</div>';
+  // Timing / focus read
+  const _p=examPace(a);
+  const timeBar=(a.startedAt||a.completedAt||_p)?'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:10px 15px;margin-bottom:14px;font-family:monospace;font-size:.78rem;color:var(--muted)">'+
+    (a.startedAt?'Started '+fmtDateTime(a.startedAt):'')+
+    (a.completedAt?(a.startedAt?' · ':'')+'finished '+fmtDateTime(a.completedAt):'')+
+    (_p?'<br>Took <b style="color:var(--text)">'+fmtDur(_p.durationSec)+'</b> · '+_p.spq+'s/question · <span style="color:'+_p.color+'">'+_p.label+'</span>':'')+
+    '</div>':'';
   const plan=(typeof pxStudyPlanHTML==='function')?pxStudyPlanHTML(questions,answers):'';
   // Comprehensive per-topic breakdown — every topic on the exam (weakest first), in addition to
   // the Top-3 study plan above. Computed from the actual questions/answers.
@@ -7806,7 +7815,7 @@ async function assignViewResult(stuUid,aid){
   const qhtml='<div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px">Question-by-question</div>'+questions.map((q,i)=>{const sel=answers[i];const ok=sel===q.correct;const ans=sel!==undefined;return buildRevQuestionCard(q,i,sel,ok,ans);}).join('');
   window._remTarget={uid:stuUid, name:a.studentName||''};
   const remBtn='<button onclick="startRemediationExam()" class="btn btn-primary" style="width:100%;margin-bottom:14px;font-size:.86rem;padding:11px;letter-spacing:.5px">🎯 Assign Remediation Exam — target this student\'s weak topics</button>';
-  document.getElementById('asgResContent').innerHTML=passBar+remBtn+plan+topicTable+qhtml;
+  document.getElementById('asgResContent').innerHTML=passBar+timeBar+remBtn+plan+topicTable+qhtml;
   document.getElementById('assignResultModal').style.display='flex';
 }
 
@@ -8324,7 +8333,8 @@ async function loadExamGradebook(classId, classExamId){
     const score=done?(r.a.score+'/'+r.a.total):'—';
     const bar=done?('<div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+_examGradeColor(pct)+'"></div></div>'):('<span style="color:var(--muted);font-family:monospace;font-size:.72rem">'+(r.a?(r.a.status==='in_progress'?'in progress':'not started'):'not assigned')+'</span>');
     const grade=done?'<span style="font-weight:800;color:'+_examGradeColor(pct)+'">'+_examGrade(pct)+'</span>':'—';
-    const comp=done&&r.a.completedAt?fmtDate(r.a.completedAt):'—';
+    const _pace=done?examPace(r.a):null;
+    const comp=done?('<div>'+(r.a.completedAt?fmtDate(r.a.completedAt):'done')+'</div>'+(examTimeBrief(r.a)?'<div style="font-size:.62rem;color:'+(_pace&&_pace.flag?'var(--wl)':'var(--muted)')+'" title="'+(_pace?_pace.label:'')+'">'+examTimeBrief(r.a)+'</div>':'')):'—';
     const integ=r.integEvents>0?'<span title="'+r.tab+' tab switch(es), '+r.blur+' focus loss(es)" style="color:var(--wl);font-weight:700;cursor:help">⚠ '+r.integEvents+'</span>':(done?'<span style="color:var(--cl)">✓</span>':'—');
     const click=done?(' style="cursor:pointer" onclick="assignViewResult(\''+r.uid+'\',\''+r.aid+'\')" title="Click to review this exam"'):'';
     return '<div'+click+' style="display:grid;grid-template-columns:'+cols+';gap:8px;padding:9px 10px;align-items:center;border-bottom:1px solid var(--border);font-size:.85rem"><span style="font-weight:600;color:'+(done?'var(--blue)':'var(--text)')+'">'+esc(r.name)+'</span><span style="font-family:monospace;font-weight:700;color:'+(done?_examGradeColor(pct):'var(--muted)')+'">'+score+'</span><span>'+bar+(done?' <span style="font-family:monospace;font-size:.7rem;color:var(--muted)">'+pct+'%</span>':'')+'</span><span>'+grade+'</span><span style="font-family:monospace;font-size:.7rem;color:var(--muted)">'+comp+'</span><span style="font-family:monospace;font-size:.78rem">'+integ+'</span></div>';
@@ -10054,6 +10064,38 @@ function exportGrades(format){
 function fmtDate(iso){
   if(!iso) return '--';
   return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+// Date + time, for "when did they start" timestamps
+function fmtDateTime(ms){
+  if(!ms) return '--';
+  return new Date(ms).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+}
+// Human duration from seconds (e.g. 1h 4m, 18m, 45s)
+function fmtDur(sec){
+  if(!sec||sec<1) return '--';
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=Math.round(sec%60);
+  if(h) return h+'h '+m+'m';
+  if(m) return m+'m '+(s?s+'s':'').trim();
+  return s+'s';
+}
+// Focus read from pace: seconds-per-question. FAA writtens run ~45-75s/q; very low = likely
+// rushed/guessing (not engaged). Returns {spq, label, color, flag} or null when no duration.
+function examPace(a){
+  if(!a) return null;
+  const dur=a.durationSec, tot=a.total||a.answeredCount;
+  if(!(dur>0)||!(tot>0)) return null;
+  const spq=dur/tot;
+  let label, color, flag=false;
+  if(spq<10){ label='⚡ very fast — may have rushed'; color='var(--wl)'; flag=true; }
+  else if(spq<20){ label='fast pace'; color='#f59e0b'; }
+  else if(spq>240){ label='long / likely stepped away'; color='var(--muted)'; }
+  else { label='steady pace'; color='var(--cl)'; }
+  return { spq:Math.round(spq), durationSec:dur, label, color, flag };
+}
+// Compact "took 18m · 44s/q" string for a completed exam (with a ⚡ flag if rushed)
+function examTimeBrief(a){
+  const p=examPace(a); if(!p) return '';
+  return fmtDur(p.durationSec)+' · '+p.spq+'s/q'+(p.flag?' ⚡':'');
 }
 
 function renderStudentProgressList(students, elId, integrityMap){
@@ -13526,7 +13568,7 @@ async function pxRunExam(topics, count, label, opts){
       }
       if(_pxExamKey){
         db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey).set({questions:_pxQuestions,answers:{}}).catch(e=>console.warn('exam data save failed (resume/review limited):',e&&e.message||e));
-        if(_pxAssignId) db.ref('assignedExams/'+stuSession.uid+'/'+_pxAssignId).update({status:'in_progress',examKey:_pxExamKey}).catch(()=>{});
+        if(_pxAssignId) db.ref('assignedExams/'+stuSession.uid+'/'+_pxAssignId).update({status:'in_progress',examKey:_pxExamKey,startedAt:Date.now()}).catch(()=>{});
       }
       practiceLoadHistory(); // keep Past Attempts current so the new (in-progress) exam shows when they return to setup
     }
@@ -13844,6 +13886,7 @@ function practiceFinish(){
   document.getElementById('practiceResults').classList.remove('hidden');
   const titleEl=document.getElementById('pxResultsTitle');
   if(titleEl){ titleEl.textContent=`${correct}/${total} — ${pct}%`; titleEl.style.color=pct>=70?'var(--cl)':'var(--wl)'; }
+  const startedAtMs = _pxStartedAt || null;
   const durationSec = _pxStartedAt ? Math.max(1, Math.round((Date.now()-_pxStartedAt)/1000)) : null;
   _pxStartedAt = 0; _pxExamLive = false; // stop integrity tracking
   if(stuSession?.uid && _pxExamKey){
@@ -13852,6 +13895,7 @@ function practiceFinish(){
     if(_pxAssignId){
       db.ref('assignedExams/'+stuSession.uid+'/'+_pxAssignId).update({
         status:'complete', completedAt:Date.now(), score:correct, pct, total, answeredCount:total,
+        ...(startedAtMs?{startedAt:startedAtMs}:{}), ...(durationSec?{durationSec}:{}),
         topicStats:_pxTopicStats, studentName:stuSession.name||'', data:{questions:_pxQuestions, answers:_pxAnswers}
       }).catch(e=>console.warn('assigned result save failed:',e&&e.message||e));
     }
