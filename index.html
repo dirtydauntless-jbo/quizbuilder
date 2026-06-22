@@ -13051,28 +13051,39 @@ function showStuApp(){
   _stuWatchAssigned();
 }
 
-// Live badge + login heads-up for instructor-assigned practice exams. Watches the student's
-// assignedExams and shows the count of not-yet-completed ones on the FAA Written Practice tab.
-let _stuAssignedListener=null, _stuAssignedSeen=false;
-function _stuWatchAssigned(){
+// Badge + login heads-up for instructor-assigned practice exams. The badge counts UNSEEN assigned
+// exams (not completed AND not yet acknowledged). Opening the FAA Written Practice tab marks the
+// current ones seen — persisted to studentProfiles/{uid}/seenAssigned — so the badge stays gone
+// across logins until a genuinely NEW exam is assigned.
+let _stuAssignedListener=null, _stuAssignedToastShown=false, _stuSeenAssigned=new Set(), _stuAssignedCache={};
+async function _stuWatchAssigned(){
   if(!stuSession?.uid) return;
   if(_stuAssignedListener){ try{ _stuAssignedListener.off(); }catch(e){} _stuAssignedListener=null; }
-  _stuAssignedSeen=false;
+  _stuAssignedToastShown=false;
+  try{ const seen=await dbGet('studentProfiles/'+stuSession.uid+'/seenAssigned'); _stuSeenAssigned=new Set(seen&&typeof seen==='object'?Object.keys(seen):[]); }
+  catch(e){ _stuSeenAssigned=new Set(); }
   const ref=db.ref('assignedExams/'+stuSession.uid);
   _stuAssignedListener=ref;
-  ref.on('value', snap=>{
-    const all=snap.val()||{};
-    const pending=Object.values(all).filter(a=>a && a.status!=='complete').length;
-    const badge=document.getElementById('stuAssignedBadge');
-    if(badge){ badge.textContent=pending; badge.style.display=pending>0?'inline-block':'none'; }
-    // One-time heads-up per session if they arrive with assigned exams waiting
-    if(!_stuAssignedSeen){
-      _stuAssignedSeen=true;
-      if(pending>0 && typeof showToast==='function'){
-        showToast('📝 You have '+pending+' practice exam'+(pending===1?'':'s')+' from your instructor — open “FAA Written Practice Exams” to take '+(pending===1?'it':'them')+'.','info',7000);
-      }
-    }
-  }, ()=>{});
+  ref.on('value', snap=>{ _stuAssignedCache=snap.val()||{}; _stuUpdateAssignedBadge(); }, ()=>{});
+}
+function _stuUpdateAssignedBadge(){
+  const all=_stuAssignedCache||{};
+  const unseen=Object.entries(all).filter(([id,a])=>a && a.status!=='complete' && !_stuSeenAssigned.has(id));
+  const n=unseen.length;
+  const badge=document.getElementById('stuAssignedBadge');
+  if(badge){ badge.textContent=n; badge.style.display=n>0?'inline-block':'none'; }
+  if(n>0 && !_stuAssignedToastShown && typeof showToast==='function'){
+    _stuAssignedToastShown=true;
+    showToast('📝 You have '+n+' new practice exam'+(n===1?'':'s')+' from your instructor — open “FAA Written Practice Exams”.','info');
+  }
+}
+// Mark the currently-assigned exams as seen (called when the student opens the practice tab).
+async function _stuMarkAssignedSeen(){
+  if(!stuSession?.uid) return;
+  let changed=false;
+  Object.entries(_stuAssignedCache||{}).forEach(([id,a])=>{ if(a && a.status!=='complete' && !_stuSeenAssigned.has(id)){ _stuSeenAssigned.add(id); changed=true; } });
+  _stuUpdateAssignedBadge(); // hide immediately
+  if(changed){ const obj={}; _stuSeenAssigned.forEach(id=>obj[id]=true); try{ await dbSet('studentProfiles/'+stuSession.uid+'/seenAssigned', obj); }catch(e){} }
 }
 
 function show(id){
@@ -13256,6 +13267,7 @@ let fcCardNum = 0;        // how many cards shown so far (increments each new ca
 
 async function stuSwitchTab(tab){
   if(stuSession?.uid) localStorage.setItem('stuLastTab_' + stuSession.uid, tab);
+  if(tab === 'practice') _stuMarkAssignedSeen(); // opening the tab clears the "new exam" badge for good
   document.getElementById('stuQuizListView').classList.toggle('hidden', tab !== 'quizzes');
   document.getElementById('stuStudyView').classList.toggle('hidden', tab !== 'study');
   document.getElementById('stuACSView').classList.toggle('hidden', tab !== 'acs');
