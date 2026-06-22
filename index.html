@@ -7695,17 +7695,66 @@ async function assignLoadList(){
     }).join('');
   }
   if(indiv.length){
-    html+='<div style="font-family:monospace;font-size:.72rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:'+(groupArr.length?'16px':'0')+' 0 8px">👤 Individual Students</div>';
-    indiv.sort((x,y)=>(y.a.createdAt||0)-(x.a.createdAt||0));
-    html+=indiv.map(({stuUid,aid,a})=>{
-      const exam=_asgExamLabel(a);
-      const done=a.status==='complete';
-      const score=done?(a.score+'/'+a.total+' · '+a.pct+'%'):(a.status==='in_progress'?'in progress':'not started');
-      const col=done?(a.pct>=70?'var(--cl)':'var(--wl)'):'var(--muted)';
-      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:11px 14px;margin-bottom:7px"><div><div style="font-weight:700;font-size:.9rem">'+esc(a.studentName||'(student)')+' — '+exam+'</div><div style="font-family:monospace;font-size:.7rem;color:var(--muted)">'+(a.createdAt?fmtDate(a.createdAt):'')+'</div></div><div style="display:flex;align-items:center;gap:12px"><span style="font-family:monospace;font-size:.82rem;font-weight:700;color:'+col+'">'+score+'</span>'+(done?'<button onclick="assignViewResult(\''+stuUid+'\',\''+aid+'\')" class="btn" style="font-size:.78rem">View breakdown</button>':'')+'</div></div>';
+    // ── Group every individual assignment by STUDENT, with a cumulative weak-area view ──
+    const byStu={};
+    indiv.forEach(it=>{ const k=it.stuUid; (byStu[k]=byStu[k]||{uid:k,name:it.a.studentName||'(student)',items:[]}).items.push(it); });
+    const students=Object.values(byStu).map(s=>{
+      s.items.sort((a,b)=>(b.a.createdAt||0)-(a.a.createdAt||0));
+      const completed=s.items.filter(it=>it.a.status==='complete');
+      s.examCount=completed.length;
+      s.avg=completed.length?Math.round(completed.reduce((x,it)=>x+(it.a.pct||0),0)/completed.length):null;
+      // cumulative per-topic: overall accuracy + how many exams the topic was weak (<70%) in
+      const tp={};
+      completed.forEach(it=>{ const ts=it.a.topicStats||{}; Object.entries(ts).forEach(([t,v])=>{ if(!v||!v.total) return;
+        const o=tp[t]=tp[t]||{correct:0,total:0,weak:0,seen:0}; o.correct+=(v.correct||0); o.total+=v.total; o.seen++;
+        if((v.correct||0)/v.total<0.7) o.weak++; }); });
+      s.topics=Object.entries(tp).map(([t,o])=>({t,...o,pct:Math.round(o.correct/o.total*100)}))
+        .sort((a,b)=>(b.weak-a.weak)||(a.pct-b.pct));
+      s.recurring=s.topics.filter(x=>x.weak>=3); // weak across 3+ exams = reliable deficiency
+      return s;
+    }).sort((a,b)=>{
+      const ar=a.recurring.length?1:0, br=b.recurring.length?1:0; if(ar!==br) return br-ar;     // recurring first
+      const aa=a.avg==null?999:a.avg, bb=b.avg==null?999:b.avg; if(aa!==bb) return aa-bb;          // lowest avg next
+      return (a.name||'').localeCompare(b.name||'');
+    });
+    html+='<div style="font-family:monospace;font-size:.72rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:'+(groupArr.length?'16px':'0')+' 0 8px">👤 Individual Students <span style="text-transform:none;letter-spacing:0">— '+students.length+' student'+(students.length===1?'':'s')+', sorted by recurring deficiencies</span></div>';
+    html+='<input id="asgStuFilter" oninput="_asgFilterStudents()" placeholder="Filter by student name…" style="width:100%;max-width:340px;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.85rem;box-sizing:border-box;margin-bottom:10px">';
+    html+=students.map(s=>{
+      const recSummary = s.recurring.length
+        ? '<span style="color:var(--wl)">⚠ Recurring weak: '+s.recurring.slice(0,3).map(x=>esc(x.t)+' ('+x.weak+'×)').join(', ')+'</span>'
+        : (s.examCount>=3 ? '<span style="color:var(--cl)">✓ No recurring weak topics</span>'
+           : '<span style="color:var(--muted)">'+(s.examCount===0?'no completed exams yet':s.examCount+' completed — need ≥3 for a reliable read')+'</span>');
+      const avgCol = s.avg==null?'var(--muted)':(s.avg>=70?'var(--cl)':'var(--wl)');
+      const avgStr = s.avg==null?'—':('avg '+s.avg+'%');
+      const topicTable = s.topics.length
+        ? '<div style="font-family:monospace;font-size:.64rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:4px 0 6px">Cumulative weak areas — across '+s.examCount+' exam'+(s.examCount===1?'':'s')+' (weakest first)</div>'+
+          s.topics.map(x=>{ const col=x.pct>=70?'var(--cl)':x.pct>=50?'#f59e0b':'var(--wl)';
+            const rec=x.weak>=3?'<span style="background:rgba(204,68,68,.18);color:var(--wl);font-family:monospace;font-size:.58rem;font-weight:700;border-radius:8px;padding:1px 6px;margin-left:6px">RECURRING</span>':'';
+            return '<div style="display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-size:.82rem">'+esc(x.t)+rec+'</div><div style="font-family:monospace;font-size:.72rem;color:var(--muted);white-space:nowrap">weak in '+x.weak+'/'+x.seen+'</div><div style="width:44px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+x.pct+'%</div></div>'; }).join('')
+        : '<div style="font-family:monospace;font-size:.75rem;color:var(--muted)">No completed exams yet.</div>';
+      const examList = s.items.map(it=>{ const dn=it.a.status==='complete';
+        const sc=dn?(it.a.score+'/'+it.a.total+' · '+it.a.pct+'%'):(it.a.status==='in_progress'?'in progress':'not started');
+        const col=dn?(it.a.pct>=70?'var(--cl)':'var(--wl)'):'var(--muted)';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="font-size:.8rem">'+esc(_asgExamLabel(it.a))+' <span style="font-family:monospace;font-size:.66rem;color:var(--muted)">'+(it.a.createdAt?fmtDate(it.a.createdAt):'')+'</span></span><span style="display:flex;gap:8px;align-items:center"><span style="font-family:monospace;font-size:.76rem;font-weight:700;color:'+col+'">'+sc+'</span>'+(dn?'<button onclick="assignViewResult(\''+it.stuUid+'\',\''+it.aid+'\')" class="btn" style="font-size:.7rem;padding:3px 8px">Breakdown</button>':'')+'</span></div>'; }).join('');
+      return '<div class="asg-stu-card" data-name="'+esc((s.name||'').toLowerCase())+'" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer" onclick="var r=document.getElementById(\'asgstu_'+s.uid+'\');if(r){var o=r.style.display===\'none\';r.style.display=o?\'block\':\'none\';this.querySelector(\'.asg-caret\').textContent=o?\'▲\':\'▼\';}">'+
+          '<div><div style="font-weight:700;font-size:.95rem">'+esc(s.name)+'</div><div style="font-family:monospace;font-size:.7rem;margin-top:2px">'+recSummary+'</div></div>'+
+          '<div style="display:flex;align-items:center;gap:12px;white-space:nowrap"><span style="font-family:monospace;font-size:.78rem;color:'+avgCol+';font-weight:700">'+s.examCount+' exam'+(s.examCount===1?'':'s')+' · '+avgStr+'</span><span class="asg-caret" style="font-family:monospace;color:var(--muted)">▼</span></div>'+
+        '</div>'+
+        '<div id="asgstu_'+s.uid+'" style="display:none;margin-top:10px">'+
+          topicTable+
+          '<div style="font-family:monospace;font-size:.64rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:12px 0 6px">Exams (newest first)</div>'+examList+
+          '<button onclick="startRemediationExam(\''+s.uid+'\', decodeURIComponent(\''+encodeURIComponent(s.name||'')+'\'))" class="btn btn-primary" style="margin-top:11px;font-size:.8rem;padding:9px 14px;letter-spacing:.3px">🎯 Assign Remediation Exam</button>'+
+        '</div>'+
+      '</div>';
     }).join('');
   }
   el.innerHTML=html||'<div style="font-family:monospace;font-size:.8rem;color:var(--muted)">No exams assigned yet.</div>';
+}
+// Live filter for the student-grouped assigned-exam list
+function _asgFilterStudents(){
+  const q=(document.getElementById('asgStuFilter')?.value||'').trim().toLowerCase();
+  document.querySelectorAll('#assignList .asg-stu-card').forEach(c=>{ c.style.display=(!q||(c.dataset.name||'').includes(q))?'':'none'; });
 }
 async function assignViewResult(stuUid,aid){
   const a=await dbGet('assignedExams/'+stuUid+'/'+aid).catch(()=>null);
