@@ -1369,7 +1369,7 @@ setTimeout(function(){
     </button>
     <button id="stuTabPractice" onclick="stuSwitchTab('practice')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:monospace;font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
-      🧪 FAA WRITTEN PRACTICE EXAMS <span id="betaTag" style="color:var(--accent);font-weight:700;letter-spacing:0">(Beta)</span>
+      🧪 FAA WRITTEN PRACTICE EXAMS <span id="betaTag" style="color:var(--accent);font-weight:700;letter-spacing:0">(Beta)</span><span id="stuAssignedBadge" title="Practice exams assigned by your instructor" style="display:none;margin-left:7px;background:#cc4444;color:#fff;border-radius:11px;padding:1px 8px;font-size:.7rem;font-weight:700;letter-spacing:0;vertical-align:middle">0</span>
     </button>
     <button id="stuTabACS" onclick="stuSwitchTab('acs')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:monospace;font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
@@ -13048,6 +13048,31 @@ function showStuApp(){
   betaInit().catch(()=>{});
   refreshMyAllStarBadge().catch(()=>{});
   _checkStudentAdmin().catch(()=>{});
+  _stuWatchAssigned();
+}
+
+// Live badge + login heads-up for instructor-assigned practice exams. Watches the student's
+// assignedExams and shows the count of not-yet-completed ones on the FAA Written Practice tab.
+let _stuAssignedListener=null, _stuAssignedSeen=false;
+function _stuWatchAssigned(){
+  if(!stuSession?.uid) return;
+  if(_stuAssignedListener){ try{ _stuAssignedListener.off(); }catch(e){} _stuAssignedListener=null; }
+  _stuAssignedSeen=false;
+  const ref=db.ref('assignedExams/'+stuSession.uid);
+  _stuAssignedListener=ref;
+  ref.on('value', snap=>{
+    const all=snap.val()||{};
+    const pending=Object.values(all).filter(a=>a && a.status!=='complete').length;
+    const badge=document.getElementById('stuAssignedBadge');
+    if(badge){ badge.textContent=pending; badge.style.display=pending>0?'inline-block':'none'; }
+    // One-time heads-up per session if they arrive with assigned exams waiting
+    if(!_stuAssignedSeen){
+      _stuAssignedSeen=true;
+      if(pending>0 && typeof showToast==='function'){
+        showToast('📝 You have '+pending+' practice exam'+(pending===1?'':'s')+' from your instructor — open “FAA Written Practice Exams” to take '+(pending===1?'it':'them')+'.','info',7000);
+      }
+    }
+  }, ()=>{});
 }
 
 function show(id){
