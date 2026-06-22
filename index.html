@@ -7710,7 +7710,11 @@ async function startRemediationExam(uid, name){
 
 // Class-wide weak spots: aggregate every student's class-exam topic results in one classroom.
 // Fold legacy / non-standard topic labels into the canonical topic when building breakdowns.
-const TOPIC_ALIASES = { 'Aircraft Engine Instruments':'Aircraft Instrument Systems' };
+const TOPIC_ALIASES = {
+  'Aircraft Engine Instruments':'Aircraft Instrument Systems',
+  'Aircraft Classification':'Forms and Regulations',
+  'Composite Structures':'Nonmetallic Structures'
+};
 function _normTopic(t){ return TOPIC_ALIASES[t] || t; }
 
 async function loadClassWideWeakSpots(classId, targetElId){
