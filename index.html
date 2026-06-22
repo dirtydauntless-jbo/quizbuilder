@@ -15254,6 +15254,19 @@ function renderFlashcard(){
       ${esc(topicLabel)} &nbsp;·&nbsp; ${fcDeck.length} card${fcDeck.length!==1?'s':''} remaining
     </div>
 
+    <!-- Note (where to find the answer: 8083 / 43.13-1B / FARs) — kept up top so it's always visible -->
+    <div style="max-width:520px;margin:0 auto 12px">
+      <button onclick="fcToggleNote()" style="width:100%;text-align:left;background:rgba(74,158,255,.10);border:1px solid rgba(74,158,255,.4);border-radius:var(--r);padding:9px 12px;cursor:pointer;font-family:monospace;font-size:.76rem;color:var(--blue)">📝 ${note?'Note (tap to edit)':'Add a note — where to find this answer'}</button>
+      ${note?'<div style="background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.3);border-left:3px solid var(--blue);border-radius:0 var(--r) var(--r) 0;padding:9px 12px;margin-top:6px;font-size:.82rem;line-height:1.5;white-space:pre-wrap">'+esc(note)+'</div>':''}
+      <div id="fcNoteEditor" style="display:none;margin-top:8px">
+        <textarea id="fcNoteInput" placeholder="e.g. FAA-H-8083-31B Ch 7 (Fuel Systems) · AC 43.13-1B §4-13 · 14 CFR 43.9 — where/how to find this on the practical" style="width:100%;min-height:70px;padding:10px 12px;border:1px solid rgba(74,158,255,.4);border-radius:var(--r);background:rgba(74,158,255,.06);color:var(--text);font-family:monospace;font-size:.82rem;box-sizing:border-box;resize:vertical">${esc(note)}</textarea>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button onclick="fcSaveNote()" class="btn btn-primary btn-sm" style="flex:1">Save note</button>
+          <button onclick="fcToggleNote()" class="btn btn-ghost btn-sm">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Flip card -->
     <div class="fc-scene" onclick="fcHandleCardClick()" id="fcScene">
       <div class="fc-card${fcFlipped?' flipped':''}" id="fcCard">
@@ -15285,19 +15298,6 @@ function renderFlashcard(){
     <div style="display:flex;gap:10px;justify-content:center;margin-bottom:10px">
       <button class="btn btn-ghost btn-sm" onclick="fcGoBack()" ${canGoBack?'':'disabled'} style="opacity:${canGoBack?1:.35}">← Back</button>
       <button class="btn btn-ghost btn-sm" onclick="skipCard()">Skip →</button>
-    </div>
-
-    <!-- Note (where to find the answer: 8083 / 43.13-1B / FARs) -->
-    <div style="max-width:520px;margin:0 auto 12px">
-      <button onclick="fcToggleNote()" style="width:100%;text-align:left;background:${note?'rgba(240,165,0,.07)':'var(--panel2)'};border:1px solid ${note?'rgba(240,165,0,.4)':'var(--border)'};border-radius:var(--r);padding:9px 12px;cursor:pointer;font-family:monospace;font-size:.76rem;color:${note?'var(--accent)':'var(--muted)'}">📝 ${note?'Note (tap to edit)':'Add a note — where to find this answer'}</button>
-      ${note?'<div style="background:rgba(240,165,0,.05);border:1px solid rgba(240,165,0,.25);border-left:3px solid var(--accent);border-radius:0 var(--r) var(--r) 0;padding:9px 12px;margin-top:6px;font-size:.82rem;line-height:1.5;white-space:pre-wrap">'+esc(note)+'</div>':''}
-      <div id="fcNoteEditor" style="display:none;margin-top:8px">
-        <textarea id="fcNoteInput" placeholder="e.g. FAA-H-8083-31B Ch 7 (Fuel Systems) · AC 43.13-1B §4-13 · 14 CFR 43.9 — where/how to find this on the practical" style="width:100%;min-height:70px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-family:monospace;font-size:.82rem;box-sizing:border-box;resize:vertical">${esc(note)}</textarea>
-        <div style="display:flex;gap:8px;margin-top:6px">
-          <button onclick="fcSaveNote()" class="btn btn-primary btn-sm" style="flex:1">Save note</button>
-          <button onclick="fcToggleNote()" class="btn btn-ghost btn-sm">Cancel</button>
-        </div>
-      </div>
     </div>
 
     <!-- Keyboard hint -->
