@@ -11,6 +11,9 @@
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
   <meta http-equiv="Permissions-Policy" content="camera=(), microphone=()">
   <title>Classroom AMT — FAA A&P Practice Tests & Study Tools</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+  <meta name="theme-color" content="#f0a500">
   <!-- Open Graph / social preview -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Classroom AMT">
@@ -23,7 +26,7 @@
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"EducationalOrganization","name":"Classroom AMT","alternateName":"ClassroomAMT","url":"https://classroomamt.com/","description":"Study platform for FAA Aviation Maintenance Technician (A&P) certification — General, Airframe, and Powerplant practice written exams, instructor-assigned quizzes, a measurement simulator, and progress tracking."}
   </script>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;600&family=Montserrat:wght@800;900&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -49,6 +52,23 @@ a{color:var(--accent);text-decoration:none}
 *{caret-color:transparent}
 input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:auto}
 .app-title{font-family:'Bebas Neue',sans-serif;font-size:1.95rem;letter-spacing:3px;color:var(--accent);white-space:nowrap}
+.brand-logo{display:flex;flex-direction:column;line-height:.9;font-family:'Montserrat',sans-serif;white-space:nowrap}
+.brand-logo .bl-top{font-weight:900;font-size:1.7rem;letter-spacing:.5px;display:flex;align-items:center}
+.brand-logo .bl-ca{color:#eef3f8}
+.brand-logo .bl-m{color:#1565c0}
+.brand-logo .bl-t{color:var(--accent)}
+.brand-logo .bl-plane{color:var(--accent);font-size:.85rem;margin-left:5px;transform:translateY(-7px)}
+.brand-logo .bl-bot{font-weight:800;font-size:.82rem;letter-spacing:.3px;margin-top:3px}
+.brand-logo .bl-c1{color:#cfd8e2}
+.brand-logo .bl-c2{color:var(--accent)}
+.brand-logo .bl-com{color:var(--muted);font-size:.72rem}
+.brand-logo.ctr{align-items:center}
+.brand-logo.lg .bl-top{font-size:4rem;letter-spacing:1px}
+.brand-logo.lg .bl-plane{font-size:1.9rem;transform:translateY(-16px);margin-left:8px}
+.brand-logo.lg .bl-bot{font-size:1.6rem;letter-spacing:.5px;margin-top:5px}
+.brand-logo.md .bl-top{font-size:2.4rem}
+.brand-logo.md .bl-plane{font-size:1.1rem;transform:translateY(-10px)}
+.brand-logo.md .bl-bot{font-size:1.05rem;margin-top:4px}
 .app-subtitle{font-family:monospace;font-size:.95rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-left:10px}
 .user-pill{font-family:monospace;font-size:.93rem;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:7px;white-space:nowrap}
 .user-pill span{color:var(--accent)}
@@ -636,7 +656,7 @@ setTimeout(function(){
 <!-- ============== LANDING ============== -->
 <div id="landingScreen" class="landing">
   <div>
-    <div class="landing-logo">Classroom AMT</div>
+    <div style="display:flex;justify-content:center"><div class="brand-logo ctr lg"><div class="bl-top"><span class="bl-ca">C</span><span class="bl-t">A</span><span class="bl-m">M</span><span class="bl-t">T</span><span class="bl-plane">&#9992;</span></div><div class="bl-bot"><span class="bl-c1">classroom</span><span class="bl-c2">amt</span><span class="bl-com">.com</span></div></div></div>
     <div class="landing-sub" id="i18n-landing-sub">Aviation Mechanic Training Platform</div>
     <!-- Language selector -->
     <div style="margin:10px 0 20px;display:flex;align-items:center;gap:8px;justify-content:center">
@@ -671,8 +691,8 @@ setTimeout(function(){
 <!-- ============== INSTRUCTOR AUTH ============== -->
 <div id="instAuthScreen" class="landing hidden">
   <div class="auth-box">
+    <div style="display:flex;justify-content:center;margin-bottom:16px"><div class="brand-logo ctr md"><div class="bl-top"><span class="bl-ca">C</span><span class="bl-t">A</span><span class="bl-m">M</span><span class="bl-t">T</span><span class="bl-plane">&#9992;</span></div><div class="bl-bot"><span class="bl-c1">classroom</span><span class="bl-c2">amt</span><span class="bl-com">.com</span></div></div></div>
     <div class="auth-title" id="i18n-inst-auth-title">Instructor Sign In</div>
-    <div class="auth-sub">Classroom AMT Platform</div>
     <div class="auth-tabs">
       <button class="auth-tab active" id="authTabLogin" onclick="switchAuthTab('login')"><span id="i18n-inst-signin-tab">Sign In</span></button>
       <button class="auth-tab" id="authTabRegister" onclick="switchAuthTab('register')"><span id="i18n-inst-register-tab">Create Account</span></button>
@@ -714,8 +734,8 @@ setTimeout(function(){
 <!-- Student Auth Screen -->
 <div id="stuAuthScreen" class="landing hidden">
   <div class="auth-box" style="border-top-color:var(--blue)">
+    <div style="display:flex;justify-content:center;margin-bottom:16px"><div class="brand-logo ctr md"><div class="bl-top"><span class="bl-ca">C</span><span class="bl-t">A</span><span class="bl-m">M</span><span class="bl-t">T</span><span class="bl-plane">&#9992;</span></div><div class="bl-bot"><span class="bl-c1">classroom</span><span class="bl-c2">amt</span><span class="bl-com">.com</span></div></div></div>
     <div class="auth-title" style="color:var(--blue)">Student Sign In</div>
-    <div class="auth-sub">Classroom AMT Platform</div>
     <div class="auth-tabs">
       <button class="auth-tab active" id="stuAuthTabLogin" onclick="switchStuAuthTab('login')"><span id="i18n-stu-signin-tab">Sign In</span></button>
       <button class="auth-tab" id="stuAuthTabRegister" onclick="switchStuAuthTab('register')"><span id="i18n-stu-register-tab">Create Account</span></button>
@@ -780,8 +800,8 @@ setTimeout(function(){
 <!-- ============== INSTRUCTOR APP ============== -->
 <div id="instApp" class="hidden">
   <div class="app-header">
-    <div style="display:flex;align-items:baseline;gap:4px;cursor:pointer" onclick="instSwitchTab('classrooms')" title="Go to home">
-      <div class="app-title">Classroom AMT</div>
+    <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="instSwitchTab('classrooms')" title="Go to home">
+      <div class="brand-logo"><div class="bl-top"><span class="bl-ca">C</span><span class="bl-t">A</span><span class="bl-m">M</span><span class="bl-t">T</span><span class="bl-plane">&#9992;</span></div><div class="bl-bot"><span class="bl-c1">classroom</span><span class="bl-c2">amt</span><span class="bl-com">.com</span></div></div>
       <div class="app-subtitle" id="instSubtitle">Instructor</div>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
@@ -1342,8 +1362,8 @@ setTimeout(function(){
 <!-- ============== STUDENT APP ============== -->
 <div id="stuApp" class="hidden">
   <div class="app-header">
-    <div style="display:flex;align-items:baseline;cursor:pointer;gap:4px" onclick="stuSwitchTab('study')" title="Go to home">
-      <div class="app-title">Classroom AMT</div>
+    <div style="display:flex;align-items:center;cursor:pointer;gap:10px" onclick="stuSwitchTab('study')" title="Go to home">
+      <div class="brand-logo"><div class="bl-top"><span class="bl-ca">C</span><span class="bl-t">A</span><span class="bl-m">M</span><span class="bl-t">T</span><span class="bl-plane">&#9992;</span></div><div class="bl-bot"><span class="bl-c1">classroom</span><span class="bl-c2">amt</span><span class="bl-com">.com</span></div></div>
       <div class="app-subtitle" id="stuSubtitle">Student</div>
     </div>
     <div class="user-pill">
