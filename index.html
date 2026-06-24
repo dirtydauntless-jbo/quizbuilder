@@ -57,7 +57,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .brand-logo .bl-ca{color:#eef3f8}
 .brand-logo .bl-m{color:#1565c0}
 .brand-logo .bl-t{color:var(--accent)}
-.brand-logo .bl-plane{color:var(--accent);font-size:.85rem;margin-left:5px;transform:translateY(-7px)}
+.brand-logo .bl-plane{color:#eef3f8;font-size:.85rem;margin-left:5px;transform:translateY(-7px)}
 .brand-logo .bl-bot{font-weight:800;font-size:.82rem;letter-spacing:.3px;margin-top:3px}
 .brand-logo .bl-c1{color:#cfd8e2}
 .brand-logo .bl-c2{color:var(--accent)}
@@ -5961,6 +5961,8 @@ function _openGradeSheetPrintWindow(sheets){
   win.document.write(`<!DOCTYPE html><html><head>
     <meta charset="utf-8">
     <title>Grade Sheets — Classroom AMT</title>
+    <link rel="icon" type="image/svg+xml" href="https://classroomamt.com/favicon.svg">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&display=swap" rel="stylesheet">
     <style>
       *{box-sizing:border-box;margin:0;padding:0}
       body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}
@@ -5998,7 +6000,13 @@ function _openGradeSheetPrintWindow(sheets){
     </style>
   </head><body>
     <div class="print-bar">
-      <span><strong>${sheets.length}</strong> grade sheet${sheets.length!==1?'s':''} ready &nbsp;·&nbsp; <span style="opacity:.7;font-size:.78rem">each student on a separate page</span></span>
+      <div style="display:flex;align-items:center;gap:18px">
+        <span style="display:flex;flex-direction:column;line-height:.9;font-family:'Montserrat','Arial Black',sans-serif;white-space:nowrap">
+          <span style="font-weight:900;font-size:1.1rem;letter-spacing:.5px"><span style="color:#fff">C</span><span style="color:#f0a500">A</span><span style="color:#6fb0ff">M</span><span style="color:#f0a500">T</span><span style="color:#fff;font-size:.72rem;margin-left:4px">&#9992;</span></span>
+          <span style="font-weight:800;font-size:.6rem;letter-spacing:.3px;margin-top:2px"><span style="color:#dfe6ee">classroom</span><span style="color:#f0a500">amt</span><span style="color:#9fb0c4;font-size:.52rem">.com</span></span>
+        </span>
+        <span style="border-left:1px solid rgba(255,255,255,.25);padding-left:18px"><strong>${sheets.length}</strong> grade sheet${sheets.length!==1?'s':''} ready &nbsp;·&nbsp; <span style="opacity:.7;font-size:.78rem">each student on a separate page</span></span>
+      </div>
       <button class="pbtn" onclick="window.print()">🖨&nbsp; Print / Save as PDF</button>
     </div>
     ${sheets.join('\n')}
