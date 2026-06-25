@@ -3888,6 +3888,9 @@ async function _vpoolLoad(){
 }
 function _vpoolRender(){
   const list=document.getElementById('vpoolList'); if(!list) return;
+  // Keep each row's _i in sync with its position — delete mutates the array,
+  // so stale indices would make later rows' buttons target the wrong/no row.
+  _vpoolData.forEach((x,idx)=>{ x._i=idx; });
   const statsEl=document.getElementById('vpoolStats');
   const total=_vpoolData.length;
   const jar=_vpoolData.filter(r=>!r.flagged&&r.stage==='jar').length;
