@@ -3854,6 +3854,7 @@ async function _genCostLoad(){
 // ── FAA Variant Pool (cookie jar) — master-admin management screen ───────────
 let _vpoolData=[];       // flattened pool entries {_i,subject,topicKey,vid,q,stage,cleanDeploys,flagged}
 let _vpoolEditIdx=-1;    // index of the row currently being edited (-1 = none)
+let _vpoolDismissed=new Set(); // vids hidden from the list after promote/retire/delete (cleared on Refresh)
 const _vpBtn      = 'background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:monospace;font-size:.68rem;padding:5px 10px;cursor:pointer';
 const _vpBtnWarn  = 'background:transparent;border:1px solid #cc8a44;border-radius:6px;color:#e0a44a;font-family:monospace;font-size:.68rem;padding:5px 10px;cursor:pointer';
 const _vpBtnDanger= 'background:transparent;border:1px solid #cc4444;border-radius:6px;color:#e06666;font-family:monospace;font-size:.68rem;padding:5px 10px;cursor:pointer';
@@ -3868,6 +3869,7 @@ async function _vpoolLoad(){
   const list=document.getElementById('vpoolList');
   if(list) list.innerHTML='<div class="empty-state" style="font-size:.8rem">Loading…</div>';
   _vpoolEditIdx=-1;
+  _vpoolDismissed.clear();
   const [pool,flagged]=await Promise.all([dbGet('faaVariants/pool').catch(()=>null),dbGet('faaVariants/flagged').catch(()=>null)]);
   const fl=flagged||{}, p=pool||{}, rows=[];
   for(const subject of Object.keys(p)){
@@ -3900,6 +3902,7 @@ function _vpoolRender(){
   const fk=(document.getElementById('vpoolKind')||{}).value||'';
   const q=((document.getElementById('vpoolSearch')||{}).value||'').toLowerCase().trim();
   let rows=_vpoolData.slice();
+  if(_vpoolDismissed.size) rows=rows.filter(r=>!_vpoolDismissed.has(r.vid));
   if(fs) rows=rows.filter(r=>r.subject===fs);
   if(fk) rows=rows.filter(r=>r.kind===fk);
   if(fst==='retired') rows=rows.filter(r=>r.flagged);
@@ -3973,9 +3976,9 @@ async function _vpoolAction(i,action){
   const r=_vpoolData[i]; if(!r) return;
   const base='faaVariants/pool/'+r.subject+'/'+r.topicKey+'/'+r.vid;
   try{
-    if(action==='promote'){ await db.ref(base+'/stage').set('jar'); r.stage='jar'; showToast('Promoted to the jar.','success'); }
+    if(action==='promote'){ await db.ref(base+'/stage').set('jar'); r.stage='jar'; _vpoolDismissed.add(r.vid); showToast('Promoted to the jar.','success'); }
     else if(action==='demote'){ await db.ref(base+'/stage').set('pending'); r.stage='pending'; showToast('Sent back to pending.','success'); }
-    else if(action==='retire'){ await db.ref('faaVariants/flagged/'+r.vid).set(true); r.flagged=true; showToast('Retired — excluded from all exams.','success'); }
+    else if(action==='retire'){ await db.ref('faaVariants/flagged/'+r.vid).set(true); r.flagged=true; _vpoolDismissed.add(r.vid); showToast('Retired — excluded from all exams.','success'); }
     else if(action==='restore'){ await db.ref('faaVariants/flagged/'+r.vid).remove(); r.flagged=false; showToast('Restored to rotation.','success'); }
     else if(action==='delete'){
       if(!confirm('Permanently delete this variant from the pool?')) return;
