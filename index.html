@@ -7616,6 +7616,19 @@ function assignRenderTopicPicker(){
   const subs=[['general','📋 General'],['airframe','✈ Airframe'],['powerplant','⚙ Powerplant']];
   el.innerHTML=subs.map(([k,lbl])=>'<div style="margin-bottom:10px"><div style="font-family:monospace;font-size:.72rem;letter-spacing:1px;color:var(--muted);margin-bottom:5px">'+lbl+'</div>'+((OFFICIAL_TOPICS[k]||[]).map(t=>'<label style="display:block;font-size:.85rem;padding:3px 0;cursor:pointer"><input type="checkbox" class="asgTopic" value="'+esc(t)+'" style="margin-right:7px">'+esc(t)+'</label>').join(''))+'</div>').join('');
 }
+// Generate a class exam's questions ONCE (shared by every student) — mirrors what a student's
+// pxRunExam would request, minus per-student "seen" filtering, so the whole class gets one
+// identical set from a single API call instead of one generation per student.
+async function _asgGenerateSharedExam(base){
+  let topics, count;
+  if(base.mode==='official' && base.subject){ topics=OFFICIAL_TOPICS[base.subject]; count=OFFICIAL_EXAMS[base.subject].count; }
+  else { topics=base.topics||[]; count=base.count||topics.length||5; }
+  const body={topics,count,...(base.focusedMix?{focusedMix:true}:{})};
+  const res=await fetch('https://classroomamt.vercel.app/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await res.json();
+  if(!res.ok||!data.questions||!data.questions.length) throw new Error(data.error||'no questions returned');
+  return data.questions;
+}
 async function assignSubmit(){
   const st=document.getElementById('assignStatus');
   // Build the shared exam payload (same shape for one student or a whole class)
@@ -7648,18 +7661,26 @@ async function assignSubmit(){
       const stu=await dbGet('classroomStudents/'+_asgClass.id)||{};
       const entries=Object.entries(stu).filter(([,v])=>v&&typeof v==='object');
       if(!entries.length){ st.style.color='var(--wl)'; st.textContent='No students in that classroom.'; return; }
+      // Generate the exam ONCE here so every student takes the identical set — a single API call for
+      // the whole class instead of one generation per student (big cost saver + a fair shared exam).
+      st.textContent='Generating the shared class exam…';
+      let sharedQuestions;
+      try{ sharedQuestions=await _asgGenerateSharedExam(base); }
+      catch(genErr){ st.style.color='var(--wl)'; st.textContent='Could not generate the class exam: '+(genErr&&genErr.message||genErr); return; }
       const classExamId='ce_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
       const updates={}; let n=0;
       for(const [stuKey,v] of entries){
         const uid=(v&&v.uid)||stuKey;
         const aid=db.ref('assignedExams/'+uid).push().key;
-        updates['assignedExams/'+uid+'/'+aid]={...base, studentName:(v&&v.name)||'', classId:_asgClass.id, className:_asgClass.name, classExamId};
+        updates['assignedExams/'+uid+'/'+aid]={...base, count:sharedQuestions.length, studentName:(v&&v.name)||'', classId:_asgClass.id, className:_asgClass.name, classExamId};
         n++;
       }
+      // The single shared question set — every student reads this when they start (no re-generation).
+      updates['classrooms/'+_asgClass.id+'/classExamQuestions/'+classExamId]={ questions:sharedQuestions, createdAt:base.createdAt };
       // Registry entry so the gradebook/performance pickers can list this class exam
       updates['classrooms/'+_asgClass.id+'/practiceExams/'+classExamId]={
         label:base.label, mode:base.mode, subject:base.subject||null, topics:base.topics||null,
-        total:base.count, createdAt:base.createdAt, by:base.byName, studentCount:n
+        total:sharedQuestions.length, createdAt:base.createdAt, by:base.byName, studentCount:n
       };
       await db.ref().update(updates);
       st.style.color='var(--cl)'; st.textContent='✓ Assigned to '+n+' student'+(n===1?'':'s')+' in '+_asgClass.name+'.';
@@ -13684,16 +13705,22 @@ async function pxRunExam(topics, count, label, opts){
   try {
     // Prefer-unseen rotation: tell the generator which questions this student has already seen so
     // it serves fresh items first (esp. reworded variants). 'all' mode returns everything anyway.
-    let seenIds=[];
-    if(stuSession?.uid && opts.mode!=='all'){ try{ seenIds=await pxLoadSeenIds(); }catch(e){} }
-    const res=await fetch('https://classroomamt.vercel.app/api/generate',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.focusedMix?{focusedMix:true}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.varRatio!=null?{varRatio:opts.varRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{}),...(seenIds.length?{seenIds}:{})})
-    });
-    const data=await res.json();
-    if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
-    _pxQuestions=data.questions;
+    if(opts.questions && opts.questions.length){
+      // Shared class exam: use the single set generated once at assign time (no per-student API call).
+      _pxQuestions=opts.questions;
+      if(msgEl) msgEl.textContent='Loading your class exam…';
+    } else {
+      let seenIds=[];
+      if(stuSession?.uid && opts.mode!=='all'){ try{ seenIds=await pxLoadSeenIds(); }catch(e){} }
+      const res=await fetch('https://classroomamt.vercel.app/api/generate',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.focusedMix?{focusedMix:true}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.varRatio!=null?{varRatio:opts.varRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{}),...(seenIds.length?{seenIds}:{})})
+      });
+      const data=await res.json();
+      if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
+      _pxQuestions=data.questions;
+    }
     pxRecordSeen(_pxQuestions); // remember these so future exams rotate to fresh questions
     await pxApplyOverrides(_pxQuestions); // apply any admin answer corrections before grading/saving
     _pxAnswers={}; _pxCurrentQ=0; _pxCorrectCount=0; _pxAnsweredCount=0; _pxTopicStats={}; _pxExamKey=null; _pxFlagCount=0; _pxFlaggedVids=new Set(); _pxStarred=new Set();
@@ -13759,6 +13786,14 @@ async function practiceStartAssigned(assignId){
   // Focused FAA-style assignment: pass the flag (server applies the mix). Older assignments may
   // still carry explicit ratios — honor those too for backward compatibility.
   const opts={}; if(a.focusedMix) opts.focusedMix=true; if(a.faaRatio!=null) opts.faaRatio=a.faaRatio; if(a.varRatio!=null) opts.varRatio=a.varRatio; if(a.opRatio!=null) opts.opRatio=a.opRatio;
+  // Class exam: everyone takes the identical set generated once at assign time — pull it and skip the
+  // per-student API call. (Older class exams with no stored set fall back to generating per student.)
+  if(a.classExamId && a.classId){
+    try{
+      const shared=await dbGet('classrooms/'+a.classId+'/classExamQuestions/'+a.classExamId);
+      if(shared && Array.isArray(shared.questions) && shared.questions.length) opts.questions=shared.questions;
+    }catch(e){}
+  }
   await pxRunExam(topics, count, label, opts);
 }
 
