@@ -15250,8 +15250,8 @@ async function renderStudyHome(){
                 <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Study the exact areas most likely on YOUR test</div>
               </div>
             </div>
-            <div style="font-family:monospace;font-size:.72rem;color:var(--muted);line-height:1.5;margin-bottom:10px">Upload your AKTR (written-test results) or type the ACS codes you missed — PrimeTime builds a focused flashcard deck from them.</div>
-            <button onclick="event.stopPropagation();stuSwitchTab('acs')" style="width:100%;background:rgba(255,107,43,.14);border:1px solid ${border};border-radius:var(--r);padding:10px;font-family:monospace;font-size:.8rem;font-weight:700;color:${fire};cursor:pointer" onmouseover="this.style.background='rgba(255,107,43,.24)'" onmouseout="this.style.background='rgba(255,107,43,.14)'">＋ Add my ACS codes</button>
+            <div style="font-family:monospace;font-size:.72rem;color:var(--muted);line-height:1.5;margin-bottom:10px">Upload your ACS codes to get your PrimeTime questions — a focused flashcard deck of the areas most likely to show up on YOUR test. Upload your AKTR (written-test results) or just type in the codes you missed.</div>
+            <button onclick="event.stopPropagation();stuSwitchTab('acs')" style="width:100%;background:rgba(255,107,43,.14);border:1px solid ${border};border-radius:var(--r);padding:11px;font-family:monospace;font-size:.82rem;font-weight:700;color:${fire};cursor:pointer" onmouseover="this.style.background='rgba(255,107,43,.24)'" onmouseout="this.style.background='rgba(255,107,43,.14)'">📤 Upload my ACS codes →</button>
           </div>`;
         }
         if(!n){
@@ -15467,6 +15467,18 @@ function renderFlashcard(){
     <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:10px">
       ${esc(topicLabel)} &nbsp;·&nbsp; ${fcDeck.length} card${fcDeck.length!==1?'s':''} remaining
     </div>
+
+    <!-- ACS code label (PrimeTime cards) — shows which missed code this card covers -->
+    ${(function(){
+      const cc = card.acs || [];
+      if(!cc.length) return '';
+      const chips = cc.map(code => {
+        const info = (typeof ACS_LOOKUP !== 'undefined' && ACS_LOOKUP[code]) || null;
+        const desc = info ? info.desc : '';
+        return '<span title="'+esc(desc)+'" style="display:inline-block;background:rgba(255,107,43,.12);border:1px solid rgba(255,107,43,.4);color:#ff6b2b;border-radius:12px;padding:3px 11px;margin:0 4px 4px 0;font-family:monospace;font-size:.72rem;font-weight:700">🔥 '+esc(code)+(desc?' <span style="color:var(--muted);font-weight:400">· '+esc(desc)+'</span>':'')+'</span>';
+      }).join('');
+      return '<div style="text-align:center;margin-bottom:12px">'+chips+'</div>';
+    })()}
 
     <!-- Flip card -->
     <div class="fc-scene" onclick="fcHandleCardClick()" id="fcScene">
@@ -15877,7 +15889,10 @@ function primeTimeBuild(codes){
       (qb[topic]||[]).forEach((q, idx) => {
         const cc = q.acs || [];
         if(cc.some(c => missed.has(_primeBase(c)))){
-          cards.push({ q:q.q, a:q.a, topic, idx, bankId });
+          // Keep only the codes that matched what the student missed, so the
+          // on-card label shows the relevant code(s), not every tag on the card.
+          const hit = cc.filter(c => missed.has(_primeBase(c)));
+          cards.push({ q:q.q, a:q.a, topic, idx, bankId, acs: hit });
         }
       });
     }
