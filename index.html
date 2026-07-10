@@ -40,6 +40,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
 <style>
 :root{
   --bg:#0a0c0f;--panel:#111417;--panel2:#161a1f;--border:#1e2328;
@@ -2313,6 +2314,7 @@ firebase.initializeApp({
 const db = firebase.database();
 const auth = firebase.auth();
 const storage = firebase.storage();
+const analytics = firebase.analytics();
 // Hide loading indicator now that Firebase is ready
 document.addEventListener('DOMContentLoaded', function(){
   var ind = document.getElementById('jsLoadingIndicator');
