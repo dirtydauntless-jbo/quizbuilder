@@ -2314,7 +2314,6 @@ firebase.initializeApp({
 const db = firebase.database();
 const auth = firebase.auth();
 const storage = firebase.storage();
-const analytics = firebase.analytics();
 // Hide loading indicator now that Firebase is ready
 document.addEventListener('DOMContentLoaded', function(){
   var ind = document.getElementById('jsLoadingIndicator');
@@ -2702,6 +2701,9 @@ function doSignOut(){
 // Listen for auth state -- fires on page load AND after sign-in
 // Flag: set to 'instructor' or 'student' when user explicitly picks a role
 let pendingAuthRole = null;
+
+// Initialize Firebase Analytics after all variables are declared
+const analytics = firebase.analytics();
 
 auth.onAuthStateChanged(async user => {
   try {
