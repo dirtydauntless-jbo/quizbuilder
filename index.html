@@ -2703,7 +2703,9 @@ function doSignOut(){
 let pendingAuthRole = null;
 
 // Initialize Firebase Analytics after all variables are declared
-const analytics = firebase.analytics();
+// Wrapped in try/catch: a config/measurementId issue here must never halt the rest of the script
+let analytics = null;
+try { analytics = firebase.analytics(); } catch(e) { console.warn('Firebase Analytics failed to init:', e); }
 
 auth.onAuthStateChanged(async user => {
   try {
