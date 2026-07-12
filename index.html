@@ -14091,11 +14091,26 @@ function practiceSelectAnswer(letter){
     db.ref('practiceHistory/'+stuSession.uid+'/'+_pxExamKey).update({score:_pxCorrectCount,pct:sp,answeredCount:_pxAnsweredCount,topicStats:_pxTopicStats}).catch(e=>console.warn('progress save failed:',e&&e.message||e));
     db.ref('practiceExamData/'+stuSession.uid+'/'+_pxExamKey+'/answers').set(_pxAnswers).catch(e=>console.warn('answer save failed:',e&&e.message||e));
   }
-  // Briefly highlight the chosen answer, then auto-advance. No feedback/explanation during the exam.
-  const btn = document.getElementById('pxBtn'+letter);
-  if(btn){ btn.style.background='rgba(8,145,178,.18)'; btn.style.borderColor='#0891b2'; }
-  Object.keys(q.choices).forEach(l=>{ const b=document.getElementById('pxBtn'+l); if(b) b.onclick=null; });
-  setTimeout(practiceAdvance, 160);
+  // Highlight the correct choice green, and the student's choice red if it was wrong.
+  Object.keys(q.choices).forEach(l=>{
+    const b=document.getElementById('pxBtn'+l);
+    if(!b) return;
+    b.onclick=null;
+    if(l===q.correct){ b.style.background='rgba(34,197,94,.15)'; b.style.borderColor='var(--cl)'; b.style.color='var(--cl)'; }
+    else if(l===letter){ b.style.background='rgba(204,68,68,.12)'; b.style.borderColor='var(--wl)'; b.style.color='var(--wl)'; }
+  });
+  // Show correct/incorrect feedback plus the 8083 explanation immediately, then wait for the student to advance.
+  const fb = document.getElementById('pxFeedback');
+  if(fb){
+    fb.style.display='block';
+    fb.style.background = ok ? 'rgba(34,197,94,.08)' : 'rgba(204,68,68,.08)';
+    fb.style.borderColor = ok ? 'rgba(34,197,94,.4)' : 'rgba(204,68,68,.4)';
+    const header = ok ? '✓ Correct' : `✗ Incorrect — correct answer: ${q.correct}. ${q.choices[q.correct]}`;
+    const exp = q.explanation || 'No explanation available for this question yet.';
+    fb.innerHTML = `<div style="font-weight:700;margin-bottom:7px;color:${ok?'var(--cl)':'var(--wl)'}">${header}</div><div style="font-size:.85rem;line-height:1.55;color:var(--text)">${exp}</div>`;
+  }
+  const nextBtn = document.getElementById('pxNextBtn');
+  if(nextBtn) nextBtn.style.display='block';
 }
 
 function practiceAdvance(){
