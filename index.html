@@ -7806,29 +7806,49 @@ async function loadClassWideWeakSpots(classId, targetElId){
   const el=document.getElementById(targetElId||'cdPerfContent'); if(!el) return;
   el.innerHTML='<div class="empty-state">Loading class-wide data…</div>';
   const stu=await dbGet('classroomStudents/'+classId)||{};
-  const roster=Object.entries(stu).filter(([,v])=>v&&typeof v==='object').map(([k,v])=>({uid:(v&&v.uid)||k}));
+  const roster=Object.entries(stu).filter(([,v])=>v&&typeof v==='object').map(([k,v])=>({uid:(v&&v.uid)||k,name:(v&&v.name)||'(student)'}));
   if(!roster.length){ el.innerHTML='<div class="empty-state">No students in this class.</div>'; return; }
-  const agg={}; let studentsWithData=0, examsCounted=0;
+  const agg={}; let studentsWithData=0, examsCounted=0, assignedCounted=0, selfCounted=0;
+  const studentRows=[];
   for(const u of roster){
-    let any=false;
-    const ex=await dbGet('assignedExams/'+u.uid).catch(()=>null)||{};
-    Object.values(ex).forEach(a=>{ if(!a||a.classId!==classId) return; const ts=a.topicStats; if(!ts||typeof ts!=='object') return; examsCounted++; any=true;
-      Object.entries(ts).forEach(([t0,v])=>{ if(!v||!v.total) return; const t=_normTopic(t0); if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total; }); });
-    if(any) studentsWithData++;
+    // practiceHistory captures EVERY completed practice exam a student ever takes — both
+    // instructor-assigned (has assignId) and self-directed (student picked subject/topics
+    // on their own). Sourcing from here (instead of assignedExams alone) means self-directed
+    // practice now counts toward the class's diagnostic picture too, not just what was assigned.
+    const hist=await dbGet('practiceHistory/'+u.uid).catch(()=>null)||{};
+    const sTs={}; let sCorrect=0, sTotal=0, sExams=0;
+    Object.values(hist).forEach(a=>{ if(!a||a.status!=='complete') return; const ts=a.topicStats; if(!ts||typeof ts!=='object') return; examsCounted++; sExams++;
+      if(a.assignId) assignedCounted++; else selfCounted++;
+      Object.entries(ts).forEach(([t0,v])=>{ if(!v||!v.total) return; const t=_normTopic(t0);
+        if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total;
+        if(!sTs[t])sTs[t]={correct:0,total:0}; sTs[t].correct+=(v.correct||0); sTs[t].total+=v.total;
+        sCorrect+=(v.correct||0); sTotal+=v.total; }); });
+    if(sExams){
+      studentsWithData++;
+      studentRows.push({uid:u.uid,name:u.name,exams:sExams,pct:sTotal?Math.round(sCorrect/sTotal*100):0,correct:sCorrect,total:sTotal,weak:pxProblemAreas(sTs,3)});
+    }
   }
   const rows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
-  if(!rows.length){ el.innerHTML='<div class="empty-state">No completed class exams with topic data yet. Assign a practice exam and have students take it — weak spots show up here.</div>'; return; }
+  if(!rows.length){ el.innerHTML='<div class="empty-state">No completed practice exams with topic data yet. Have students take (or assign) a practice exam — weak spots show up here.</div>'; return; }
   // Only flag a topic as a problem area if it was asked at least twice — one missed question
   // out of a single asking isn't a reliable signal.
   const weak=rows.filter(r=>r.pct<70 && r.total>=2);
   window._classRemTopics=weak.slice(0,8).map(r=>r.t);
-  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across all assigned exams in this class · '+studentsWithData+' student'+(studentsWithData===1?'':'s')+' with data · '+examsCounted+' exam'+(examsCounted===1?'':'s')+' counted</div></div>';
+  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across all practice exams in this class ('+assignedCounted+' assigned · '+selfCounted+' self-directed) · '+studentsWithData+' student'+(studentsWithData===1?'':'s')+' with data · '+examsCounted+' exam'+(examsCounted===1?'':'s')+' counted</div></div>';
   if(weak.length){
     html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Topics the class struggles with most</div>'+weak.slice(0,8).map(r=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:3px">'+esc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+'<button onclick="startClassRemediation(\''+classId+'\')" class="btn btn-primary" style="margin-top:10px;font-size:.82rem;padding:9px 16px;letter-spacing:.5px">🎯 Assign Remediation Exam to Whole Class</button></div>';
   } else {
     html+='<div style="background:rgba(58,170,102,.08);border:1px solid rgba(58,170,102,.3);border-radius:var(--r);padding:12px 15px;margin-bottom:12px;font-weight:700;color:var(--cl)">✓ No class-wide weak topics — every topic is above 70%.</div>';
   }
-  html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px"><div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:9px">All Topics — class aggregate (weakest first)</div>'+rows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.t)+'</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted)">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>';
+  html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:9px">All Topics — class aggregate (weakest first)</div>'+rows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.t)+'</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted)">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>';
+  // Per-student breakdown — surfaces WHICH students are struggling, and in what, not just the class average.
+  studentRows.sort((a,b)=>a.pct-b.pct);
+  html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-top:12px"><div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:9px">Student Breakdown (weakest overall first)</div>'+
+    studentRows.map(s=>{const col=s.pct>=70?'var(--cl)':s.pct>=50?'#f59e0b':'var(--wl)';
+      return '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span style="font-weight:600;font-size:.85rem">'+esc(s.name)+'</span><span style="font-family:monospace;font-size:.78rem;color:var(--muted)">'+s.exams+' exam'+(s.exams===1?'':'s')+'</span><span style="font-family:monospace;font-size:.8rem;font-weight:700;color:'+col+'">'+s.correct+'/'+s.total+' ('+s.pct+'%)</span></div>'+
+        (s.weak.length?'<div style="font-family:monospace;font-size:.72rem;color:var(--wl);margin-top:4px">⚠ '+s.weak.map(esc).join(' · ')+'</div>':'')+
+      '</div>';}).join('')+
+  '</div>';
   el.innerHTML=html;
 }
 // Pre-fill the Assign tab in CLASSROOM mode with the class's weakest topics.
