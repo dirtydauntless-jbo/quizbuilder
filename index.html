@@ -2710,20 +2710,14 @@ let pendingAuthRole = null;
 let analytics = null;
 try { analytics = firebase.analytics(); } catch(e) { console.warn('Firebase Analytics failed to init:', e); }
 
-auth.onAuthStateChanged(async user => {
-  try {
-  const ind = document.getElementById('jsLoadingIndicator');
-  if(ind) ind.style.display = 'none';
-
-  if(!user){
-    if(typeof _stuSimCleanup === 'function') try{ _stuSimCleanup(); }catch(e){}
-    if(!stuSession && !instUser) showLanding();
-    return;
-  }
-  if(stuSession) return;
-  if(_handlingRedirect) return;
-
-  // Log site access immediately on any authenticated page load
+// Writes accessLog meta + firstSeen + a session entry for this user.
+// Called both from onAuthStateChanged (page-reload / returning-user case) and
+// directly from the student sign-in flow, since that flow sets stuSession itself
+// before onAuthStateChanged fires, which would otherwise skip this entirely (missing new-signup tracking).
+let _loggedAccessUids = new Set();
+async function logAccessEvent(user){
+  if(!user || _loggedAccessUids.has(user.uid)) return;
+  _loggedAccessUids.add(user.uid);
   const logKey = (user.email||user.uid).replace(/[.#$\[\]]/g,'_');
   const nowMs = Date.now();
   try {
@@ -2746,6 +2740,23 @@ auth.onAuthStateChanged(async user => {
   } catch(e){
     console.warn(`✗ accessLog write failed:`, e.message || e);
   }
+}
+
+auth.onAuthStateChanged(async user => {
+  try {
+  const ind = document.getElementById('jsLoadingIndicator');
+  if(ind) ind.style.display = 'none';
+
+  if(!user){
+    if(typeof _stuSimCleanup === 'function') try{ _stuSimCleanup(); }catch(e){}
+    if(!stuSession && !instUser) showLanding();
+    return;
+  }
+  if(stuSession) return;
+  if(_handlingRedirect) return;
+
+  // Log site access immediately on any authenticated page load
+  await logAccessEvent(user);
 
   // CASE 1: Instructor app already visible (page refresh while logged in)
   if(!document.getElementById('instApp').classList.contains('hidden')){
@@ -2969,6 +2980,7 @@ async function doStuOAuth(provider){
 async function showStuJoinScreen(user){
 
   stuAuthUser = user;
+  logAccessEvent(user).catch(()=>{});
   try {
     // Get or create profile
     let profile = await dbGet('studentProfiles/' + user.uid);
