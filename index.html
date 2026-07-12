@@ -7979,6 +7979,10 @@ async function assignViewResult(stuUid,aid){
     (_p?'<br>Took <b style="color:var(--text)">'+fmtDur(_p.durationSec)+'</b> · '+_p.spq+'s/question · <span style="color:'+_p.color+'">'+_p.label+'</span>':'')+
     '</div>':'';
   const plan=(typeof pxStudyPlanHTML==='function')?pxStudyPlanHTML(questions,answers):'';
+  // A flat, specific list to walk through 1-on-1 with the student — broad topic names like
+  // "propellers" aren't actionable, so this pulls the actual missed-question takeaways.
+  const missedConcepts=pxMissedConceptBullets(questions,answers,10);
+  const conceptsHtml=missedConcepts.length?'<div style="background:rgba(240,165,0,.07);border:1px solid rgba(240,165,0,.3);border-radius:var(--r);padding:13px 15px;margin-bottom:14px"><div style="font-family:monospace;font-size:.72rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin-bottom:9px">🎯 Concepts To Review With This Student</div><ul style="margin:0;padding-left:20px;font-size:.86rem;line-height:1.65">'+missedConcepts.map(c=>'<li>'+c+'</li>').join('')+'</ul></div>':'';
   // Comprehensive per-topic breakdown — every topic on the exam (weakest first), in addition to
   // the Top-3 study plan above. Computed from the actual questions/answers.
   const topicAgg={};
@@ -7988,7 +7992,7 @@ async function assignViewResult(stuUid,aid){
   const qhtml='<div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px">Question-by-question</div>'+questions.map((q,i)=>{const sel=answers[i];const ok=sel===q.correct;const ans=sel!==undefined;return buildRevQuestionCard(q,i,sel,ok,ans);}).join('');
   window._remTarget={uid:stuUid, name:a.studentName||''};
   const remBtn='<button onclick="startRemediationExam()" class="btn btn-primary" style="width:100%;margin-bottom:14px;font-size:.86rem;padding:11px;letter-spacing:.5px">🎯 Assign Remediation Exam — target this student\'s weak topics</button>';
-  document.getElementById('asgResContent').innerHTML=passBar+timeBar+remBtn+plan+topicTable+qhtml;
+  document.getElementById('asgResContent').innerHTML=passBar+timeBar+remBtn+conceptsHtml+plan+topicTable+qhtml;
   document.getElementById('assignResultModal').style.display='flex';
 }
 
@@ -8529,6 +8533,10 @@ async function loadExamPerformance(classId, classExamId){
   const weak=topicRows.filter(r=>r.pct<70 && r.total>=2).slice(0,5);
   let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;letter-spacing:1px;color:var(--accent)">Class Average: '+classPct+'%</div><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">'+done.length+' student'+(done.length===1?'':'s')+' completed · '+totC+'/'+totQ+' total</div></div>';
   if(weak.length){ html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Class needs the most work on</div>'+weak.map(r=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:3px">'+esc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+'</div>'; }
+  // Flat, ranked list of the SPECIFIC concepts missed across the class on this exam — more
+  // actionable than a broad topic name when planning what to actually re-teach.
+  const classConcepts=pxClassMissedConceptBullets(done,8);
+  if(classConcepts.length){ html+='<div style="background:rgba(240,165,0,.07);border:1px solid rgba(240,165,0,.3);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--accent);margin-bottom:9px">🎯 Concepts To Re-Teach The Class</div>'+classConcepts.map(c=>'<div style="font-size:.86rem;line-height:1.55;margin-bottom:5px">• '+c.concept+' <span style="font-family:monospace;font-size:.7rem;color:var(--muted)">('+c.count+' student'+(c.count===1?'':'s')+' missed this)</span></div>').join('')+'</div>'; }
   html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px"><div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:9px">All Topics — class aggregate (weakest first)</div>'+topicRows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.t)+'</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted)">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>';
   el.innerHTML=html;
 }
@@ -14535,6 +14543,43 @@ function pxStudyPlanText(questions,answers){
   return topics.map((t,i)=>(i+1)+'. '+t.topic+' — '+t.correct+'/'+t.total+' ('+t.pct+'%)\n'+
     (t.refs.length?'   Revisit: '+t.refs.join(' | ')+'\n':'')+
     '   Concepts missed:\n'+t.concepts.map(c=>'     - '+c).join('\n')).join('\n\n');
+}
+
+// A flat, prioritized list of the SPECIFIC concepts a student got wrong on one exam (not grouped
+// by broad topic — "propellers" isn't actionable, but the individual missed-question takeaways are).
+// Worst-scoring topics contribute their missed concepts first, so the most urgent items lead the list.
+function pxMissedConceptBullets(questions,answers,n){
+  n=n||10;
+  const topics=pxAnalyzeTopics(questions,answers).filter(t=>t.missed.length>0).sort((a,b)=>a.pct-b.pct);
+  const seen=new Set(), bullets=[];
+  for(const t of topics){
+    for(const q of t.missed){
+      const c=pxConcept(q);
+      if(!c||seen.has(c)) continue;
+      seen.add(c); bullets.push(c);
+      if(bullets.length>=n) return bullets;
+    }
+  }
+  return bullets;
+}
+// Same idea, aggregated across every completed student on one assigned exam — ranked by how many
+// students missed each specific concept, so an instructor knows what to re-teach the WHOLE class.
+function pxClassMissedConceptBullets(completedRows,n){
+  n=n||8;
+  const freq=new Map();
+  completedRows.forEach(r=>{
+    const data=r&&r.a&&r.a.data; if(!data) return;
+    const questions=data.questions||[], answers=data.answers||{};
+    const seenThisStudent=new Set();
+    questions.forEach((q,i)=>{
+      if(answers[i]===q.correct) return;
+      const c=pxConcept(q);
+      if(!c||seenThisStudent.has(c)) return;
+      seenThisStudent.add(c);
+      freq.set(c,(freq.get(c)||0)+1);
+    });
+  });
+  return [...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,n).map(([concept,count])=>({concept,count}));
 }
 
 function buildPxHistoryRow(r){
