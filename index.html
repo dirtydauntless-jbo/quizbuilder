@@ -7809,15 +7809,20 @@ async function loadClassWideWeakSpots(classId, targetElId){
   const roster=Object.entries(stu).filter(([,v])=>v&&typeof v==='object').map(([k,v])=>({uid:(v&&v.uid)||k,name:(v&&v.name)||'(student)'}));
   if(!roster.length){ el.innerHTML='<div class="empty-state">No students in this class.</div>'; return; }
   const agg={}; let studentsWithData=0, examsCounted=0, assignedCounted=0, selfCounted=0;
-  const studentRows=[];
+  const studentRows=[]; const conceptFreq=new Map();
+  // Cap concept-level extraction to each student's most recent N completed exams — topic
+  // aggregation above is cheap (already in practiceHistory), but pulling specific missed
+  // concepts requires a separate practiceExamData read per exam, so bound the read volume.
+  const CONCEPT_EXAM_CAP=20;
   for(const u of roster){
     // practiceHistory captures EVERY completed practice exam a student ever takes — both
     // instructor-assigned (has assignId) and self-directed (student picked subject/topics
     // on their own). Sourcing from here (instead of assignedExams alone) means self-directed
     // practice now counts toward the class's diagnostic picture too, not just what was assigned.
     const hist=await dbGet('practiceHistory/'+u.uid).catch(()=>null)||{};
+    const completed=Object.entries(hist).filter(([,a])=>a&&a.status==='complete');
     const sTs={}; let sCorrect=0, sTotal=0, sExams=0;
-    Object.values(hist).forEach(a=>{ if(!a||a.status!=='complete') return; const ts=a.topicStats; if(!ts||typeof ts!=='object') return; examsCounted++; sExams++;
+    completed.forEach(([,a])=>{ const ts=a.topicStats; if(!ts||typeof ts!=='object') return; examsCounted++; sExams++;
       if(a.assignId) assignedCounted++; else selfCounted++;
       Object.entries(ts).forEach(([t0,v])=>{ if(!v||!v.total) return; const t=_normTopic(t0);
         if(!agg[t])agg[t]={correct:0,total:0}; agg[t].correct+=(v.correct||0); agg[t].total+=v.total;
@@ -7827,7 +7832,22 @@ async function loadClassWideWeakSpots(classId, targetElId){
       studentsWithData++;
       studentRows.push({uid:u.uid,name:u.name,exams:sExams,pct:sTotal?Math.round(sCorrect/sTotal*100):0,correct:sCorrect,total:sTotal,weak:pxProblemAreas(sTs,3)});
     }
+    const recent=completed.sort((a,b)=>(b[1].date||0)-(a[1].date||0)).slice(0,CONCEPT_EXAM_CAP);
+    const seenThisStudent=new Set();
+    for(const [examKey] of recent){
+      const ed=await dbGet('practiceExamData/'+u.uid+'/'+examKey).catch(()=>null);
+      if(!ed||!Array.isArray(ed.questions)) continue;
+      const answers=ed.answers||{};
+      ed.questions.forEach((q,i)=>{
+        if(answers[i]===q.correct) return;
+        const c=pxConcept(q);
+        if(!c||seenThisStudent.has(c)) return;
+        seenThisStudent.add(c);
+        conceptFreq.set(c,(conceptFreq.get(c)||0)+1);
+      });
+    }
   }
+  const classConcepts=[...conceptFreq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8).map(([concept,count])=>({concept,count}));
   const rows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
   if(!rows.length){ el.innerHTML='<div class="empty-state">No completed practice exams with topic data yet. Have students take (or assign) a practice exam — weak spots show up here.</div>'; return; }
   // Only flag a topic as a problem area if it was asked at least twice — one missed question
@@ -7840,6 +7860,10 @@ async function loadClassWideWeakSpots(classId, targetElId){
   } else {
     html+='<div style="background:rgba(58,170,102,.08);border:1px solid rgba(58,170,102,.3);border-radius:var(--r);padding:12px 15px;margin-bottom:12px;font-weight:700;color:var(--cl)">✓ No class-wide weak topics — every topic is above 70%.</div>';
   }
+  // Flat, ranked list of the SPECIFIC concepts missed across the class — more actionable than
+  // a broad topic name when planning what to actually re-teach. Ranked by student count, not
+  // sheer question count, so one student retrying the same weak topic doesn't dominate the list.
+  if(classConcepts.length){ html+='<div style="background:rgba(240,165,0,.07);border:1px solid rgba(240,165,0,.3);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--accent);margin-bottom:9px">🎯 Concepts To Re-Teach The Class</div>'+classConcepts.map(c=>'<div style="font-size:.86rem;line-height:1.55;margin-bottom:5px">• '+c.concept+' <span style="font-family:monospace;font-size:.7rem;color:var(--muted)">('+c.count+' student'+(c.count===1?'':'s')+' missed this)</span></div>').join('')+'</div>'; }
   html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;color:var(--muted);margin-bottom:9px">All Topics — class aggregate (weakest first)</div>'+rows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.t)+'</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted)">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+'</div>';
   // Per-student breakdown — surfaces WHICH students are struggling, and in what, not just the class average.
   studentRows.sort((a,b)=>a.pct-b.pct);
