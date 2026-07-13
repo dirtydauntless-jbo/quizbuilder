@@ -7802,17 +7802,25 @@ const TOPIC_ALIASES = {
 };
 function _normTopic(t){ return TOPIC_ALIASES[t] || t; }
 
-async function loadClassWideWeakSpots(classId, targetElId){
+// mode: 'cumulative' (default) folds together every completed practice exam a student has ever
+// taken; 'last' uses only each student's single most recent completed exam — a current snapshot
+// instead of an accumulation, useful right after a fresh round of practice exams.
+async function loadClassWideWeakSpots(classId, targetElId, mode){
+  mode = mode || window._classWideMode || 'cumulative';
+  window._classWideMode = mode;
   const el=document.getElementById(targetElId||'cdPerfContent'); if(!el) return;
   el.innerHTML='<div class="empty-state">Loading class-wide data…</div>';
+  const mkBtn=(m,label)=>'<button onclick="loadClassWideWeakSpots(\''+classId+'\','+(targetElId?"'"+targetElId+"'":'null')+',\''+m+'\')" style="flex:1;padding:9px;border:none;cursor:pointer;font-family:monospace;font-size:.75rem;font-weight:700;letter-spacing:.5px;background:'+(mode===m?'var(--accent)':'var(--panel2)')+';color:'+(mode===m?'#000':'var(--muted)')+'">'+label+'</button>';
+  const toggleHtml='<div style="display:flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:12px">'+mkBtn('cumulative','CUMULATIVE (ALL EXAMS)')+mkBtn('last','LAST EXAM ONLY')+'</div>';
   const stu=await dbGet('classroomStudents/'+classId)||{};
   const roster=Object.entries(stu).filter(([,v])=>v&&typeof v==='object').map(([k,v])=>({uid:(v&&v.uid)||k,name:(v&&v.name)||'(student)'}));
-  if(!roster.length){ el.innerHTML='<div class="empty-state">No students in this class.</div>'; return; }
+  if(!roster.length){ el.innerHTML=toggleHtml+'<div class="empty-state">No students in this class.</div>'; return; }
   const agg={}; let studentsWithData=0, examsCounted=0, assignedCounted=0, selfCounted=0;
   const studentRows=[]; const conceptFreq=new Map();
-  // Cap concept-level extraction to each student's most recent N completed exams — topic
-  // aggregation above is cheap (already in practiceHistory), but pulling specific missed
-  // concepts requires a separate practiceExamData read per exam, so bound the read volume.
+  // Cap concept-level extraction to each student's most recent N completed exams (cumulative mode
+  // only — 'last' mode only ever looks at 1) — topic aggregation above is cheap (already in
+  // practiceHistory), but pulling specific missed concepts requires a separate practiceExamData
+  // read per exam, so bound the read volume.
   const CONCEPT_EXAM_CAP=20;
   for(const u of roster){
     // practiceHistory captures EVERY completed practice exam a student ever takes — both
@@ -7820,7 +7828,9 @@ async function loadClassWideWeakSpots(classId, targetElId){
     // on their own). Sourcing from here (instead of assignedExams alone) means self-directed
     // practice now counts toward the class's diagnostic picture too, not just what was assigned.
     const hist=await dbGet('practiceHistory/'+u.uid).catch(()=>null)||{};
-    const completed=Object.entries(hist).filter(([,a])=>a&&a.status==='complete');
+    let completed=Object.entries(hist).filter(([,a])=>a&&a.status==='complete');
+    completed.sort((a,b)=>(b[1].date||0)-(a[1].date||0)); // newest first, always
+    if(mode==='last') completed=completed.slice(0,1);
     const sTs={}; let sCorrect=0, sTotal=0, sExams=0;
     completed.forEach(([,a])=>{ const ts=a.topicStats; if(!ts||typeof ts!=='object') return; examsCounted++; sExams++;
       if(a.assignId) assignedCounted++; else selfCounted++;
@@ -7832,7 +7842,7 @@ async function loadClassWideWeakSpots(classId, targetElId){
       studentsWithData++;
       studentRows.push({uid:u.uid,name:u.name,exams:sExams,pct:sTotal?Math.round(sCorrect/sTotal*100):0,correct:sCorrect,total:sTotal,weak:pxProblemAreas(sTs,3)});
     }
-    const recent=completed.sort((a,b)=>(b[1].date||0)-(a[1].date||0)).slice(0,CONCEPT_EXAM_CAP);
+    const recent=mode==='last'?completed:completed.slice(0,CONCEPT_EXAM_CAP);
     const seenThisStudent=new Set();
     for(const [examKey] of recent){
       const ed=await dbGet('practiceExamData/'+u.uid+'/'+examKey).catch(()=>null);
@@ -7849,12 +7859,13 @@ async function loadClassWideWeakSpots(classId, targetElId){
   }
   const classConcepts=[...conceptFreq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8).map(([concept,count])=>({concept,count}));
   const rows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
-  if(!rows.length){ el.innerHTML='<div class="empty-state">No completed practice exams with topic data yet. Have students take (or assign) a practice exam — weak spots show up here.</div>'; return; }
+  if(!rows.length){ el.innerHTML=toggleHtml+'<div class="empty-state">No completed practice exams with topic data yet. Have students take (or assign) a practice exam — weak spots show up here.</div>'; return; }
   // Only flag a topic as a problem area if it was asked at least twice — one missed question
   // out of a single asking isn't a reliable signal.
   const weak=rows.filter(r=>r.pct<70 && r.total>=2);
   window._classRemTopics=weak.slice(0,8).map(r=>r.t);
-  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across all practice exams in this class ('+assignedCounted+' assigned · '+selfCounted+' self-directed) · '+studentsWithData+' student'+(studentsWithData===1?'':'s')+' with data · '+examsCounted+' exam'+(examsCounted===1?'':'s')+' counted</div></div>';
+  const modeLabel=mode==='last'?'each student\'s most recent exam only':'all practice exams in this class ('+assignedCounted+' assigned · '+selfCounted+' self-directed)';
+  let html=toggleHtml+'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across '+modeLabel+' · '+studentsWithData+' student'+(studentsWithData===1?'':'s')+' with data · '+examsCounted+' exam'+(examsCounted===1?'':'s')+' counted</div></div>';
   if(weak.length){
     html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Topics the class struggles with most</div>'+weak.slice(0,8).map(r=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:3px">'+esc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+'<button onclick="startClassRemediation(\''+classId+'\')" class="btn btn-primary" style="margin-top:10px;font-size:.82rem;padding:9px 16px;letter-spacing:.5px">🎯 Assign Remediation Exam to Whole Class</button></div>';
   } else {
