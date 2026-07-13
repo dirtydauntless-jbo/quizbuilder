@@ -16767,24 +16767,26 @@ async function openPrintPreview(quizId, editMode = false){
       const opts = q.options || [];
       const optHtml = opts.map((o, oi) => {
         const isCorrect = oi === q.correct;
-        return `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;margin:3px 0;border-radius:4px;background:${isCorrect?'#e8f5e9':'#f9f9f9'};border:1px solid ${isCorrect?'#a5d6a7':'#e0e0e0'}">
+        return `<div style="display:flex;align-items:flex-start;gap:6px;padding:4px 6px;margin:3px 0;border-radius:4px;background:${isCorrect?'#e8f5e9':'#f9f9f9'};border:1px solid ${isCorrect?'#a5d6a7':'#e0e0e0'}">
           <button onclick="setCorrectAnswer(${i},${oi})" title="${isCorrect?'Correct (click another to change)':'Mark as correct'}"
             style="flex-shrink:0;width:22px;height:22px;border-radius:50%;border:2px solid ${isCorrect?'#2e7d32':'#bbb'};background:${isCorrect?'#2e7d32':'#fff'};color:${isCorrect?'#fff':'transparent'};cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;font-weight:700">✓</button>
-          <span style="color:#888;font-weight:600;font-size:.82rem;flex-shrink:0">${letterOf(oi)}.</span>
-          <input type="text" value="${esc(o)}" onblur="saveOptionEdit(${i},${oi},this.value.trim())"
-            style="flex:1;font-size:.88rem;color:${isCorrect?'#2e7d32':'#333'};outline:none;border:none;border-bottom:1px dashed transparent;cursor:text;min-width:20px;background:transparent;font-family:inherit;padding:0"
+          <span style="color:#888;font-weight:600;font-size:.82rem;flex-shrink:0;margin-top:2px">${letterOf(oi)}.</span>
+          <textarea class="qedit-ta" rows="1" onblur="saveOptionEdit(${i},${oi},this.value.trim())"
+            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+            style="flex:1;min-width:0;width:100%;box-sizing:border-box;font-size:.88rem;color:${isCorrect?'#2e7d32':'#333'};outline:none;border:none;border-bottom:1px dashed transparent;cursor:text;background:transparent;font-family:inherit;padding:0;resize:none;overflow:hidden;white-space:pre-wrap;word-wrap:break-word;line-height:1.4"
             onmouseover="if(document.activeElement!==this)this.style.borderBottomColor='#aaa'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
             onfocus="this.style.borderBottomColor='#4a9eff'"
-            title="Click to edit">
+            title="Click to edit">${esc(o)}</textarea>
         </div>`;
       }).join('');
 
       const fibAns = q.type==='fib' ? `
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#e8f5e9;border-radius:4px;border:1px solid #a5d6a7;margin-top:6px">
-          <span style="font-size:.8rem;color:#2e7d32;font-weight:700;flex-shrink:0">Answer:</span>
-          <input type="text" value="${esc(q.answer||q.a||'')}" onblur="saveFibAnswer(${i},this.value.trim())"
-            style="flex:1;font-size:.88rem;color:#2e7d32;outline:none;border:none;border-bottom:1px dashed #a5d6a7;cursor:text;background:transparent;font-family:inherit;padding:0"
-            title="Click to edit">
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:6px 8px;background:#e8f5e9;border-radius:4px;border:1px solid #a5d6a7;margin-top:6px">
+          <span style="font-size:.8rem;color:#2e7d32;font-weight:700;flex-shrink:0;margin-top:2px">Answer:</span>
+          <textarea class="qedit-ta" rows="1" onblur="saveFibAnswer(${i},this.value.trim())"
+            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+            style="flex:1;min-width:0;width:100%;box-sizing:border-box;font-size:.88rem;color:#2e7d32;outline:none;border:none;border-bottom:1px dashed #a5d6a7;cursor:text;background:transparent;font-family:inherit;padding:0;resize:none;overflow:hidden;white-space:pre-wrap;word-wrap:break-word;line-height:1.4"
+            title="Click to edit">${esc(q.answer||q.a||'')}</textarea>
         </div>` : '';
 
       return `<div id="previewQ_${i}" style="border:1px solid #ddd;border-radius:6px;padding:12px 14px;margin-bottom:10px;background:#fff">
@@ -16795,7 +16797,7 @@ async function openPrintPreview(quizId, editMode = false){
               <span style="color:#bbb;font-weight:600;font-size:.88rem;flex-shrink:0;margin-top:1px">${i+1}.</span>
               <textarea class="qedit-ta" rows="1" onblur="saveQuestionEdit(${i},this.value.trim())"
                 oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
-                style="font-weight:600;font-size:.9rem;color:#111;outline:none;border:none;flex:1;border-bottom:1px dashed transparent;cursor:text;line-height:1.4;background:transparent;font-family:inherit;padding:0;resize:none;overflow:hidden;white-space:pre-wrap;word-wrap:break-word"
+                style="font-weight:600;font-size:.9rem;color:#111;outline:none;border:none;flex:1;min-width:0;width:100%;box-sizing:border-box;border-bottom:1px dashed transparent;cursor:text;line-height:1.4;background:transparent;font-family:inherit;padding:0;resize:none;overflow:hidden;white-space:pre-wrap;word-wrap:break-word"
                 onmouseover="if(document.activeElement!==this)this.style.borderBottomColor='#aaa'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
                 onfocus="this.style.borderBottomColor='#4a9eff'"
                 title="Click to edit question">${esc(q.q)}</textarea>
