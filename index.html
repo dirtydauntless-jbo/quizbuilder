@@ -7952,6 +7952,23 @@ async function assignLoadList(){
       s.topics=Object.entries(tp).map(([t,o])=>({t,...o,pct:Math.round(o.correct/o.total*100)}))
         .sort((a,b)=>(b.weak-a.weak)||(a.pct-b.pct));
       s.recurring=s.topics.filter(x=>x.weak>=2); // weak across 2+ exams = deficiency worth attacking
+      // Flat, specific concepts missed across ALL of this student's completed exams — more
+      // actionable than the topic names above. it.a.data is already in memory (loaded by
+      // assignLoadList), so this needs no extra Firebase reads.
+      const conceptCount=new Map();
+      completed.forEach(it=>{
+        const data=it.a.data; if(!data) return;
+        const questions=data.questions||[], answers=data.answers||{};
+        const seenInThisExam=new Set();
+        questions.forEach((q,i)=>{
+          if(answers[i]===q.correct) return;
+          const c=pxConcept(q);
+          if(!c||seenInThisExam.has(c)) return;
+          seenInThisExam.add(c);
+          conceptCount.set(c,(conceptCount.get(c)||0)+1);
+        });
+      });
+      s.concepts=[...conceptCount.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([concept,count])=>({concept,count}));
       return s;
     }).sort((a,b)=>{
       const ar=a.recurring.length?1:0, br=b.recurring.length?1:0; if(ar!==br) return br-ar;     // recurring first
@@ -7973,6 +7990,13 @@ async function assignLoadList(){
             const rec=x.weak>=2?'<span style="background:rgba(204,68,68,.18);color:var(--wl);font-family:monospace;font-size:.58rem;font-weight:700;border-radius:8px;padding:1px 6px;margin-left:6px">RECURRING</span>':'';
             return '<div style="display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-size:.82rem">'+esc(x.t)+rec+'</div><div style="font-family:monospace;font-size:.72rem;color:var(--muted);white-space:nowrap">weak in '+x.weak+'/'+x.seen+'</div><div style="width:44px;text-align:right;font-family:monospace;font-size:.78rem;font-weight:700;color:'+col+'">'+x.pct+'%</div></div>'; }).join('')
         : '<div style="font-family:monospace;font-size:.75rem;color:var(--muted)">No completed exams yet.</div>';
+      // Flat, specific concepts — the actual missed-question takeaways, not just topic names
+      // like "Propellers" — cumulative across every one of this student's completed exams.
+      const conceptsBlock = s.concepts.length
+        ? '<div style="background:rgba(240,165,0,.07);border:1px solid rgba(240,165,0,.3);border-radius:var(--r);padding:11px 13px;margin:10px 0"><div style="font-family:monospace;font-size:.64rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:7px">🎯 Concepts To Review With '+esc((s.name||'').split(' ')[0]||'This Student')+'</div>'+
+          s.concepts.map(c=>'<div style="font-size:.82rem;line-height:1.5;margin-bottom:4px">• '+c.concept+(c.count>1?' <span style="font-family:monospace;font-size:.66rem;color:var(--muted)">(missed in '+c.count+' exams)</span>':'')+'</div>').join('')+
+        '</div>'
+        : '';
       const examList = s.items.map(it=>{ const dn=it.a.status==='complete';
         const sc=dn?(it.a.score+'/'+it.a.total+' · '+it.a.pct+'%'):(it.a.status==='in_progress'?'in progress':'not started');
         const col=dn?(it.a.pct>=70?'var(--cl)':'var(--wl)'):'var(--muted)';
@@ -7986,6 +8010,7 @@ async function assignLoadList(){
         '</div>'+
         '<div id="asgstu_'+s.uid+'" style="display:none;margin-top:10px">'+
           topicTable+
+          conceptsBlock+
           '<div style="font-family:monospace;font-size:.64rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:12px 0 6px">Exams (newest first)</div>'+examList+
           '<button onclick="startRemediationExam(\''+s.uid+'\', decodeURIComponent(\''+encodeURIComponent(s.name||'')+'\'))" class="btn btn-primary" style="margin-top:11px;font-size:.8rem;padding:9px 14px;letter-spacing:.3px">🎯 Assign Remediation Exam</button>'+
         '</div>'+
