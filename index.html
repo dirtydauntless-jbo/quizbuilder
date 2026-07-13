@@ -9098,6 +9098,10 @@ Enter number:`);
   await showAssignModal(quizId);
 }
 
+// Normalize question/answer text for duplicate comparison — collapses whitespace and
+// ignores case so near-identical formatting differences don't defeat exact-match dedup.
+function _normQ(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+
 async function generateAndSaveQuiz(id){
   const { title, qType, qCount, choiceCount, fibCount, topics } = await saveCurrentSettings(id);
 
@@ -9124,9 +9128,15 @@ async function generateAndSaveQuiz(id){
   if(!topics.length){ alert('Please select at least one topic.'); return; }
 
   let pool = [];
+  const _seenQ = new Set();
   topics.forEach(t => {
     const src = QB[t]||QB_AIRFRAME[t]||QB_POWERPLANT[t]||[];
-    pool = [...pool, ...src.map(q=>({...q,topic:t}))];
+    src.forEach(q => {
+      const key = _normQ(q.q);
+      if(_seenQ.has(key)) return; // same question text under multiple topics, or a repeat within one topic's bank
+      _seenQ.add(key);
+      pool.push({...q, topic:t});
+    });
   });
   shuffle(pool);
   const selected = pool.slice(0, Math.min(qCount, pool.length));
@@ -16888,10 +16898,11 @@ async function replacePreviewQuestion(idx){
   if(!_printQuiz || !_printQuizId) return;
   const q = _printQuiz.questions[idx];
   if(!q) return;
-  // Pick a random unused question from the same topic
+  // Pick a random unused question from the same topic — normalized comparison so a
+  // whitespace/case-only difference doesn't defeat the dedup check.
   const src = QB[q.topic] || QB_AIRFRAME[q.topic] || QB_POWERPLANT[q.topic] || [];
-  const usedQs = new Set(_printQuiz.questions.map(x => x.q));
-  const pool = src.filter(x => !usedQs.has(x.q));
+  const usedQs = new Set(_printQuiz.questions.map(x => _normQ(x.q)));
+  const pool = src.filter(x => !usedQs.has(_normQ(x.q)));
   if(!pool.length){ alert('No more unused questions in this topic.'); return; }
   shuffle(pool);
   const newItem = pool[0];
@@ -16903,11 +16914,31 @@ async function replacePreviewQuestion(idx){
     const btn = event.target;
     btn.textContent = '...';
     btn.disabled = true;
-    const { distractors } = await generateDistractorsAI({ ...newItem, topic: q.topic }, (q.options?.length||3) - 1);
+    const numWrong = (q.options?.length||3) - 1;
+    const { distractors } = await generateDistractorsAI({ ...newItem, topic: q.topic }, numWrong);
+    // Same QC pass the bulk generator runs — checks for synonyms/paraphrases of the correct
+    // answer and near-duplicate wrong answers among themselves — which this single-question
+    // regenerate path was skipping entirely before.
+    const qcFixed = await qcDistractorsQB([{ question: newItem.q, correct: newItem.a, wrong: distractors.map(w=>fixDistractor(w, newItem.a)) }]);
+    let finalWrong = qcFixed[0]?.wrong || distractors;
+    // Defensive final scrub: if the QC pass still left a wrong answer that normalizes the
+    // same as the correct answer or another wrong answer, swap it for a local fallback so a
+    // meaning-duplicate never reaches the saved quiz.
+    const localBackup = generateDistractorsLocal(newItem, numWrong * 2);
+    let backupIdx = 0;
+    const seen = new Set([_normQ(newItem.a)]);
+    finalWrong = finalWrong.map(w => {
+      if(seen.has(_normQ(w))){
+        while(backupIdx < localBackup.length && seen.has(_normQ(localBackup[backupIdx]))) backupIdx++;
+        w = localBackup[backupIdx++] || w;
+      }
+      seen.add(_normQ(w));
+      return w;
+    });
     const correctPos = Math.floor(Math.random() * (q.options?.length||3));
     const options = []; let wi = 0;
     for(let j=0; j<(q.options?.length||3); j++){
-      options.push(j===correctPos ? newItem.a : (distractors[wi++]||'Not applicable'));
+      options.push(j===correctPos ? newItem.a : (finalWrong[wi++]||'Not applicable'));
     }
     newQ = { id: q.id, q: newItem.q, topic: q.topic, type: 'mc', options, correct: correctPos };
     btn.textContent = '↺ Replace';
