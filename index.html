@@ -16793,11 +16793,12 @@ async function openPrintPreview(quizId, editMode = false){
             <div style="font-size:.7rem;color:#bbb;font-family:monospace;margin-bottom:3px">${q.topic||''} · ${q.type==='fib'?'FIB':'MC'}</div>
             <div style="display:flex;align-items:flex-start;gap:5px">
               <span style="color:#bbb;font-weight:600;font-size:.88rem;flex-shrink:0;margin-top:1px">${i+1}.</span>
-              <input type="text" value="${esc(q.q)}" onblur="saveQuestionEdit(${i},this.value.trim())"
-                style="font-weight:600;font-size:.9rem;color:#111;outline:none;border:none;flex:1;border-bottom:1px dashed transparent;cursor:text;line-height:1.4;background:transparent;font-family:inherit;padding:0"
+              <textarea class="qedit-ta" rows="1" onblur="saveQuestionEdit(${i},this.value.trim())"
+                oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+                style="font-weight:600;font-size:.9rem;color:#111;outline:none;border:none;flex:1;border-bottom:1px dashed transparent;cursor:text;line-height:1.4;background:transparent;font-family:inherit;padding:0;resize:none;overflow:hidden;white-space:pre-wrap;word-wrap:break-word"
                 onmouseover="if(document.activeElement!==this)this.style.borderBottomColor='#aaa'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
                 onfocus="this.style.borderBottomColor='#4a9eff'"
-                title="Click to edit question">
+                title="Click to edit question">${esc(q.q)}</textarea>
             </div>
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0">
@@ -16819,12 +16820,20 @@ async function openPrintPreview(quizId, editMode = false){
         <div id="previewQList">${qs.map((q,i) => window._renderEditCard(q,i)).join('')}</div>
         <button onclick="closePrintPreviewAndSave()" style="width:100%;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:6px;font-size:.95rem;font-weight:700;cursor:pointer;margin-top:6px">✓ Done — Save & Close</button>
       </div>`;
+    _autosizeQeditTextareas(document.getElementById('previewQList'));
   } else {
     const html = buildQuizPrintHTML(quiz, true);
     preview.innerHTML = `<iframe id="printFrame" style="width:100%;height:65vh;border:none;border-radius:6px" srcdoc="${html.replace(/"/g,'&quot;')}"></iframe>`;
   }
 
   openModal('printPreviewModal');
+}
+
+// The question textarea starts at rows=1 — grow it to fit its actual content (long
+// questions would otherwise stay clipped to one line instead of wrapping into view).
+function _autosizeQeditTextareas(root){
+  if(!root) return;
+  root.querySelectorAll('.qedit-ta').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; });
 }
 
 function closePrintPreviewAndSave(){
@@ -16838,7 +16847,10 @@ async function _savePreviewAndRefreshCard(idx){
   // Re-render just the one card instead of the full preview (avoids losing focus on other cards)
   if(window._renderEditCard){
     const card = document.getElementById(`previewQ_${idx}`);
-    if(card) card.outerHTML = window._renderEditCard(_printQuiz.questions[idx], idx);
+    if(card){
+      card.outerHTML = window._renderEditCard(_printQuiz.questions[idx], idx);
+      _autosizeQeditTextareas(document.getElementById(`previewQ_${idx}`));
+    }
   }
 }
 
