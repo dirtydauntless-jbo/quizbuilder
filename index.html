@@ -20410,20 +20410,6 @@ function caliperSvgDraw(value, side, showGuide, locked){
   }
 }
 
-// Vernier caliper reading breakdown: whole" + .100s + .025-line + vernier-thousandths = total"
-function _calFormulaString(value, d){
-  const readStr = value.toFixed(3)+'"';
-  const lastMain = Math.floor(value/0.025)*0.025;
-  const wholeIn  = Math.floor(value);
-  const tenths   = Math.floor((value - wholeIn)/0.1)*0.1;
-  const qtrRem   = Math.round((lastMain - wholeIn - tenths)*1000)/1000;
-  const verThou  = d.vernier * 0.001;
-  const p1 = `${wholeIn}"`;
-  const p2 = tenths   > 0.00001 ? `+.${Math.round(tenths*10).toString()}00` : null;
-  const p3 = qtrRem   > 0.00001 ? `+.0${Math.round(qtrRem*1000).toString().padStart(2,'0')}` : null;
-  const p4 = verThou  > 0.00001 ? `+.${String(d.vernier).padStart(3,'0')}` : null;
-  return [p1,p2,p3,p4].filter(Boolean).join(' ') + ' = ' + readStr;
-}
 function caliperRedraw(side){
   const s = SIM[side];
   const d = calDecompose(s.value);
