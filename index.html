@@ -19476,7 +19476,11 @@ function acsPredictPracticals(studentCodes){
       matchedSubjects: matchedSubjects.length,
       score: matches ? (p.occ || 0) : 0
     };
-  }).filter(p => p.score > 0);
+  }).filter(p => {
+    // Only show General (AM.I) and Airframe (AM.II) practicals for now
+    const hasGeneralOrAirframe = (p.codes || []).some(code => code.match(/^AM\.[I]{1,2}\./));
+    return p.score > 0 && hasGeneralOrAirframe;
+  });
 
   // Sort by occurrences (probability) — higher occurrences = higher rank
   scored.sort((a, b) => b.score - a.score);
@@ -19514,9 +19518,9 @@ function acsRenderPracticals(studentCodes){
     return;
   }
 
-  const top = predictions.slice(0, 25);
-  // Recalculate tiers based on position within the displayed 25 (not the full list)
-  // Top 25% (~7) = HIGH, next 35% (~9) = MED, bottom 40% (~10) = LOW
+  const top = predictions.slice(0, 20);
+  // Recalculate tiers based on position within the displayed 20 (not the full list)
+  // Top 25% (~5) = HIGH, next 35% (~7) = MED, bottom 40% (~8) = LOW
   const topTotal = top.length;
   top.forEach((p, i) => {
     const pct = i / topTotal;
@@ -19564,7 +19568,7 @@ function acsRenderPracticals(studentCodes){
 
   list.innerHTML = `
     <div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-bottom:10px;padding:0 2px">
-      ${predictions.length > 25 ? `Top 25 of ${predictions.length}` : `${predictions.length} task${predictions.length!==1?'s':''}`} matched · Ranked by skill subject matches and exam frequency (how often DMEs assign them) · Add more codes to refine
+      ${predictions.length > 20 ? `Top 20 of ${predictions.length}` : `${predictions.length} task${predictions.length!==1?'s':''}`} matched · Ranked by skill subject matches and exam frequency (how often DMEs assign them) · Add more codes to refine
     </div>
     <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">${rows}</div>`;
 }
