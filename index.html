@@ -20422,7 +20422,12 @@ function caliperRedraw(side){
   if(rd){ if(s.calRevealed){ rd.textContent = s.value.toFixed(3)+'"'; rd.classList.remove('hidden'); } else { rd.classList.add('hidden'); } }
   // Show formula only when reveal answer is clicked
   const fEl = document.getElementById(side==='inst'?'instCalFormula':'stuCalFormula');
-  if(fEl){ fEl.style.display = s.calRevealed ? 'block' : 'none'; }
+  if(fEl){
+    fEl.style.display = s.calRevealed ? 'block' : 'none';
+    if(s.calRevealed) {
+      fEl.innerHTML = `${d.main.toFixed(2)}" + ${(d.vernier/1000).toFixed(3)}" = ${s.value.toFixed(3)}"`;
+    }
+  }
   caliperAttachDrag(zoomId, side);
 }
 
@@ -20858,7 +20863,12 @@ function micRenderSide(side){
   if(rd) rd.textContent = s.value.toFixed(4)+'"';
   // Reading-breakdown formula, shown only when reveal answer is clicked
   const fEl = document.getElementById(side==='inst'?'instMicFormula':'stuMicFormula');
-  if(fEl){ fEl.style.display = s.micRevealed ? 'block' : 'none'; }
+  if(fEl){
+    fEl.style.display = s.micRevealed ? 'block' : 'none';
+    if(s.micRevealed) {
+      fEl.innerHTML = `${d.base.toFixed(4)}" + ${(d.thimble/1000).toFixed(4)}" = ${s.value.toFixed(4)}"`;
+    }
+  }
   if(side==='inst'){
     const rl = document.getElementById('instSimRangeLabel');
     if(rl) rl.textContent = `Range: ${d.base}\u2013${d.base+1}"`;
