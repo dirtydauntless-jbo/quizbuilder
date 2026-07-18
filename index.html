@@ -19298,7 +19298,7 @@ const PRACTICALS_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR
 let _practicalsLoaded = false;
 
 // Parse CSV rows into PRACTICALS format
-// Expected columns (row 3 = headers): Practical, Occurrences, DME:...(x4), Frequency Tier
+// Expected columns: Practical, Occurrences, DME:...(x4), Primary Skills, All Related Skills, Frequency Tier
 function _parseSheetCSV(csvText) {
   const lines = csvText.trim().split('\n').map(l => l.split(','));
   // Find header row — look for "Practical" in column B (index 1)
@@ -19313,18 +19313,20 @@ function _parseSheetCSV(csvText) {
     const row = lines[i];
     const name = row[1]?.trim().replace(/^"+|"+$/g,'');
     const occ  = parseInt(row[2]?.trim()) || 0;
-    const rawTier = row[7]?.trim().replace(/^"+|"+$/g,'').toLowerCase() || '';
+    // Parse skills from column 8 (All Related Skills)
+    const skillsStr = row[8]?.trim().replace(/^"+|"+$/g,'') || '';
+    const codes = skillsStr ? skillsStr.split(/\s+/).filter(c => c.match(/^AM\./)) : [];
+    // Frequency tier at column 9
+    const rawTier = row[9]?.trim().replace(/^"+|"+$/g,'').toLowerCase() || '';
     const validTiers = ['high','medium','low'];
-    // Preserve existing ACS codes AND tier from hardcoded data by matching name
-    const existing = PRACTICALS.find(p => p.name.toLowerCase() === name.toLowerCase());
-    const tier = validTiers.includes(rawTier) ? rawTier : (existing?.tier || 'low');
+    const tier = validTiers.includes(rawTier) ? rawTier : (codes.length > 0 ? 'medium' : 'low');
     if(!name || !occ) continue;
     results.push({
       id: results.length + 1,
       name,
       occ,
       tier,
-      codes: existing ? existing.codes : []
+      codes
     });
   }
   return results.length > 0 ? results : null;
