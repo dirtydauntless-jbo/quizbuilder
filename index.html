@@ -20221,6 +20221,23 @@ function calDecompose(value){
   return { whole: mainWhole, mainTicks, vernier: remainder, value: v };
 }
 
+// Build caliper formula breakdown: whole" + .900 + .075 + .001 = total"
+function _calFormulaString(d){
+  if(!d) return '';
+  const whole = d.whole;
+  const hun = Math.floor((d.mainTicks * 25) / 100);
+  const tens = Math.floor(((d.mainTicks * 25) % 100) / 10);
+  const ones = (d.mainTicks * 25) % 10;
+  const mainReading = whole + (hun * 0.1) + (tens * 0.01) + (ones * 0.001);
+  const vernReading = d.vernier * 0.001;
+  const parts = [ whole.toString() ];
+  if(hun > 0) parts.push(`+.${hun}00`);
+  if(tens > 0) parts.push(`+.0${tens}0`);
+  if(ones > 0) parts.push(`+.00${ones}`);
+  if(d.vernier > 0) parts.push(`+.000${d.vernier}`);
+  return parts.join(' ') + ' = ' + d.value.toFixed(3) + '"';
+}
+
 // ── SVG Caliper Renderer ──────────────────────────────────────────────
 // Coordinate system: viewBox 0 0 1000 220
 // Fixed jaw on left, sliding jaw moves right with opening
@@ -20425,8 +20442,8 @@ function caliperRedraw(side){
   if(fEl){
     fEl.style.display = s.calRevealed ? 'block' : 'none';
     if(s.calRevealed) {
-      const mainReading = d.whole + (d.mainTicks * 0.025);
-      fEl.innerHTML = `${mainReading.toFixed(3)}" + ${(d.vernier/1000).toFixed(3)}" = ${s.value.toFixed(3)}"`;
+      const formulaStr = _calFormulaString(d);
+      fEl.innerHTML = formulaStr;
     }
   }
   caliperAttachDrag(zoomId, side);
@@ -20867,7 +20884,8 @@ function micRenderSide(side){
   if(fEl){
     fEl.style.display = s.micRevealed ? 'block' : 'none';
     if(s.micRevealed) {
-      fEl.innerHTML = `${d.base.toFixed(4)}" + ${d.local.toFixed(4)}" = ${s.value.toFixed(4)}"`;
+      const formulaStr = _micFormulaString({...d, revealed: true, value: s.value});
+      fEl.innerHTML = formulaStr;
     }
   }
   if(side==='inst'){
