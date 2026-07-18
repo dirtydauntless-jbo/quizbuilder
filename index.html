@@ -20228,13 +20228,11 @@ function _calFormulaString(d){
   const hun = Math.floor((d.mainTicks * 25) / 100);
   const tens = Math.floor(((d.mainTicks * 25) % 100) / 10);
   const ones = (d.mainTicks * 25) % 10;
-  const mainReading = whole + (hun * 0.1) + (tens * 0.01) + (ones * 0.001);
-  const vernReading = d.vernier * 0.001;
   const parts = [ whole.toString() ];
-  if(hun > 0) parts.push(`+.${hun}00`);
-  if(tens > 0) parts.push(`+.0${tens}0`);
-  if(ones > 0) parts.push(`+.00${ones}`);
-  if(d.vernier > 0) parts.push(`+.000${d.vernier}`);
+  if(hun > 0) parts.push('+ ' + (hun * 0.1).toFixed(3) + '"');
+  if(tens > 0) parts.push('+ ' + (tens * 0.01).toFixed(3) + '"');
+  if(ones > 0) parts.push('+ ' + (ones * 0.001).toFixed(3) + '"');
+  if(d.vernier > 0) parts.push('+ ' + (d.vernier * 0.001).toFixed(3) + '"');
   return parts.join(' ') + ' = ' + d.value.toFixed(3) + '"';
 }
 
@@ -20849,11 +20847,11 @@ function _micFormulaString(d){
   const sleeveSubTT = Math.floor(rem/250)*250;   rem -= sleeveSubTT;   // .025" steps
   const thouTT      = Math.floor(rem/10)*10;     rem -= thouTT;        // .001" steps
   const vernTT      = rem;                                              // .0001" steps (0–9)
-  const pt = (v,dec)=>'+.'+(v/10000).toFixed(dec).split('.')[1];
-  const parts = [ d.base+'"' ];
-  if(sleeveNumTT>0) parts.push(pt(sleeveNumTT,3));
-  if(sleeveSubTT>0) parts.push(pt(sleeveSubTT,3));
-  if(thouTT>0)      parts.push(pt(thouTT,3));
+  const pt = (v,dec)=> '+ ' + (v/10000).toFixed(dec) + '"';
+  const parts = [ d.base.toFixed(4) + '"' ];
+  if(sleeveNumTT>0) parts.push(pt(sleeveNumTT,4));
+  if(sleeveSubTT>0) parts.push(pt(sleeveSubTT,4));
+  if(thouTT>0)      parts.push(pt(thouTT,4));
   if(vernTT>0)      parts.push(pt(vernTT,4));
   return parts.join(' ') + ' = ' + val.toFixed(4) + '"';
 }
