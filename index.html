@@ -1079,7 +1079,7 @@ setTimeout(function(){
 
   <!-- MEASUREMENT SIMULATOR TAB (instructor) -->
   <div id="inst-tab-sim" class="tab-pane" style="display:none;padding:22px 24px;overflow-y:auto">
-    <div style="max-width:960px">
+    <div style="max-width:960px;margin:0 auto">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;color:var(--accent);margin-bottom:2px">📐 Measurement Simulator</div>
       <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:20px">Set a measurement and broadcast to your classroom for live reading practice.</div>
 
@@ -20420,8 +20420,9 @@ function caliperRedraw(side){
   // Reading + breakdown shown BELOW the scale (only when revealed)
   const rd = document.getElementById(side==='inst'?'instCalReadout':'stuCalReadout');
   if(rd){ if(s.calRevealed){ rd.textContent = s.value.toFixed(3)+'"'; rd.classList.remove('hidden'); } else { rd.classList.add('hidden'); } }
+  // Show formula only for students, never for instructors
   const fEl = document.getElementById(side==='inst'?'instCalFormula':'stuCalFormula');
-  if(fEl){ fEl.style.display = 'none'; }
+  if(fEl){ fEl.style.display = side !== 'inst' ? 'block' : 'none'; }
   caliperAttachDrag(zoomId, side);
 }
 
@@ -20855,9 +20856,9 @@ function micRenderSide(side){
 
   const rd = document.getElementById(readId);
   if(rd) rd.textContent = s.value.toFixed(4)+'"';
-  // Reading-breakdown formula, shown BELOW the scale (only when revealed)
+  // Reading-breakdown formula, shown BELOW the scale (only for students, never for instructors)
   const fEl = document.getElementById(side==='inst'?'instMicFormula':'stuMicFormula');
-  if(fEl){ fEl.style.display = 'none'; }
+  if(fEl){ fEl.style.display = side !== 'inst' ? 'block' : 'none'; }
   if(side==='inst'){
     const rl = document.getElementById('instSimRangeLabel');
     if(rl) rl.textContent = `Range: ${d.base}\u2013${d.base+1}"`;
