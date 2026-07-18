@@ -10286,8 +10286,14 @@ function exportGrades(format){
   const menu = document.getElementById('gbExportMenu');
   if(menu) menu.style.display='none';
   if(!window._currentGrades||!window._currentGrades.students.length){ alert('No grades to export yet.'); return; }
-  const students = window._currentGrades.students.filter(s=>s.finished);
+  let students = window._currentGrades.students.filter(s=>s.finished);
   if(!students.length){ alert('No completed grades to export yet.'); return; }
+  // Sort by last name (A-Z)
+  students = students.sort((a,b)=>{
+    const aName = (a.name||'').trim().split(/\s+/).pop()||'';
+    const bName = (b.name||'').trim().split(/\s+/).pop()||'';
+    return aName.localeCompare(bName);
+  });
   const quizTitle = document.getElementById('cdProgressQuizPicker')?.selectedOptions[0]?.text||'Quiz';
   const safe = s=>(s||'').replace(/\\/g,'\\\\').replace(/\{/g,'\\{').replace(/\}/g,'\\}');
 
@@ -10300,7 +10306,7 @@ function exportGrades(format){
     const avg=Math.round(students.reduce((s,x)=>s+Math.round((x.correctCount/(x.totalCount||1))*100),0)/students.length);
     const eh=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const rows=students.map((s,i)=>{ const pct=Math.round((s.correctCount/(s.totalCount||1))*100); const grade=pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F'; return `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}"><td style="padding:7px 10px;font-weight:600">${eh(s.name)}</td><td style="padding:7px 10px;font-family:monospace">${s.correctCount}/${s.totalCount||0}</td><td style="padding:7px 10px">${pct}%</td><td style="padding:7px 10px;font-weight:700;color:${pct>=70?'#2ea06b':'#cc4444'}">${grade}</td><td style="padding:7px 10px;font-size:.85rem">${s.finishedAt?new Date(s.finishedAt).toLocaleDateString():'--'}</td></tr>`; }).join('');
-    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Grade Report</title><style>body{font-family:Arial,sans-serif;margin:0;padding:0}.page{max-width:7.5in;margin:0 auto;padding:.75in .85in}@media print{.page{padding:.5in .75in;max-width:none}@page{size:letter;margin:.5in .75in}}table{width:100%;border-collapse:collapse}th{background:#111;color:#fff;padding:8px 10px;text-align:left;font-size:.85rem}</style></head><body><div class="page"><div style="text-align:center;margin-bottom:20px"><div style="font-size:18pt;font-weight:700">Grade Report</div><div style="font-size:12pt;margin-top:4px">${eh(quizTitle)}</div><div style="font-size:10pt;color:#666;margin-top:4px">${students.length} students · Class average: ${avg}%</div></div><table><thead><tr><th>Student</th><th>Score</th><th>Percent</th><th>Grade</th><th>Completed</th></tr></thead><tbody>${rows}</tbody></table></div></body></html>`;
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Grade Report</title><style>body{font-family:Arial,sans-serif;margin:0;padding:0}.page{max-width:7.5in;margin:0 auto;padding:.75in .85in}@media print{.page{padding:.5in .75in;max-width:none}@page{size:letter;margin:.5in .75in}}.logo{text-align:center;margin-bottom:20px;font-family:Montserrat,sans-serif;line-height:0.9}.logo-top{font-size:24pt;font-weight:900;letter-spacing:0.5px}.logo-top .ca{color:#1565c0}.logo-top .m{color:#1565c0}.logo-top .t{color:#f0a500}.logo-plane{font-size:16pt;color:#333;display:inline-block;margin-left:5px}.logo-bot{font-size:12pt;font-weight:800;letter-spacing:0.3px;margin-top:2px}.logo-bot .c1{color:#666}.logo-bot .c2{color:#f0a500}table{width:100%;border-collapse:collapse}th{background:#111;color:#fff;padding:8px 10px;text-align:left;font-size:.85rem}</style></head><body><div class="page"><div class="logo"><div class="logo-top"><span class="ca">CA</span><span class="m">M</span><span class="t">T</span> <span class="logo-plane">✈</span></div><div class="logo-bot"><span class="c1">CLASSROOM</span> <span class="c2">AMT</span></div></div><div style="text-align:center;margin-bottom:20px"><div style="font-size:18pt;font-weight:700">Grade Report</div><div style="font-size:12pt;margin-top:4px">${eh(quizTitle)}</div><div style="font-size:10pt;color:#666;margin-top:4px">${students.length} students · Class average: ${avg}%</div></div><table><thead><tr><th>Student</th><th>Score</th><th>Percent</th><th>Grade</th><th>Completed</th></tr></thead><tbody>${rows}</tbody></table></div></body></html>`;
     const w=window.open('','_blank','width=900,height=700'); w.document.write(html); w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 
   } else if(format==='rtf'){
@@ -11995,26 +12001,18 @@ async function loadQuizLeaderboard(){
   const me = finished.find(s => s.uid === myUid || s.name === stuSession.name);
   if(!me) return;
 
-  // Build leaderboard — show top 3 + current student if outside top 3
-  const medals = ['🥇','🥈','🥉'];
-  const top3 = finished.filter(s => s.rank <= 3);
-  const myRankText = me.rank <= 3 ? '' : `<div style="font-family:monospace;font-size:.87rem;color:var(--muted);text-align:center;margin-top:4px">Your rank: <strong style="color:var(--text)">#${me.rank}</strong> of ${finished.length}</div>`;
-
-  const rows = top3.map(s => {
-    const isMe = s.uid === myUid || s.name === stuSession.name;
-    const medal = medals[s.rank - 1] || `#${s.rank}`;
-    return `<div class="lb-row${isMe?' lb-you':''}">
-      <div class="lb-medal">${medal}</div>
-      <div class="lb-name">${esc(s.name)}${isMe?' <span style="font-size:.75rem;color:var(--accent);font-family:monospace">(You)</span>':''}</div>
-      <div class="lb-score" style="color:${s.pct>=70?'var(--cl)':'var(--wl)'}">${s.score}</div>
-    </div>`;
-  }).join('');
+  // Build leaderboard — show only current student's score
+  const rows = `<div class="lb-row lb-you">
+    <div class="lb-medal">✓</div>
+    <div class="lb-name">${esc(me.name)} <span style="font-size:.75rem;color:var(--accent);font-family:monospace">(You)</span></div>
+    <div class="lb-score" style="color:${me.pct>=70?'var(--cl)':'var(--wl)'}">${me.score}</div>
+  </div>`;
 
   if(!allDone){
     // Show partial with "waiting" message
-    lb.innerHTML = `<div class="lb-title">🏆 Class Standings — ${finished.length} of ${enrolledCount} submitted</div>${rows}${myRankText}`;
+    lb.innerHTML = `<div class="lb-title">🏆 Your Score</div>${rows}`;
   } else {
-    lb.innerHTML = `<div class="lb-title">🏆 Final Class Rankings</div>${rows}${myRankText}`;
+    lb.innerHTML = `<div class="lb-title">🏆 Your Score</div>${rows}`;
   }
   lb.style.display = 'block';
 }
@@ -18928,7 +18926,13 @@ async function acsSave(codes){
   localStorage.setItem(acsGetKey(), JSON.stringify(codes));
   // Persist to Firebase if logged in — gated node so instructors only see it when shared
   if(stuAuthUser?.uid){
-    try{ await dbSet('acsCodes/' + stuAuthUser.uid, codes); }catch(e){}
+    try{
+      await dbSet('acsCodes/' + stuAuthUser.uid, codes);
+      // Also clear legacy path if we're clearing codes
+      if(!codes.length){
+        try{ await dbSet('studentProfiles/' + stuAuthUser.uid + '/acsCodes', null); }catch(e){}
+      }
+    }catch(e){}
   }
 }
 
@@ -18967,7 +18971,7 @@ async function acsClearAll(){
   await acsSave([]);
   _acsNewCodes.clear();
   document.getElementById('acsUploadStatus').textContent = 'All codes cleared.';
-  acsRenderAll();
+  await acsRenderAll();
 }
 
 async function acsDeleteCode(code){
@@ -19443,6 +19447,13 @@ function acsPredictPracticals(studentCodes){
   const codeSet = new Set(studentCodes.map(c => c.toUpperCase().trim()));
   if(!codeSet.size) return [];
 
+  // Determine which sections have codes (AM.I = General, AM.II = Airframe, AM.III = Powerplant)
+  const sectionPrefixes = new Set();
+  codeSet.forEach(code => {
+    const match = code.match(/^AM\.(I+)/);
+    if(match) sectionPrefixes.add(match[1]);
+  });
+
   // DME frequency varies wildly (1–30+), so multiplying it by a tier weight let it swamp the code
   // match and made everyone's list nearly identical. Instead: your matched ACS codes are the
   // PRIMARY driver (personalizes the list), DME frequency is normalized to 0..1 and de-emphasized
@@ -19454,6 +19465,12 @@ function acsPredictPracticals(studentCodes){
     const freqNorm = (p.occ || 0) / maxOcc;                       // 0..1, de-emphasized
     const score = (matchCount * 4) + (freqNorm * 3) + (matchCount * freqNorm * 2);
     return { ...p, matchCount, matchRatio, score };
+  }).filter(p => {
+    // Only include practicals from sections that have codes entered
+    return p.codes.some(code => {
+      const match = code.match(/^AM\.(I+)/);
+      return match && sectionPrefixes.has(match[1]);
+    });
   });
 
   scored.sort((a,b) => b.score - a.score);
@@ -20396,7 +20413,7 @@ function caliperRedraw(side){
   const rd = document.getElementById(side==='inst'?'instCalReadout':'stuCalReadout');
   if(rd){ if(s.calRevealed){ rd.textContent = s.value.toFixed(3)+'"'; rd.classList.remove('hidden'); } else { rd.classList.add('hidden'); } }
   const fEl = document.getElementById(side==='inst'?'instCalFormula':'stuCalFormula');
-  if(fEl){ const f = s.calRevealed ? _calFormulaString(s.value, d) : ''; fEl.textContent = f; fEl.style.display = f ? 'block' : 'none'; }
+  if(fEl){ fEl.style.display = 'none'; }
   caliperAttachDrag(zoomId, side);
 }
 
@@ -20832,7 +20849,7 @@ function micRenderSide(side){
   if(rd) rd.textContent = s.value.toFixed(4)+'"';
   // Reading-breakdown formula, shown BELOW the scale (only when revealed)
   const fEl = document.getElementById(side==='inst'?'instMicFormula':'stuMicFormula');
-  if(fEl){ const f = (s.micRevealed ? _micFormulaString(d) : ''); fEl.textContent = f; fEl.style.display = f ? 'block' : 'none'; }
+  if(fEl){ fEl.style.display = 'none'; }
   if(side==='inst'){
     const rl = document.getElementById('instSimRangeLabel');
     if(rl) rl.textContent = `Range: ${d.base}\u2013${d.base+1}"`;
