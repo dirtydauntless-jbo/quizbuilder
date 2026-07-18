@@ -20425,7 +20425,8 @@ function caliperRedraw(side){
   if(fEl){
     fEl.style.display = s.calRevealed ? 'block' : 'none';
     if(s.calRevealed) {
-      fEl.innerHTML = `${d.main.toFixed(2)}" + ${(d.vernier/1000).toFixed(3)}" = ${s.value.toFixed(3)}"`;
+      const mainReading = d.whole + (d.mainTicks * 0.025);
+      fEl.innerHTML = `${mainReading.toFixed(3)}" + ${(d.vernier/1000).toFixed(3)}" = ${s.value.toFixed(3)}"`;
     }
   }
   caliperAttachDrag(zoomId, side);
@@ -20866,7 +20867,7 @@ function micRenderSide(side){
   if(fEl){
     fEl.style.display = s.micRevealed ? 'block' : 'none';
     if(s.micRevealed) {
-      fEl.innerHTML = `${d.base.toFixed(4)}" + ${(d.thimble/1000).toFixed(4)}" = ${s.value.toFixed(4)}"`;
+      fEl.innerHTML = `${d.base.toFixed(4)}" + ${d.local.toFixed(4)}" = ${s.value.toFixed(4)}"`;
     }
   }
   if(side==='inst'){
