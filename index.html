@@ -1128,7 +1128,7 @@ setTimeout(function(){
           <svg id="instMicSvg" viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
         </div>
         <div id="instMicReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.0000"</div>
-        <div id="instMicFormula" style="display:none;margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
+        <div id="instMicFormula" style="margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
         <div style="font-family:monospace;font-size:.72rem;color:var(--muted);padding-bottom:4px" id="instSimRangeLabel">Range: 0–1"</div>
       </div>
 
@@ -1141,7 +1141,7 @@ setTimeout(function(){
           <svg id="instCalSvg" viewBox="0 0 920 320" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
         </div>
         <div id="instCalReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.000"</div>
-        <div id="instCalFormula" style="display:none;margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
+        <div id="instCalFormula" style="margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
@@ -1697,7 +1697,7 @@ setTimeout(function(){
         <svg id="stuMicSvg" viewBox="0 0 920 280" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg>
       </div>
       <div id="stuMicReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.0000"</div>
-      <div id="stuMicFormula" style="display:none;margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
+      <div id="stuMicFormula" style="margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
     </div>
 
     <!-- Vernier Caliper SVG (shown when instrument=cal) -->
@@ -1709,7 +1709,7 @@ setTimeout(function(){
         <svg id="stuCalSvg" viewBox="0 0 920 320" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;cursor:ew-resize"></svg>
       </div>
       <div id="stuCalReadout" class="hidden" style="font-size:1.4rem;font-weight:900;color:#f0a500;letter-spacing:3px;padding:6px 2px;font-family:monospace">0.000"</div>
-      <div id="stuCalFormula" style="display:none;margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
+      <div id="stuCalFormula" style="margin-top:6px;background:rgba(8,16,30,0.93);border:2px solid #f0c040;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:1rem;font-weight:bold;color:#f0c040;letter-spacing:1px;overflow-x:auto;white-space:nowrap"></div>
     </div>
 
     <!-- Controls row -->
@@ -20420,9 +20420,9 @@ function caliperRedraw(side){
   // Reading + breakdown shown BELOW the scale (only when revealed)
   const rd = document.getElementById(side==='inst'?'instCalReadout':'stuCalReadout');
   if(rd){ if(s.calRevealed){ rd.textContent = s.value.toFixed(3)+'"'; rd.classList.remove('hidden'); } else { rd.classList.add('hidden'); } }
-  // Show formula only for students, never for instructors
+  // Show formula always on both sides
   const fEl = document.getElementById(side==='inst'?'instCalFormula':'stuCalFormula');
-  if(fEl){ fEl.style.display = side !== 'inst' ? 'block' : 'none'; }
+  if(fEl){ fEl.style.display = 'block'; }
   caliperAttachDrag(zoomId, side);
 }
 
@@ -20856,9 +20856,9 @@ function micRenderSide(side){
 
   const rd = document.getElementById(readId);
   if(rd) rd.textContent = s.value.toFixed(4)+'"';
-  // Reading-breakdown formula, shown BELOW the scale (only for students, never for instructors)
+  // Reading-breakdown formula, shown BELOW the scale on both sides
   const fEl = document.getElementById(side==='inst'?'instMicFormula':'stuMicFormula');
-  if(fEl){ fEl.style.display = side !== 'inst' ? 'block' : 'none'; }
+  if(fEl){ fEl.style.display = 'block'; }
   if(side==='inst'){
     const rl = document.getElementById('instSimRangeLabel');
     if(rl) rl.textContent = `Range: ${d.base}\u2013${d.base+1}"`;
