@@ -20223,17 +20223,18 @@ function calDecompose(value){
 
 // Build caliper formula breakdown: whole" + .900 + .075 + .001 = total"
 function _calFormulaString(d){
-  if(!d) return '';
-  const whole = d.whole;
-  const hun = Math.floor((d.mainTicks * 25) / 100);
-  const tens = Math.floor(((d.mainTicks * 25) % 100) / 10);
-  const ones = (d.mainTicks * 25) % 10;
+  if(!d || typeof d.value !== 'number') return '';
+  const whole = d.whole || 0;
+  const mainTicks = d.mainTicks || 0;
+  const hun = Math.floor((mainTicks * 25) / 100);
+  const tens = Math.floor(((mainTicks * 25) % 100) / 10);
+  const ones = (mainTicks * 25) % 10;
   const parts = [ whole.toString() ];
   if(hun > 0) parts.push('+ ' + (hun * 0.1).toFixed(3) + '"');
   if(tens > 0) parts.push('+ ' + (tens * 0.01).toFixed(3) + '"');
   if(ones > 0) parts.push('+ ' + (ones * 0.001).toFixed(3) + '"');
   if(d.vernier > 0) parts.push('+ ' + (d.vernier * 0.001).toFixed(3) + '"');
-  return parts.join(' ') + ' = ' + d.value.toFixed(3) + '"';
+  return parts.join(' ') + ' = ' + parseFloat(d.value).toFixed(3) + '"';
 }
 
 // ── SVG Caliper Renderer ──────────────────────────────────────────────
