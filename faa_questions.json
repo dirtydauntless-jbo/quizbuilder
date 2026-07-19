@@ -2627,20 +2627,6 @@
     ]
    },
    {
-    "id": "246",
-    "question": "A certain amount of slack must be left in a flexible hose during installation because, when under pressure, it",
-    "choices": {
-     "A": "expands in length and diameter.",
-     "B": "expands in length and contracts in diameter.",
-     "C": "contracts in length and expands in diameter."
-    },
-    "correct": "C",
-    "explanation": "When pressurized, flexible hose contracts in length and expands in diameter due to the internal pressure acting against the reinforcement braid, which is why slack must be provided during installation to accommodate this dimensional change without creating tension. (Ref: FAA-H-8083-30B, Ch 7 — Fluid Lines and Fittings)",
-    "acs": [
-     "AM.I.H.K3"
-    ]
-   },
-   {
     "id": "250",
     "question": "Flexible lines must be installed with",
     "choices": {
@@ -3260,7 +3246,8 @@
     "explanation": "Evaluating the expression in Figure 66 using proper order of operations and arithmetic yields 35,998 as the correct result. Basic arithmetic and algebraic operations are covered in the mathematics chapter of the AMT handbook. (Ref: FAA-H-8083-30B, Ch 1 — Mathematics)",
     "acs": [
      "AM.I.H.K6"
-    ]
+    ],
+    "figureNum": "1-68"
    },
    {
     "id": "536",
@@ -5148,18 +5135,6 @@
     ]
    },
    {
-    "id": "195",
-    "question": "Which of the following may cause erroneous scale readings?",
-    "choices": {
-     "A": "Wheel chocks in place.",
-     "B": "Parking brakes set.",
-     "C": "Parking brakes not set."
-    },
-    "correct": "B",
-    "explanation": "Setting the parking brakes during weighing can cause side loads or binding on the landing gear struts, transferring weight unevenly and producing erroneous scale readings. (Ref: FAA-H-8083-30B, Ch 1 — Aircraft Drawings)",
-    "acs": []
-   },
-   {
     "id": "207",
     "question": "If it is necessary to weigh an aircraft with full fuel tanks, all fuel weight must be subtracted from the scale reading(s)",
     "choices": {
@@ -5904,6 +5879,18 @@
     "acs": [
      "AM.I.C.K8"
     ]
+   },
+   {
+    "id": "195",
+    "question": "Which of the following may cause erroneous scale readings?",
+    "choices": {
+     "A": "Wheel chocks in place.",
+     "B": "Parking brakes set.",
+     "C": "Parking brakes not set."
+    },
+    "correct": "B",
+    "explanation": "Setting the parking brakes during weighing can cause side loads or binding on the landing gear struts, transferring weight unevenly and producing erroneous scale readings. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance)",
+    "acs": []
    }
   ],
   "Cleaning and Corrosion Control": [
@@ -7223,6 +7210,20 @@
     "correct": "B",
     "explanation": "The three primary helicopter main rotor classifications recognized by the FAA are fully articulated, semi-rigid, and rigid; the 'flexible-beam' rotor system is not one of the three standard FAA-defined groups. (Ref: FAA-H-8083-30B, Ch 7 — Fluid Lines and Fittings)",
     "acs": []
+   },
+   {
+    "id": "246",
+    "question": "A certain amount of slack must be left in a flexible hose during installation because, when under pressure, it",
+    "choices": {
+     "A": "expands in length and diameter.",
+     "B": "expands in length and contracts in diameter.",
+     "C": "contracts in length and expands in diameter."
+    },
+    "correct": "C",
+    "explanation": "When pressurized, flexible hose contracts in length and expands in diameter due to the internal pressure acting against the reinforcement braid, which is why slack must be provided during installation to accommodate this dimensional change without creating tension. (Ref: FAA-H-8083-30B, Ch 7 — Fluid Lines and Fittings)",
+    "acs": [
+     "AM.I.H.K3"
+    ]
    }
   ],
   "Inspection Concepts and Techniques": [
