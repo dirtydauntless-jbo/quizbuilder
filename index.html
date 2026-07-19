@@ -20228,8 +20228,8 @@ function _calFormulaString(d){
   const mainTicks = d.mainTicks || 0;
   const mainScaleTotal = mainTicks * 0.025; // combine all main scale ticks into single value
   const parts = [ whole.toString() ];
-  if(mainScaleTotal > 0.00001) parts.push('+ ' + mainScaleTotal.toFixed(3) + '"');
-  if(d.vernier > 0) parts.push('+ ' + (d.vernier * 0.001).toFixed(3) + '"');
+  parts.push('+ ' + mainScaleTotal.toFixed(3) + '"');
+  parts.push('+ ' + ((d.vernier || 0) * 0.001).toFixed(3) + '"');
   return parts.join(' ') + ' = ' + parseFloat(d.value).toFixed(3) + '"';
 }
 
@@ -20832,10 +20832,10 @@ function _micFormulaString(d){
   const vernTT      = rem;                                              // .0001" steps (0–9)
   const pt = (v,dec)=> '+ ' + (v/10000).toFixed(dec) + '"';
   const parts = [ d.base.toFixed(4) + '"' ];
-  if(sleeveNumTT>0) parts.push(pt(sleeveNumTT,4));
-  if(sleeveSubTT>0) parts.push(pt(sleeveSubTT,4));
-  if(thouTT>0)      parts.push(pt(thouTT,4));
-  if(vernTT>0)      parts.push(pt(vernTT,4));
+  parts.push(pt(sleeveNumTT,4));
+  parts.push(pt(sleeveSubTT,4));
+  parts.push(pt(thouTT,4));
+  parts.push(pt(vernTT,4));
   return parts.join(' ') + ' = ' + val.toFixed(4) + '"';
 }
 function micRenderSide(side){
