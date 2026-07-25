@@ -228,6 +228,12 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .qi-btn-assign:hover{background:rgba(74,158,255,.28)}
 .btn-listen{background:rgba(74,158,255,.12);color:var(--blue);border:1px solid rgba(74,158,255,.3);transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
 .btn-listen:hover{background:rgba(74,158,255,.28);border-color:var(--blue);color:#fff;box-shadow:0 0 8px rgba(74,158,255,.35)}
+
+/* DME Mode — typed-answer oral exam practice, AI-graded */
+@keyframes dmeGlow{0%,100%{box-shadow:0 0 8px rgba(155,109,255,.4)}50%{box-shadow:0 0 16px rgba(155,109,255,.75)}}
+.btn-dme{position:relative;background:linear-gradient(135deg,#9b6dff,#5b8dff);color:#fff;border:1px solid rgba(255,255,255,.25);font-weight:700;animation:dmeGlow 2.6s ease-in-out infinite;transition:transform .15s,filter .15s}
+.btn-dme:hover{transform:translateY(-1px);filter:brightness(1.12)}
+.btn-dme:active{transform:translateY(0)}
 .qi-btn-delete{background:rgba(204,68,68,.12);color:var(--wl);border:1px solid var(--wrong)}
 .qi-btn-delete:hover{background:rgba(204,68,68,.24)}
 
@@ -406,6 +412,31 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .fc-text{font-size:1.12rem;font-weight:500;line-height:1.55;color:var(--text)}
 .fc-back .fc-text{color:var(--accent);font-size:1.05rem}
 .fc-tap-hint{font-family:monospace;font-size:.8rem;color:var(--muted);margin-top:14px;letter-spacing:1px}
+
+/* DME Mode — typed answer, AI-graded */
+.fc-dme-toggle{background:rgba(155,109,255,.12);color:var(--purple);border:1px solid rgba(155,109,255,.4);font-weight:700;transition:background .15s,box-shadow .15s}
+.fc-dme-toggle:hover{background:rgba(155,109,255,.24);box-shadow:0 0 10px rgba(155,109,255,.35)}
+.fc-dme-toggle.active{background:linear-gradient(135deg,#9b6dff,#5b8dff);color:#fff;border-color:transparent;box-shadow:0 0 10px rgba(155,109,255,.5)}
+.fc-dme-card{width:100%;min-height:220px;border-radius:var(--r);padding:28px 24px;background:var(--panel);border:2px solid rgba(155,109,255,.45);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;box-sizing:border-box;margin-bottom:16px}
+.fc-dme-input-wrap{display:flex;flex-direction:column;gap:10px;align-items:center;margin-bottom:16px}
+.fc-dme-textarea{width:100%;min-height:110px;padding:12px 14px;border-radius:var(--r);border:1px solid var(--border);background:var(--panel2);color:var(--text);font-family:inherit;font-size:1rem;line-height:1.5;resize:vertical;box-sizing:border-box}
+.fc-dme-textarea:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 2px rgba(155,109,255,.25)}
+.fc-dme-textarea:disabled{opacity:.7}
+.fc-dme-submit{background:linear-gradient(135deg,#9b6dff,#5b8dff);color:#fff;font-weight:700;padding:10px 28px;box-shadow:0 0 10px rgba(155,109,255,.35)}
+.fc-dme-submit:disabled{opacity:.6;cursor:default}
+.fc-dme-result{border-radius:var(--r);padding:14px 18px;margin-bottom:14px;border:2px solid;text-align:center}
+.fc-dme-correct{background:rgba(58,170,102,.1);border-color:var(--correct)}
+.fc-dme-partial{background:rgba(240,165,0,.1);border-color:var(--accent)}
+.fc-dme-incorrect{background:rgba(204,68,68,.1);border-color:var(--wrong)}
+.fc-dme-error{background:rgba(138,150,163,.1);border-color:var(--muted)}
+.fc-dme-verdict{font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:1.15rem;margin-bottom:6px}
+.fc-dme-correct .fc-dme-verdict{color:var(--cl)}
+.fc-dme-partial .fc-dme-verdict{color:var(--accent)}
+.fc-dme-incorrect .fc-dme-verdict{color:var(--wl)}
+.fc-dme-error .fc-dme-verdict{color:var(--muted)}
+.fc-dme-feedback{font-size:.9rem;color:var(--text);line-height:1.5}
+.fc-dme-reference{border-radius:var(--r);padding:14px 18px;margin-bottom:14px;background:var(--panel2);border:1px solid var(--border);text-align:center}
+.fc-dme-lock-hint{font-family:monospace;font-size:.72rem;color:var(--muted);text-align:center;flex:1;letter-spacing:.5px}
 
 .fc-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:20px}
 .fc-btn{font-family:monospace;font-size:.95rem;letter-spacing:1px;text-transform:uppercase;padding:11px 24px;border-radius:var(--r);border:none;cursor:pointer;transition:all .15s;font-weight:600;flex:1;max-width:200px}
@@ -13454,6 +13485,12 @@ let fcHiddenNotes = new Set(); // card keys whose note box the student chose to 
 let fcHideAllNotes = false;    // student hid note boxes on ALL cards
 let fcTotalCards = 0;     // fixed total at session start for counter display
 let fcCardNum = 0;        // how many cards shown so far (increments each new card, decrements on Back)
+let fcDmeMode = false;     // DME Mode — type your answer, AI grades it like an oral examiner would
+let fcDmeSubmitted = false;// has the current card's typed answer been graded?
+let fcDmeGrading = false;  // grading request in flight
+let fcDmeResult = null;    // {verdict:'correct'|'partial'|'incorrect'|'error', feedback} from last grade
+let fcDmeDraft = '';       // student's typed answer for the current card
+function fcResetDmeCard(){ fcDmeSubmitted = false; fcDmeGrading = false; fcDmeResult = null; fcDmeDraft = ''; }
 
 async function stuSwitchTab(tab){
   if(stuSession?.uid) localStorage.setItem('stuLastTab_' + stuSession.uid, tab);
@@ -15223,6 +15260,10 @@ async function renderStudyHome(){
             style="font-size:.65rem;padding:3px 10px;flex:1">
             🎧 Listen
           </button>
+          <button class="btn btn-sm btn-dme" onclick="event.stopPropagation();startDmeMode('${esc(bankId)}::${esc(t)}')"
+            style="font-size:.65rem;padding:3px 10px;flex:1" title="DME Mode — type your answer, AI grades it like an oral examiner would">
+            🎙️ DME Mode
+          </button>
         </div>
       </div>`;
     }).join('');
@@ -15251,6 +15292,11 @@ async function renderStudyHome(){
             style="font-weight:700"
             title="Listen mode — auto-reads questions and answers aloud">
             🎧 Listen
+          </button>
+          <button class="btn btn-sm btn-dme" onclick="startDmeMode('${bankId}::__all__')"
+            style="font-weight:700"
+            title="DME Mode — type your answer, AI grades it like an oral examiner would">
+            🎙️ DME Mode
           </button>
           <button class="btn btn-ghost btn-sm" onclick="resetAllDecksFor('${bankId}')" style="font-size:.65rem">↺ Reset</button>
         </div>
@@ -15532,9 +15578,11 @@ function fcGetAllKnownFor(topics, qb){
   }, 0);
 }
 
-async function startFlashcards(topicKey){
+async function startFlashcards(topicKey, dme){
   navPush({ screen: 'stuApp', view: 'flashcards' });
   fcTopic = topicKey;
+  fcDmeMode = !!dme;
+  fcResetDmeCard();
   const el = document.getElementById('stuStudyView');
 
   // Parse bankId::topic format
@@ -15588,6 +15636,12 @@ async function startFlashcards(topicKey){
   renderFlashcard();
 }
 
+// Start a deck straight into DME Mode — student types each answer and an AI grades it
+// like a Designated Mechanic Examiner would (lenient on wording, strict on the concept).
+function startDmeMode(topicKey){
+  return startFlashcards(topicKey, true);
+}
+
 function renderFlashcard(){
   const el = document.getElementById('stuStudyView');
   if(fcCur >= fcDeck.length){ renderStudyComplete(fcTopic); return; }
@@ -15634,7 +15688,10 @@ function renderFlashcard(){
     <div class="fc-nav">
       <button class="btn btn-ghost btn-sm" onclick="exitFlashcards()">← Topics</button>
       <div class="fc-counter">${displayPos} / ${total}</div>
-      <button class="btn btn-ghost btn-sm" onclick="fcResetCurrent()" title="Reset this deck">↺ Reset</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-sm fc-dme-toggle${fcDmeMode?' active':''}" onclick="fcToggleDmeMode()" title="${fcDmeMode?'Switch back to tap-to-flip cards':'Switch to DME Mode — type your answer, AI grades it'}">${fcDmeMode?'🃏 Flip Mode':'🎙️ DME Mode'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="fcResetCurrent()" title="Reset this deck">↺ Reset</button>
+      </div>
     </div>
 
     <!-- Session tracker -->
@@ -15665,7 +15722,26 @@ function renderFlashcard(){
       return '<div style="text-align:center;margin-bottom:12px">'+chips+'</div>';
     })()}
 
-    <!-- Flip card -->
+    <!-- Flip card, or DME Mode: typed answer graded like an oral examiner would -->
+    ${fcDmeMode ? `
+    <div class="fc-dme-card">
+      <div class="fc-label">Question</div>
+      <div class="fc-text">${esc(card.q)}</div>
+    </div>
+    <div class="fc-dme-input-wrap">
+      <textarea id="fcDmeInput" class="fc-dme-textarea" placeholder="Type your answer like you're speaking to the DME..." ${fcDmeSubmitted?'disabled':''} oninput="fcDmeDraft=this.value">${esc(fcDmeDraft)}</textarea>
+      ${!fcDmeSubmitted ? `<button class="btn fc-dme-submit" onclick="fcDmeSubmit()" ${fcDmeGrading?'disabled':''}>${fcDmeGrading?'⏳ Grading…':'✓ Grade My Answer'}</button>` : ''}
+    </div>
+    ${fcDmeSubmitted && fcDmeResult ? `
+    <div class="fc-dme-result fc-dme-${fcDmeResult.verdict}">
+      <div class="fc-dme-verdict">${fcDmeVerdictLabel(fcDmeResult.verdict)}</div>
+      <div class="fc-dme-feedback">${esc(fcDmeResult.feedback)}</div>
+    </div>
+    <div class="fc-dme-reference">
+      <div class="fc-label">Reference Answer</div>
+      <div class="fc-text">${esc(card.a)}</div>
+    </div>` : ''}
+    ` : `
     <div class="fc-scene" onclick="fcHandleCardClick()" id="fcScene">
       <div class="fc-card${fcFlipped?' flipped':''}" id="fcCard">
         <div class="fc-face fc-front">
@@ -15680,19 +15756,16 @@ function renderFlashcard(){
         </div>
       </div>
     </div>
+    `}
 
     <!-- Note (where to find the answer: 8083 / 43.13-1B / FARs) -->
     ${noteAreaHtml}
 
-    <!-- Action buttons — always visible, work before AND after flip -->
+    <!-- Action buttons — always visible, work before AND after flip. In DME Mode, locked until graded. -->
     <div class="fc-actions" id="fcActions">
-      <button class="fc-btn fc-btn-learn" id="fcBtnLearn" onclick="markCard(false)" title="Still Learning (←)">
-        ← Still Learning
-      </button>
+      ${(fcDmeMode && !fcDmeSubmitted) ? '' : `<button class="fc-btn fc-btn-learn" id="fcBtnLearn" onclick="markCard(false)" title="Still Learning (←)">← Still Learning</button>`}
       <button onclick="fcToggleStar()" title="Star this card" style="background:${isStarred?'rgba(240,165,0,.2)':'var(--panel2)'};border:1px solid ${isStarred?'var(--accent)':'var(--border)'};border-radius:var(--r);padding:8px 14px;cursor:pointer;font-size:1.1rem;transition:all .15s;color:${isStarred?'var(--accent)':'var(--muted)'}">${isStarred?'★':'☆'}</button>
-      <button class="fc-btn fc-btn-know" id="fcBtnKnow" onclick="markCard(true)" title="Know It (→)">
-        Know It →
-      </button>
+      ${(fcDmeMode && !fcDmeSubmitted) ? '<div class="fc-dme-lock-hint">Grade your answer to continue &nbsp;·&nbsp; or Skip ↓</div>' : `<button class="fc-btn fc-btn-know" id="fcBtnKnow" onclick="markCard(true)" title="Know It (→)">Know It →</button>`}
     </div>
 
     <!-- Nav row: Back · Skip -->
@@ -15722,12 +15795,50 @@ function fcHandleCardClick(){
 }
 
 function flipCard(){
-  if(fcAnimating) return;
+  if(fcAnimating || fcDmeMode) return;
   fcFlipped = !fcFlipped;
   const cardEl = document.getElementById('fcCard');
   if(cardEl) cardEl.classList.toggle('flipped', fcFlipped);
 }
 
+// Switch DME Mode on/off mid-session without losing the current deck or position.
+function fcToggleDmeMode(){
+  if(fcAnimating || fcDmeGrading) return;
+  fcDmeMode = !fcDmeMode;
+  fcResetDmeCard();
+  fcFlipped = false;
+  renderFlashcard();
+}
+
+function fcDmeVerdictLabel(v){
+  return v==='correct' ? '✅ Correct' : v==='partial' ? '🟡 Partially Correct' : v==='incorrect' ? '❌ Needs Work' : '⚠️ Grading unavailable';
+}
+
+async function fcDmeSubmit(){
+  if(fcDmeGrading || fcDmeSubmitted) return;
+  const ta = document.getElementById('fcDmeInput');
+  const val = (ta ? ta.value : fcDmeDraft).trim();
+  if(!val){ if(ta) ta.focus(); return; }
+  fcDmeDraft = val;
+  fcDmeGrading = true;
+  renderFlashcard();
+  const card = fcDeck[fcCur];
+  try{
+    const r = await fetch('/api/grade-dme', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: card.q, correctAnswer: card.a, studentAnswer: val })
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Grading failed');
+    fcDmeResult = { verdict: data.verdict, feedback: data.feedback };
+  } catch(e){
+    fcDmeResult = { verdict: 'error', feedback: 'Could not grade your answer right now — compare it to the reference answer below.' };
+  }
+  fcDmeGrading = false;
+  fcDmeSubmitted = true;
+  renderFlashcard();
+}
 
 function fcUpdateCounters(){
   const nl = document.getElementById('fcNumLearn');
@@ -15738,6 +15849,7 @@ function fcUpdateCounters(){
 
 function markCard(known){
   if(fcAnimating) return;
+  if(fcDmeMode && !fcDmeSubmitted) return; // must grade the typed answer first
   fcAnimating = true;
 
   // Flash the chosen button
@@ -15781,6 +15893,7 @@ function markCard(known){
       if(fcCur >= fcDeck.length) fcCur = 0;
     }
     fcFlipped = false;
+    fcResetDmeCard();
     fcAnimating = false;
     renderFlashcard();
   }, 420);
@@ -15793,6 +15906,7 @@ function skipCard(){
   fcSessionSkip++;
   fcCardNum = Math.min(fcTotalCards - 1, fcCardNum + 1);
   fcFlipped = false;
+  fcResetDmeCard();
   fcCur = (fcCur + 1) % Math.max(1, fcDeck.length);
   renderFlashcard();
 }
@@ -15832,6 +15946,7 @@ function fcGoBack(){
   }
 
   fcFlipped = false;
+  fcResetDmeCard();
   renderFlashcard();
 }
 
@@ -15974,6 +16089,7 @@ async function startStarredDeck(...sections){
   fcSessionKnow = 0; fcSessionLearn = 0; fcSessionSkip = 0;
   fcAnimating = false; fcHistory = [];
   fcTotalCards = cards.length; fcCardNum = 0;
+  fcDmeMode = false; fcResetDmeCard();
   navPush({ screen:'stuApp', view:'flashcards' });
   renderFlashcard();
 }
@@ -16111,6 +16227,7 @@ async function startPrimeTime(){
   fcSessionKnow = 0; fcSessionLearn = 0; fcSessionSkip = 0;
   fcAnimating = false; fcHistory = [];
   fcTotalCards = cards.length; fcCardNum = 0;
+  fcDmeMode = false; fcResetDmeCard();
   document.removeEventListener('keydown', fcKeyHandler);
   document.addEventListener('keydown', fcKeyHandler);
   navPush({ screen:'stuApp', view:'flashcards' });
