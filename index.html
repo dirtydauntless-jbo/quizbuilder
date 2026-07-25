@@ -226,12 +226,12 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .qi-btn{font-family:monospace;font-size:.97rem;letter-spacing:.8px;text-transform:uppercase;padding:4px 8px;border-radius:3px;cursor:pointer;border:none;transition:background .15s;flex:1;text-align:center}
 .qi-btn-assign{background:rgba(74,158,255,.15);color:var(--blue);border:1px solid rgba(74,158,255,.3)}
 .qi-btn-assign:hover{background:rgba(74,158,255,.28)}
-.btn-listen{background:rgba(74,158,255,.12);color:var(--blue);border:1px solid rgba(74,158,255,.3);transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
+.btn-listen{background:rgba(74,158,255,.12);color:var(--blue);border:1px solid rgba(74,158,255,.3);transition:background .15s,border-color .15s,color .15s,box-shadow .15s;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .btn-listen:hover{background:rgba(74,158,255,.28);border-color:var(--blue);color:#fff;box-shadow:0 0 8px rgba(74,158,255,.35)}
 
 /* DME Mode — typed-answer oral exam practice, AI-graded */
 @keyframes dmeGlow{0%,100%{box-shadow:0 0 8px rgba(155,109,255,.4)}50%{box-shadow:0 0 16px rgba(155,109,255,.75)}}
-.btn-dme{position:relative;background:linear-gradient(135deg,#9b6dff,#5b8dff);color:#fff;border:1px solid rgba(255,255,255,.25);font-weight:700;animation:dmeGlow 2.6s ease-in-out infinite;transition:transform .15s,filter .15s}
+.btn-dme{position:relative;background:linear-gradient(135deg,#9b6dff,#5b8dff);color:#fff;border:1px solid rgba(255,255,255,.25);font-weight:700;animation:dmeGlow 2.6s ease-in-out infinite;transition:transform .15s,filter .15s;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .btn-dme:hover{transform:translateY(-1px);filter:brightness(1.12)}
 .btn-dme:active{transform:translateY(0)}
 .qi-btn-delete{background:rgba(204,68,68,.12);color:var(--wl);border:1px solid var(--wrong)}
@@ -15262,7 +15262,7 @@ async function renderStudyHome(){
           </button>
           <button class="btn btn-sm btn-dme" onclick="event.stopPropagation();startDmeMode('${esc(bankId)}::${esc(t)}')"
             style="font-size:.65rem;padding:3px 10px;flex:1" title="DME Mode — type your answer, AI grades it like an oral examiner would">
-            🎙️ DME Mode
+            🎙️ DME
           </button>
         </div>
       </div>`;
@@ -15729,7 +15729,7 @@ function renderFlashcard(){
       <div class="fc-text">${esc(card.q)}</div>
     </div>
     <div class="fc-dme-input-wrap">
-      <textarea id="fcDmeInput" class="fc-dme-textarea" placeholder="Type your answer like you're speaking to the DME..." ${fcDmeSubmitted?'disabled':''} oninput="fcDmeDraft=this.value">${esc(fcDmeDraft)}</textarea>
+      <textarea id="fcDmeInput" class="fc-dme-textarea" placeholder="Type your answer like you're speaking to the DME..." ${fcDmeSubmitted?'disabled':''} oninput="fcDmeDraft=this.value" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fcDmeSubmit();}">${esc(fcDmeDraft)}</textarea>
       ${!fcDmeSubmitted ? `<button class="btn fc-dme-submit" onclick="fcDmeSubmit()" ${fcDmeGrading?'disabled':''}>${fcDmeGrading?'⏳ Grading…':'✓ Grade My Answer'}</button>` : ''}
     </div>
     ${fcDmeSubmitted && fcDmeResult ? `
