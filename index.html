@@ -397,9 +397,9 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 
 /* Card flip */
 .fc-scene{width:100%;perspective:1000px;margin-bottom:20px;cursor:pointer}
-.fc-card{width:100%;min-height:220px;position:relative;transform-style:preserve-3d;transition:transform .45s cubic-bezier(.4,0,.2,1)}
+.fc-card{width:100%;min-height:220px;position:relative;display:grid;transform-style:preserve-3d;transition:transform .45s cubic-bezier(.4,0,.2,1)}
 .fc-card.flipped{transform:rotateY(180deg)}
-.fc-face{position:absolute;width:100%;min-height:220px;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:var(--r);padding:28px 24px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+.fc-face{grid-column:1;grid-row:1;width:100%;min-height:220px;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:var(--r);padding:28px 24px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
 .fc-front{background:var(--panel);border:2px solid var(--border)}
 .fc-back{background:var(--panel2);border:2px solid var(--accent);transform:rotateY(180deg)}
 .fc-label{font-family:monospace;font-size:.8rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
