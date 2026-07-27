@@ -11273,7 +11273,7 @@ async function openStudentQuiz(quizId, instructorId, classroomIdOverride){
 }
 
 function tryExitActiveQuiz(){
-  if(activeQuiz){
+  if(activeQuiz && !_quizFinished){
     if(_quizTimerEnd){
       showTimedQuizWarning('leave');
     } else {
