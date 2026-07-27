@@ -10098,6 +10098,7 @@ async function loadClassroomProgress(overrideQuizId){
       return {
         name: s.name || s.email || 'Unknown',
         uid: s.uid || key,
+        rosterNum: s.rosterNum ?? null,
         finished: prog.finished || false,
         answeredCount: prog.answeredCount || 0,
         correctCount: prog.correctCount || 0,
@@ -10126,7 +10127,8 @@ async function loadClassroomProgress(overrideQuizId){
     const elDone = document.getElementById('cdpDone'); if(elDone) elDone.textContent = done.length;
     const elAvg = document.getElementById('cdpAvg'); if(elAvg) elAvg.textContent = avg!==null?avg+'%':'--';
 
-    dbGet(`integrityLog/${selectedClassId}/${quizId}`).then(iLog => {
+    dbGet(`integrityLog/${selectedClassId}/${quizId}`).then(async iLog => {
+      await ensureRosterNumbers(selectedClassId, allStudents);
       const elPList = document.getElementById('cdProgressList');
       if(elPList) renderStudentProgressList(allStudents, 'cdProgressList', iLog || {});
       renderGradeBook(allStudents, quizId, iLog || {});
@@ -10142,6 +10144,42 @@ async function loadClassroomProgress(overrideQuizId){
       const events = Object.values(data).filter(e=>!e.classroomId||e.classroomId===selectedClassId).sort((a,b)=>new Date(b.time)-new Date(a.time));
       renderFeedList(events, 'cdFeed');
     });
+  }
+}
+
+// Gradebook roster numbers — mirrors an instructor's physical gradebook, where each student
+// has a fixed number (usually assigned alphabetically by last name). Stored per-student so it
+// survives across quizzes/sorts, and stays put once assigned unless the instructor edits it.
+async function ensureRosterNumbers(classId, students){
+  const missing = students.filter(s => s.rosterNum == null);
+  if(!missing.length) return;
+  const lastName = name => { const p=(name||'').trim().split(/\s+/); return (p[p.length-1]||'').toLowerCase(); };
+  const used = new Set(students.filter(s => s.rosterNum != null).map(s => s.rosterNum));
+  const sortedMissing = [...missing].sort((a,b) => lastName(a.name).localeCompare(lastName(b.name)));
+  const updates = {};
+  let next = 1;
+  for(const s of sortedMissing){
+    while(used.has(next)) next++;
+    const key = s.uid || safeKey(s.name||'');
+    updates[`${key}/rosterNum`] = next;
+    s.rosterNum = next;
+    used.add(next);
+  }
+  try{ await dbUpdate(`classroomStudents/${classId}`, updates); }catch(e){}
+}
+
+async function editRosterNum(classId, stuKey, currentNum, displayName){
+  const input = prompt(`Gradebook # for ${displayName} — match your physical gradebook:`, currentNum != null ? String(currentNum) : '');
+  if(input === null) return;
+  const num = parseInt(input, 10);
+  if(!Number.isFinite(num) || num <= 0){ alert('Enter a positive whole number.'); return; }
+  try{
+    await dbUpdate(`classroomStudents/${classId}`, { [`${stuKey}/rosterNum`]: num });
+  }catch(e){ alert('Error saving number: ' + (e.message||e.code||e)); return; }
+  if(window._currentGrades){
+    const stu = window._currentGrades._rawStudents.find(s => (s.uid||safeKey(s.name||'')) === stuKey);
+    if(stu) stu.rosterNum = num;
+    renderGradeBook(window._currentGrades._rawStudents, window._currentGrades.quizId, window._currentGrades.iLog||{});
   }
 }
 
@@ -10213,12 +10251,14 @@ function renderGradeBook(students, quizId, iLog){
       ? `<td onclick="event.stopPropagation()" title="${tabSwitches} tab switch(es), ${blurs} window left(s)"><span style="font-family:monospace;font-size:.75rem;color:var(--wl);font-weight:700;cursor:help">⚠ ${totalEvents}</span></td>`
       : `<td style="font-family:monospace;font-size:.75rem;color:var(--cl)">✓</td>`;
     const retakeBtn = `<td onclick="event.stopPropagation()"><button class="btn btn-sm" style="font-size:.65rem;padding:3px 8px;background:rgba(240,165,0,.1);color:var(--accent);border:1px solid rgba(240,165,0,.3);white-space:nowrap" onclick="grantRetake('${selectedClassId||''}','${stuKey}','${esc(name)}')">Allow Retake</button></td>`;
+    const numCell = `<td onclick="event.stopPropagation();editRosterNum('${selectedClassId||''}','${stuKey}',${s.rosterNum ?? 'null'},'${esc(name)}')" title="Click to edit — match your physical gradebook" style="font-family:monospace;font-weight:700;color:var(--muted);cursor:pointer;text-align:center">${s.rosterNum ?? '—'}</td>`;
 
     if(s.finished){
       const pct = Math.round((s.correctCount/tot)*100);
       const grade = pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
       const gradeClass = pct>=90?'grade-a':pct>=80?'grade-b':pct>=70?'grade-c':'grade-f';
       return `<tr style="${rowStyle}" onclick="${rowClick}" ${rowHover}>
+        ${numCell}
         <td style="font-weight:600;font-size:.9rem;color:var(--blue)">${esc(name)}</td>
         <td style="font-family:monospace;font-weight:700;color:${pct>=70?'var(--cl)':'var(--wl)'}">${s.correctCount}/${tot}</td>
         <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct>=70?'var(--cl)':pct>=50?'var(--accent)':'var(--wl)'}"></div></div><span style="font-family:monospace;font-size:.75rem">${pct}%</span></div></td>
@@ -10233,6 +10273,7 @@ function renderGradeBook(students, quizId, iLog){
       const projColor = projected>=70?'var(--cl)':projected>=50?'var(--accent)':'var(--wl)';
       const progBar = Math.round((s.answeredCount/tot)*100);
       return `<tr style="opacity:.85;${rowStyle}" onclick="${rowClick}" ${rowHover}>
+        ${numCell}
         <td style="font-weight:600;font-size:.9rem;color:var(--blue)">${esc(name)}</td>
         <td style="font-family:monospace;color:var(--accent)">In Progress</td>
         <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:100px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${progBar}%;background:var(--accent)"></div></div><span style="font-family:monospace;font-size:.75rem;color:${projColor};font-weight:700">${projected}%</span></div></td>
@@ -10242,6 +10283,7 @@ function renderGradeBook(students, quizId, iLog){
       </tr>`;
     } else {
       return `<tr style="opacity:.45;${rowStyle}" onclick="${rowClick}" ${rowHover}>
+        ${numCell}
         <td style="font-weight:600;font-size:.9rem;color:var(--blue)">${esc(name)}</td>
         <td colspan="4" style="font-family:monospace;font-size:.75rem;color:var(--muted)">Not started</td>
         ${integrityCell}
@@ -10251,6 +10293,7 @@ function renderGradeBook(students, quizId, iLog){
   }).join('');
 
   el.innerHTML = `<table class="grade-table"><thead><tr>
+    <th>#</th>
     <th style="${thStyle}" onclick="setGradeBookSort('name')">Student${arrow('name')}</th>
     <th>Score</th>
     <th style="${thStyle}" onclick="setGradeBookSort('score')">Percent${arrow('score')}</th>
@@ -10329,15 +10372,15 @@ function exportGrades(format){
   const safe = s=>(s||'').replace(/\\/g,'\\\\').replace(/\{/g,'\\{').replace(/\}/g,'\\}');
 
   if(format==='csv'){
-    const lines=['Student,Score,Total,Percent,Grade,Completed'];
-    students.forEach(s=>{ const pct=Math.round((s.correctCount/(s.totalCount||1))*100); const grade=pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F'; lines.push(`"${s.name}",${s.correctCount},${s.totalCount||0},${pct}%,${grade},"${s.finishedAt?new Date(s.finishedAt).toLocaleDateString():''}"`); });
+    const lines=['#,Student,Score,Total,Percent,Grade,Completed'];
+    students.forEach((s,i)=>{ const pct=Math.round((s.correctCount/(s.totalCount||1))*100); const grade=pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F'; lines.push(`${s.rosterNum ?? (i+1)},"${s.name}",${s.correctCount},${s.totalCount||0},${pct}%,${grade},"${s.finishedAt?new Date(s.finishedAt).toLocaleDateString():''}"`); });
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'})); a.download='quiz_grades.csv'; a.click();
 
   } else if(format==='pdf'){
     const avg=Math.round(students.reduce((s,x)=>s+Math.round((x.correctCount/(x.totalCount||1))*100),0)/students.length);
     const eh=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    const rows=students.map((s,i)=>{ const pct=Math.round((s.correctCount/(s.totalCount||1))*100); const grade=pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F'; return `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}"><td style="padding:7px 10px;font-weight:600">${eh(s.name)}</td><td style="padding:7px 10px;font-family:monospace">${s.correctCount}/${s.totalCount||0}</td><td style="padding:7px 10px">${pct}%</td><td style="padding:7px 10px;font-weight:700;color:${pct>=70?'#2ea06b':'#cc4444'}">${grade}</td><td style="padding:7px 10px;font-size:.85rem">${s.finishedAt?new Date(s.finishedAt).toLocaleDateString():'--'}</td></tr>`; }).join('');
-    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Grade Report</title><style>body{font-family:Arial,sans-serif;margin:0;padding:0}.page{max-width:7.5in;margin:0 auto;padding:.75in .85in}@media print{.page{padding:.5in .75in;max-width:none}@page{size:letter;margin:.5in .75in}}.logo{text-align:center;margin-bottom:20px;font-family:Montserrat,sans-serif;line-height:0.9}.logo-top{font-size:24pt;font-weight:900;letter-spacing:0.5px}.logo-top .ca{color:#1565c0}.logo-top .m{color:#1565c0}.logo-top .t{color:#f0a500}.logo-plane{font-size:16pt;color:#333;display:inline-block;margin-left:5px}.logo-bot{font-size:12pt;font-weight:800;letter-spacing:0.3px;margin-top:2px}.logo-bot .c1{color:#666}.logo-bot .c2{color:#f0a500}table{width:100%;border-collapse:collapse}th{background:#111;color:#fff;padding:8px 10px;text-align:left;font-size:.85rem}</style></head><body><div class="page"><div class="logo"><div class="logo-top"><span class="ca">CA</span><span class="m">M</span><span class="t">T</span> <span class="logo-plane">✈</span></div><div class="logo-bot"><span class="c1">CLASSROOM</span> <span class="c2">AMT</span></div></div><div style="text-align:center;margin-bottom:20px"><div style="font-size:18pt;font-weight:700">Grade Report</div><div style="font-size:12pt;margin-top:4px">${eh(quizTitle)}</div><div style="font-size:10pt;color:#666;margin-top:4px">${students.length} students · Class average: ${avg}%</div></div><table><thead><tr><th>Student</th><th>Score</th><th>Percent</th><th>Grade</th><th>Completed</th></tr></thead><tbody>${rows}</tbody></table></div></body></html>`;
+    const rows=students.map((s,i)=>{ const pct=Math.round((s.correctCount/(s.totalCount||1))*100); const grade=pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F'; return `<tr style="background:${i%2===0?'#f9f9f9':'#fff'}"><td style="padding:7px 10px;font-family:monospace;color:#666;text-align:center">${s.rosterNum ?? (i+1)}</td><td style="padding:7px 10px;font-weight:600">${eh(s.name)}</td><td style="padding:7px 10px;font-family:monospace">${s.correctCount}/${s.totalCount||0}</td><td style="padding:7px 10px">${pct}%</td><td style="padding:7px 10px;font-weight:700;color:${pct>=70?'#2ea06b':'#cc4444'}">${grade}</td><td style="padding:7px 10px;font-size:.85rem">${s.finishedAt?new Date(s.finishedAt).toLocaleDateString():'--'}</td></tr>`; }).join('');
+    const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Grade Report</title><style>body{font-family:Arial,sans-serif;margin:0;padding:0}.page{max-width:7.5in;margin:0 auto;padding:.75in .85in}@media print{.page{padding:.5in .75in;max-width:none}@page{size:letter;margin:.5in .75in}}.logo{text-align:center;margin-bottom:20px;font-family:Montserrat,sans-serif;line-height:0.9}.logo-top{font-size:24pt;font-weight:900;letter-spacing:0.5px}.logo-top .ca{color:#1565c0}.logo-top .m{color:#1565c0}.logo-top .t{color:#f0a500}.logo-plane{font-size:16pt;color:#333;display:inline-block;margin-left:5px}.logo-bot{font-size:12pt;font-weight:800;letter-spacing:0.3px;margin-top:2px}.logo-bot .c1{color:#666}.logo-bot .c2{color:#f0a500}table{width:100%;border-collapse:collapse}th{background:#111;color:#fff;padding:8px 10px;text-align:left;font-size:.85rem}</style></head><body><div class="page"><div class="logo"><div class="logo-top"><span class="ca">CA</span><span class="m">M</span><span class="t">T</span> <span class="logo-plane">✈</span></div><div class="logo-bot"><span class="c1">CLASSROOM</span> <span class="c2">AMT</span></div></div><div style="text-align:center;margin-bottom:20px"><div style="font-size:18pt;font-weight:700">Grade Report</div><div style="font-size:12pt;margin-top:4px">${eh(quizTitle)}</div><div style="font-size:10pt;color:#666;margin-top:4px">${students.length} students · Class average: ${avg}%</div></div><table><thead><tr><th>#</th><th>Student</th><th>Score</th><th>Percent</th><th>Grade</th><th>Completed</th></tr></thead><tbody>${rows}</tbody></table></div></body></html>`;
     const w=window.open('','_blank','width=900,height=700'); w.document.write(html); w.document.close(); w.onload=()=>{ w.focus(); w.print(); };
 
   } else if(format==='rtf'){
