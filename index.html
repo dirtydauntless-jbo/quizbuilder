@@ -9212,40 +9212,58 @@ async function generateAndSaveQuiz(id){
     return;
   }
 
+  // ── Plain Multiple Choice — pulls from the same FAA bank + focused mix (50% verbatim FAA /
+  // 40% reworded variants / 10% O&P) as student practice exams, via the same /api/generate
+  // endpoint _asgGenerateSharedExam uses for assignments. Gives real bank wrong-answers instead
+  // of AI-invented distractors, and access to the full FAA bank instead of just the O&P topic pool.
   show('genOverlay');
-  document.getElementById('genProg').textContent = `Generating ${selected.length} questions...`;
-  // Clear debug log from previous run
+  document.getElementById('genProg').textContent = `Generating ${qCount} questions from the FAA question bank...`;
   const dbgEl = document.getElementById('genDebugLog');
   if(dbgEl){ dbgEl.innerHTML = ''; dbgEl.style.display = 'none'; }
   const aiStatusEl = document.getElementById('genAiStatus');
   if(aiStatusEl) aiStatusEl.innerHTML = '';
   try{
-    const questions = [];
-    const BATCH = 8;
-    for(let i=0; i<selected.length; i+=BATCH){
-      const batch = selected.slice(i, i+BATCH);
-      document.getElementById('genProg').textContent = `Questions ${i+1}-${Math.min(i+BATCH,selected.length)} of ${selected.length}...`;
-      const results = await generateDistractors(batch, choiceCount);
-      questions.push(...results);
-    }
+    const bankQuestions = await _generateFaaBankQuestions(topics, qCount);
+    const questions = bankQuestions.map((q,i) => _faaBankToQuizQuestion(q, i, choiceCount));
     await dbUpdate(`quizzes/${instUser.uid}/${id}`, { questions, updatedAt:Date.now() });
     hide('genOverlay');
     selectQuiz(id); loadQuizBank();
     // Auto-open review preview so instructor can check/edit questions immediately
     openPrintPreview(id, true);
-    // Warn if AI fallback was used (means distractors are low quality)
-    if(window._lastGenFallbackError){
-      const msg = `⚠️ Quiz generated but AI distractor generation failed — questions used the local fallback instead.
-
-Error: ${window._lastGenFallbackError}
-
-Check the browser console (F12) for details. Common cause: Anthropic API key not configured for direct browser calls.`;
-      alert(msg);
-    }
   }catch(e){
     hide('genOverlay');
     alert('Error: ' + e.message);
   }
+}
+
+// Fetch real FAA-bank multiple-choice questions (verbatim / reworded variant / O&P blend) for
+// the given topics — the same source and mix used for student practice exam assignments.
+async function _generateFaaBankQuestions(topics, count){
+  const res = await fetch('https://classroomamt.vercel.app/api/generate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ topics, count, focusedMix:true })
+  });
+  const data = await res.json();
+  if(!res.ok || !data.questions || !data.questions.length) throw new Error(data.error || 'No questions returned from the FAA bank.');
+  return data.questions;
+}
+
+// Convert a bank question ({question, choices:{A,B,C}, correct:'A'}) into the quiz-maker's
+// MC schema ({q, options:[], correct:index}), trimming to choiceCount wrong answers if fewer
+// choices were requested than the bank provides (still keeps the bank's own wrong answers).
+function _faaBankToQuizQuestion(bq, i, choiceCount){
+  const letters = Object.keys(bq.choices||{});
+  let options = letters.map(l => bq.choices[l]);
+  let correct = letters.indexOf(bq.correct);
+  if(choiceCount && choiceCount < options.length){
+    const correctText = options[correct];
+    const wrongs = options.filter((_,j) => j !== correct);
+    shuffle(wrongs);
+    options = [correctText, ...wrongs.slice(0, choiceCount - 1)];
+    shuffle(options);
+    correct = options.indexOf(correctText);
+  }
+  return { id:i, q:fixAMTText(bq.question), topic:bq.topic, type:'mc', options:options.map(fixAMTText), correct };
 }
 
 // ===============================================
