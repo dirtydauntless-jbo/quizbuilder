@@ -8930,6 +8930,7 @@ function renderBuilderPanel(quiz, id){
           <div>
             <label class="label">Number of Questions</label>
             <input class="input" id="qzCount" type="number" min="1" max="200" value="${quiz.questionCount||10}" />
+            <div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:4px">Max 200 questions</div>
           </div>
           <div id="acrQuizNote" style="display:none;background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.2);border-radius:6px;padding:10px 14px;font-family:monospace;font-size:.75rem;color:var(--blue)">
             ✈ Questions will be pulled live from the AMT Acronyms spreadsheet.<br>
@@ -9100,32 +9101,10 @@ async function _deleteQuizFully(quizId){
 }
 
 async function quickAssignQuiz(quizId){
-  // Pre-select this quiz in the assign modal
+  // Pre-select this quiz in the assign modal. showAssignModal builds its own classroom
+  // dropdown (pre-selecting selectedClassId if one's already open) so no need to resolve
+  // the classroom here first — that used to prompt() for a number when there were multiple.
   selectedQuizId = quizId;
-  // Check we have a classroom open, otherwise prompt
-  if(!selectedClassId){
-    // Load classrooms to pick one
-    const classData = await dbGet(`instructorClassrooms/${instUser.uid}`) || {};
-    const classIds = Object.keys(classData);
-    if(!classIds.length){ alert('You need to create a classroom first before assigning a quiz.'); return; }
-    if(classIds.length === 1){
-      selectedClassId = classIds[0];
-    } else {
-      // Build a quick picker
-      const classes = await Promise.all(classIds.map(async id=>{ const c=await dbGet(`classrooms/${id}`); return c?{...c,id}:null; }));
-      const valid = classes.filter(Boolean);
-      const names = valid.map((c,i) => `${i+1}. ${c.name} (${c.code})`).join('\\n');
-      const pick = prompt(`Which classroom?
-
-${names}
-
-Enter number:`);
-      const idx = parseInt(pick) - 1;
-      if(isNaN(idx) || idx < 0 || idx >= valid.length) return;
-      selectedClassId = valid[idx].id;
-    }
-  }
-  // Open the assign modal with this quiz pre-selected
   await showAssignModal(quizId);
 }
 
