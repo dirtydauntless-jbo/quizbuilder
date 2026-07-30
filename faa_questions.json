@@ -5573,15 +5573,15 @@
     ]
    },
    {
-    "id": "4",
-    "question": "radio equipment weighing 35 pounds was installed at +95. What is the new empty weight CG?",
+    "id": "216",
+    "question": "An aircraft with an empty weight of 2,100 pounds and an empty weight CG of +32.5 was altered as follows: (1) two 18-pound passenger seats located at +73 were removed; (2) structural modifications were made at +77 increasing weight by 17 pounds; (3) a seat and safety belt weighing 25 pounds were installed at +74.5; and (4) radio equipment weighing 35 pounds was installed at +95. What is the new empty weight CG?",
     "choices": {
      "A": "+34.01.",
      "B": "+33.68.",
      "C": "+34.65."
     },
-    "correct": "C",
-    "explanation": "Adding the new equipment's weight and moment (35 lb × 95 in = 3,325 in-lb) to the existing empty weight and moment, then dividing the new total moment by the new total weight yields a new CG of +34.65 inches. This standard weight and balance addition formula is used whenever equipment is installed. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance Record Keeping)",
+    "correct": "B",
+    "explanation": "Starting moment is 2,100 × 32.5 = 68,250 in-lb. Removing two 18-lb seats at +73 subtracts 36 lb and 2,628 in-lb (weight 2,064, moment 65,622). Adding 17 lb of structural modification at +77 adds 1,309 in-lb (weight 2,081, moment 66,931). Adding a 25-lb seat and belt at +74.5 adds 1,862.5 in-lb (weight 2,106, moment 68,793.5). Adding 35 lb of radio equipment at +95 adds 3,325 in-lb (weight 2,141, moment 72,118.5). Dividing the final moment by the final weight gives 72,118.5 ÷ 2,141 = +33.68 inches. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance Record Keeping)",
     "acs": [
      "AM.I.C.K4"
     ]
@@ -5629,15 +5629,15 @@
     ]
    },
    {
-    "id": "4",
-    "question": "radio equipment weighing 30 pounds was installed at +30. What is the new empty weight CG?",
+    "id": "222",
+    "question": "An aircraft with an empty weight of 1,800 pounds and an empty weight CG of +31.5 was altered as follows: (1) two 15-pound passenger seats located at +72 were removed; (2) structural modifications increasing the weight 14 pounds were made at +76; (3) a seat and safety belt weighing 20 pounds were installed at +73.5; and (4) radio equipment weighing 30 pounds was installed at +30. What is the new empty weight CG?",
     "choices": {
      "A": "+30.61.",
      "B": "+31.61.",
      "C": "+32.69."
     },
-    "correct": "C",
-    "explanation": "Adding the installed equipment weight and moment (30 lb × 30 in = 900 in-lb) to the existing empty weight and moment, then dividing the new total moment by the new total weight produces a new CG of +32.69 inches, following the standard equipment installation weight and balance formula. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance Record Keeping)",
+    "correct": "B",
+    "explanation": "Starting moment is 1,800 × 31.5 = 56,700 in-lb. Removing two 15-lb seats at +72 subtracts 30 lb and 2,160 in-lb (weight 1,770, moment 54,540). Adding 14 lb of structural modification at +76 adds 1,064 in-lb (weight 1,784, moment 55,604). Adding a 20-lb seat and belt at +73.5 adds 1,470 in-lb (weight 1,804, moment 57,074). Adding 30 lb of radio equipment at +30 adds 900 in-lb (weight 1,834, moment 57,974). Dividing the final moment by the final weight gives 57,974 ÷ 1,834 = +31.61 inches. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance Record Keeping)",
     "acs": [
      "AM.I.C.K4"
     ]
@@ -5671,15 +5671,15 @@
     ]
    },
    {
-    "id": "3",
-    "question": "Removable ballast (146 pounds at +380). What is the empty weight CG of the aircraft described above?",
+    "id": "227",
+    "question": "The datum is forward of the main gear center point by 30.24 inches. The actual distance between the tail gear and main gear center points is 360.26 inches. Net weight at the right main gear is 9,980 pounds, at the left main gear is 9,770 pounds, and at the tail gear is 1,970 pounds. These items were in the aircraft when weighed: (1) lavatory water tank full (34 pounds at +352); (2) hydraulic fluid (22 pounds at -8); (3) removable ballast (146 pounds at +380). What is the empty weight CG of the aircraft described above?",
     "choices": {
      "A": "62.92 inches.",
      "B": "60.31 inches.",
      "C": "58.54 inches."
     },
     "correct": "A",
-    "explanation": "To find the empty weight CG, the removable ballast moment (146 lbs × 380 in = 55,480 in-lbs) must be included in the total moment, and the total moment divided by the total weight yields the CG of approximately 62.92 inches. Removable ballast is included in the empty weight calculation when it is installed and accounted for in the weight and balance records. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance Theory)",
+    "explanation": "As-weighed, the main gear (19,750 lb at +30.24) and tail gear (1,970 lb at +390.50, i.e. 30.24 + 360.26) give a total weight of 21,720 lb and a total moment of 1,366,525 in-lb. The lavatory water (34 lb × 352 = 11,968 in-lb) and hydraulic fluid (22 lb × -8 = -176 in-lb) are not part of empty weight and must be subtracted, leaving 21,664 lb and 1,354,733 in-lb. Removable ballast that is installed and accounted for in the records IS included in empty weight, so it is not subtracted. Dividing the resulting moment by the resulting weight gives the empty weight CG of approximately 62.92 inches. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance Theory)",
     "acs": [
      "AM.I.C.K4"
     ]
@@ -5741,15 +5741,15 @@
     ]
    },
    {
-    "id": "4",
-    "question": "radio equipment weighing 25 pounds was installed at +85. What is the new empty weight CG?",
+    "id": "232",
+    "question": "An aircraft with an empty weight of 1,500 pounds and an empty weight CG of +28.4 was altered as follows: (1) two 12-pound seats located at +68.5 were removed; (2) structural modifications weighing 28 pounds were made at +73; (3) a seat and safety belt weighing 30 pounds were installed at +70.5; and (4) radio equipment weighing 25 pounds was installed at +85. What is the new empty weight CG?",
     "choices": {
      "A": "+23.51.",
      "B": "+31.35.",
      "C": "+30.30."
     },
     "correct": "C",
-    "explanation": "The new empty weight CG is calculated by adding the new item's moment (25 lbs × 85 in = 2,125 in-lbs) to the existing total moment, then dividing by the new total weight, resulting in a CG of approximately +30.30 inches. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance Computations)",
+    "explanation": "Starting moment is 1,500 × 28.4 = 42,600 in-lb. Removing two 12-lb seats at +68.5 subtracts 24 lb and 1,644 in-lb (weight 1,476, moment 40,956). Adding 28 lb of structural modification at +73 adds 2,044 in-lb (weight 1,504, moment 43,000). Adding a 30-lb seat and belt at +70.5 adds 2,115 in-lb (weight 1,534, moment 45,115). Adding 25 lb of radio equipment at +85 adds 2,125 in-lb (weight 1,559, moment 47,240). Dividing the final moment by the final weight gives 47,240 ÷ 1,559 = +30.30 inches. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance Computations)",
     "acs": [
      "AM.I.C.K4"
     ]
@@ -5853,15 +5853,15 @@
     ]
    },
    {
-    "id": "4",
-    "question": "installing radio equipment (30 pounds) at +94. The alterations caused the new empty weight CG to move",
+    "id": "223",
+    "question": "An aircraft had an empty weight of 2,886 pounds with a moment of 101,673.78 before several alterations were made. The alterations included: (1) removing two passenger seats (15 pounds each) at +71; (2) installing a cabinet (97 pounds) at +71; (3) installing a seat and safety belt (20 pounds) at +71; and (4) installing radio equipment (30 pounds) at +94. The alterations caused the new empty weight CG to move",
     "choices": {
      "A": "1.62 inches aft of the original empty weight CG.",
      "B": "2.03 inches forward of the original empty weight CG.",
      "C": "2.03 inches aft of the original empty weight CG."
     },
-    "correct": "C",
-    "explanation": "Adding weight aft of the existing CG shifts the CG aft; the change in CG equals the added weight multiplied by the arm distance from the existing CG divided by the new total weight, yielding approximately 2.03 inches of aft movement. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance)",
+    "correct": "A",
+    "explanation": "Original CG is 101,673.78 ÷ 2,886 = 35.24 inches. Removing two 15-lb seats at +71 subtracts 30 lb and 2,130 in-lb (weight 2,856, moment 99,543.78). Installing a 97-lb cabinet at +71 adds 6,887 in-lb (weight 2,953, moment 106,430.78). Installing a 20-lb seat and belt at +71 adds 1,420 in-lb (weight 2,973, moment 107,850.78). Installing 30 lb of radio equipment at +94 adds 2,820 in-lb (weight 3,003, moment 110,670.78). The new CG is 110,670.78 ÷ 3,003 = 36.85 inches, a change of about 1.62 inches aft of the original CG. (Ref: FAA-H-8083-30B, Ch 4 — Weight and Balance)",
     "acs": [
      "AM.I.C.K4"
     ]

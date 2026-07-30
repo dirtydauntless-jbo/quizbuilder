@@ -8929,7 +8929,7 @@ function renderBuilderPanel(quiz, id){
           </div>
           <div>
             <label class="label">Number of Questions</label>
-            <input class="input" id="qzCount" type="number" min="1" max="100" value="${quiz.questionCount||10}" />
+            <input class="input" id="qzCount" type="number" min="1" max="200" value="${quiz.questionCount||10}" />
           </div>
           <div id="acrQuizNote" style="display:none;background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.2);border-radius:6px;padding:10px 14px;font-family:monospace;font-size:.75rem;color:var(--blue)">
             ✈ Questions will be pulled live from the AMT Acronyms spreadsheet.<br>
@@ -8938,7 +8938,7 @@ function renderBuilderPanel(quiz, id){
           </div>
           <div id="mixFibWrap" style="display:none">
             <label class="label">Fill-in-the-Blank Questions</label>
-            <input class="input" id="qzFibCount" type="number" min="0" max="100" value="${quiz.fibCount!=null?quiz.fibCount:Math.round((quiz.questionCount||10)/2)}" />
+            <input class="input" id="qzFibCount" type="number" min="0" max="200" value="${quiz.fibCount!=null?quiz.fibCount:Math.round((quiz.questionCount||10)/2)}" />
             <div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:4px;line-height:1.45">of the total above — the rest are multiple choice. FIB answers are graded leniently (AI checks comprehension if the wording differs from the answer on file).</div>
           </div>
           <div id="choicesWrap">
@@ -9052,7 +9052,7 @@ function _qbToggleSection(key){
 async function saveCurrentSettings(id){
   const title = document.getElementById('qzTitle')?.value.trim()||'Untitled';
   const qType = document.getElementById('qzType')?.value||'mc';
-  const qCount = Math.max(1,Math.min(100,parseInt(document.getElementById('qzCount')?.value)||10));
+  const qCount = Math.max(1,Math.min(200,parseInt(document.getElementById('qzCount')?.value)||10));
   const choiceCount = parseInt(document.getElementById('qzChoices')?.value||3);
   const fibCount = Math.max(0,Math.min(qCount,parseInt(document.getElementById('qzFibCount')?.value)||0));
   const topics = [...document.querySelectorAll('#quizBuilderPanel input[type=checkbox]:checked')].map(cb=>cb.dataset.topic);
