@@ -614,6 +614,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .pxh-table td{padding:12px 11px;border-bottom:1px solid var(--border);vertical-align:middle}
 .pxh-table tbody tr{cursor:pointer;transition:background .12s}
 .pxh-table tbody tr:hover{background:var(--panel2)}
+.pxh-select-cb,.pxh-selectall-cb{width:20px;height:20px;accent-color:var(--accent);cursor:pointer;vertical-align:middle}
 .pxh-num{font-family:monospace;color:var(--muted);font-weight:700}
 .pxh-bar{display:flex;height:15px;width:150px;border-radius:3px;overflow:hidden;background:var(--border)}
 .pxh-bar>span{display:block;height:100%}
@@ -2168,6 +2169,11 @@ setTimeout(function(){
     <div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Or search for another instructor</div>
     <input id="pxSendReportSearch" oninput="pxSendReportSearchInstructors()" placeholder="Search instructor by name…" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.9rem;box-sizing:border-box">
     <div id="pxSendReportResults" style="margin-top:8px"></div>
+    <div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 6px">Or email it directly</div>
+    <div style="display:flex;gap:8px">
+      <input id="pxSendReportEmail" type="email" placeholder="instructor@email.com" style="flex:1;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.9rem;box-sizing:border-box" onkeydown="if(event.key==='Enter')pxSendReportByEmail()">
+      <button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="pxSendReportByEmail()">✉️ Send Email</button>
+    </div>
     <div id="pxSendReportStatus" style="margin-top:10px;font-family:monospace;font-size:.78rem;min-height:16px"></div>
     <div style="margin-top:14px">
       <button class="btn btn-ghost" style="width:100%" onclick="closeModal('pxSendReportModal')">Close</button>
@@ -14396,7 +14402,7 @@ function practiceFinish(){
 // Cache of this student's practiceHistory rows, keyed by exam _key — populated by
 // practiceLoadHistory() and read by pxCombineSelected() so combining doesn't need extra DB reads.
 let _pxHistCache={};
-let _pxCombinedLast=null; // last-rendered "Combine Selected Exams" breakdown
+var _pxCombinedLast=null; // last-rendered "Combine Selected Exams" breakdown — var (not let) so window['_pxCombinedLast'] lookups (pxOpenSendReportModal/pxGenerateFocusExam's storeKey pattern) actually resolve
 async function practiceLoadHistory(){
   if(!stuSession?.uid) return;
   try {
@@ -14416,14 +14422,19 @@ async function practiceLoadHistory(){
     if(!el) return;
     if(!rows.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No attempts yet</div>'; return; }
     const hasCompleted=rows.some(r=>r.status==='complete');
-    el.innerHTML='<div class="pxh-wrap"><table class="pxh-table"><thead><tr>'+
-      '<th>'+(hasCompleted?'<input type="checkbox" onchange="pxToggleHistSelectAll(this)" title="Select all">':'')+'</th>'+
+    const combineBar=hasCompleted
+      ?'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0">'+
+        '<button class="pxCombineBtn btn btn-primary btn-sm" style="font-size:.8rem" disabled onclick="pxCombineSelected()">📊 Combine Selected (0)</button>'+
+        '<button class="pxSendBtn btn btn-ghost btn-sm" style="font-size:.8rem" disabled onclick="pxSendSelectedToInstructor()">📤 Send to Instructor</button>'+
+        '<span style="font-family:monospace;font-size:.7rem;color:var(--muted)">Check 1+ attempts below (any subject) to combine into one weak-area breakdown, or send as-is.</span>'+
+      '</div>'
+      :'';
+    el.innerHTML = combineBar +
+      '<div class="pxh-wrap"><table class="pxh-table"><thead><tr>'+
+      '<th>'+(hasCompleted?'<input type="checkbox" class="pxh-selectall-cb" onchange="pxToggleHistSelectAll(this)" title="Select all">':'')+'</th>'+
       '<th>#</th><th>Date</th><th>Pool</th><th>Result</th><th>Size</th><th>Not&nbsp;Ans.</th><th>Incorrect</th><th>Correct</th><th>Problem&nbsp;Areas</th><th></th>'+
       '</tr></thead><tbody>'+rows.map(r=>buildPxHistoryRow(r)).join('')+'</tbody></table></div>'+
-      (hasCompleted?'<div style="display:flex;align-items:center;gap:10px;margin-top:10px">'+
-        '<button id="pxCombineBtn" class="btn btn-primary btn-sm" style="font-size:.8rem" disabled onclick="pxCombineSelected()">📊 Combine Selected (0)</button>'+
-        '<span style="font-family:monospace;font-size:.7rem;color:var(--muted)">Check 2 or more attempts above (any subject) to see one combined weak-area breakdown.</span>'+
-      '</div>':'')+
+      combineBar+
       '<div id="pxCombinedOut" style="margin-top:14px"></div>';
   } catch(e){ console.error('practiceLoadHistory',e); }
 }
@@ -14433,10 +14444,19 @@ function pxToggleHistSelectAll(cb){
 }
 function pxUpdateCombineCount(){
   const n=document.querySelectorAll('.pxh-select-cb:checked').length;
-  const btn=document.getElementById('pxCombineBtn');
-  if(!btn) return;
-  btn.textContent='📊 Combine Selected ('+n+')';
-  btn.disabled = n<1;
+  document.querySelectorAll('.pxCombineBtn').forEach(btn=>{
+    btn.textContent='📊 Combine Selected ('+n+')';
+    btn.disabled = n<1;
+  });
+  document.querySelectorAll('.pxSendBtn').forEach(btn=>{ btn.disabled = n<1; });
+}
+// Combine the checked attempts (same aggregation as pxCombineSelected) and go straight to the
+// Send-to-Instructor modal in one click, instead of making the student combine, scroll down to
+// the rendered breakdown, then hunt for the Send button inside it.
+function pxSendSelectedToInstructor(){
+  pxCombineSelected();
+  if(_pxCombinedLast) pxOpenSendReportModal('_pxCombinedLast');
+  else if(typeof showToast==='function') showToast('Check at least one attempt to send.','error');
 }
 // Aggregate the student's checked history rows (any subject, mixed) into one weak-area
 // breakdown — same underlying aggregator as the per-subject Comprehensive view.
@@ -14496,6 +14516,7 @@ async function pxOpenSendReportModal(storeKey){
   const statusEl=document.getElementById('pxSendReportStatus'); if(statusEl) statusEl.textContent='';
   const searchEl=document.getElementById('pxSendReportSearch'); if(searchEl) searchEl.value='';
   const resultsEl=document.getElementById('pxSendReportResults'); if(resultsEl) resultsEl.innerHTML='';
+  const emailEl=document.getElementById('pxSendReportEmail'); if(emailEl) emailEl.value='';
   const quickEl=document.getElementById('pxSendReportQuick');
   show('pxSendReportModal');
   if(quickEl){
@@ -14541,8 +14562,43 @@ async function pxSendReportTo(instUid,instName){
     if(typeof showToast==='function') showToast('Could not send: '+(e&&e.message||e),'error');
   }
 }
+// Email the report directly to an instructor address — for instructors who don't have (or the
+// student can't find) a classroomamt account, unlike pxSendReportTo which requires one.
+async function pxSendReportByEmail(){
+  const comp=_pxPendingSendReport;
+  if(!comp) return;
+  const emailEl=document.getElementById('pxSendReportEmail');
+  const statusEl=document.getElementById('pxSendReportStatus');
+  const toEmail=(emailEl?.value||'').trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)){
+    if(statusEl) statusEl.textContent='Enter a valid email address.';
+    return;
+  }
+  if(statusEl) statusEl.textContent='Sending…';
+  try{
+    const cls=(stuSession?.classrooms && stuSession.classrooms[0])||null;
+    const r=await fetch('/api/send-report-email',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        toEmail,
+        studentName: stuSession?.name||'',
+        studentEmail: stuSession?.email||'',
+        classroomName: cls?.classroomName||'',
+        comp
+      })
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.error||'Send failed');
+    if(statusEl) statusEl.textContent='';
+    if(typeof showToast==='function') showToast('Emailed to '+toEmail+'.','success');
+    closeModal('pxSendReportModal');
+  }catch(e){
+    if(statusEl) statusEl.textContent='';
+    if(typeof showToast==='function') showToast('Could not email: '+(e&&e.message||e),'error');
+  }
+}
 
-let _pxCompLast=null; // last-rendered comprehensive breakdown, for Print/PDF
+var _pxCompLast=null; // last-rendered comprehensive breakdown, for Print/PDF — var so window['_pxCompLast'] lookups resolve (see _pxCombinedLast)
 // Shared aggregation: sums topicStats (+ overall score) across a list of practiceHistory
 // records into weakest-first topic rows. Used by both the per-subject Comprehensive view and
 // the student-picked "Combine Selected Exams" view (index.html — see pxCombineSelected).
