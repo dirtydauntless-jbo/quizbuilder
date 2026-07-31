@@ -186,6 +186,15 @@
         }
       }
     },
+    "instructorReports": {
+      "$instUid": {
+        ".read": "auth != null && (auth.uid === $instUid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        "$reportId": {
+          ".write": "auth != null && (root.child('config/masterAdmins').child(auth.uid).val() === true || (!data.exists() && newData.child('studentUid').val() === auth.uid))",
+          ".validate": "newData.hasChildren(['studentUid','studentName','sentAt','rows'])"
+        }
+      }
+    },
     "acsCodes": {
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('practiceShares').child($uid).child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",

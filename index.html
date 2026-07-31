@@ -924,6 +924,13 @@ setTimeout(function(){
         <div id="asgPerfContent"><div style="font-family:monospace;font-size:.8rem;color:var(--muted)">Pick a classroom to see its weakest topics (across every assigned exam).</div></div>
       </div>
 
+      <!-- Reports students sent directly (combined weak-area breakdowns, self-served via the
+           student's Practice Exam tab) — separate from the ongoing "Share My Results" grant. -->
+      <div style="margin-top:30px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px">
+        <div class="section-head" style="font-size:1.1rem;margin:0 0 12px">📥 Reports From Students</div>
+        <div id="instReportsContent"><div style="font-family:monospace;font-size:.8rem;color:var(--muted)">Loading…</div></div>
+      </div>
+
       <!-- Assigned exams + results -->
       <div style="margin-top:30px">
         <div class="section-head" style="font-size:1.1rem;margin:0 0 10px">Assigned Exams</div>
@@ -2148,6 +2155,22 @@ setTimeout(function(){
 
     <div style="margin-top:18px">
       <button class="btn btn-ghost" style="width:100%" onclick="closeModal('stuMyProfileModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Send Practice Results to Instructor Modal (Student) -->
+<div id="pxSendReportModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('pxSendReportModal')">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title">📤 Send Results to Instructor</div>
+    <div id="pxSendReportSummary" style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-bottom:14px"></div>
+    <div id="pxSendReportQuick" style="margin-bottom:12px"></div>
+    <div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Or search for another instructor</div>
+    <input id="pxSendReportSearch" oninput="pxSendReportSearchInstructors()" placeholder="Search instructor by name…" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.9rem;box-sizing:border-box">
+    <div id="pxSendReportResults" style="margin-top:8px"></div>
+    <div id="pxSendReportStatus" style="margin-top:10px;font-family:monospace;font-size:.78rem;min-height:16px"></div>
+    <div style="margin-top:14px">
+      <button class="btn btn-ghost" style="width:100%" onclick="closeModal('pxSendReportModal')">Close</button>
     </div>
   </div>
 </div>
@@ -7559,6 +7582,43 @@ function assignInitTab(){
   assignLoadList();
   assignLoadClasses();  // populates both the target picker and the Class Performance dropdown
   const pc=document.getElementById('asgPerfContent'); if(pc) pc.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted)">Pick a classroom to see its weakest topics (across every assigned exam).</div>';
+  instLoadStudentReports();
+}
+// Reports a student sent directly via "Send to Instructor" on their Practice Exam tab — a
+// one-time snapshot (instructorReports/{instUid}/{reportId}), distinct from the ongoing
+// practiceShares consent grant (see shareGrant / loadClassWideWeakSpots for that).
+async function instLoadStudentReports(){
+  const el=document.getElementById('instReportsContent'); if(!el || !instUser?.uid) return;
+  el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted)">Loading…</div>';
+  let data;
+  try{ data=await dbGet('instructorReports/'+instUser.uid)||{}; }
+  catch(e){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--wl)">Could not load reports.</div>'; return; }
+  const reports=Object.entries(data).map(([id,r])=>({id,...r})).filter(r=>r&&r.studentName).sort((a,b)=>(b.sentAt||0)-(a.sentAt||0));
+  if(!reports.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted)">No reports yet. Students can send their combined weak-area breakdowns here from their Practice Exam tab.</div>'; return; }
+  el.innerHTML=reports.slice(0,50).map(r=>_instRenderReportCard(r)).join('');
+}
+function _instRenderReportCard(r){
+  const d=new Date(r.sentAt||0);
+  const dateStr=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const pct=r.overallPct||0;
+  const col=pct>=70?'var(--cl)':pct>=50?'#f59e0b':'var(--wl)';
+  const weak=(r.weak||[]).slice(0,5);
+  const rows=r.rows||[];
+  const detailId='instRepDetail_'+r.id;
+  return '<div style="border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;background:var(--panel2)">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">'+
+      '<div>'+
+        '<div style="font-weight:700;font-size:.92rem">'+esc(r.studentName||'(student)')+'</div>'+
+        '<div style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:2px">'+esc(r.label||'')+(r.classroomName?' · '+esc(r.classroomName):'')+'</div>'+
+        '<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-top:2px">'+dateStr+'</div>'+
+      '</div>'+
+      '<div style="font-family:monospace;font-size:.9rem;font-weight:700;color:'+col+';white-space:nowrap">'+pct+'% ('+(r.totCorrect||0)+'/'+(r.totQ||0)+')</div>'+
+    '</div>'+
+    (weak.length?'<div style="margin-top:8px;font-family:monospace;font-size:.72rem;color:var(--wl)">⚠ '+weak.map(w=>esc(w.t)+' ('+w.pct+'%)').join(' · ')+'</div>':'')+
+    (rows.length?'<button onclick="document.getElementById(\''+detailId+'\').classList.toggle(\'hidden\')" class="btn btn-ghost btn-sm" style="margin-top:8px;font-size:.72rem;padding:5px 10px">View full breakdown</button>':'')+
+    (rows.length?'<div id="'+detailId+'" class="hidden" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
+      rows.map(row=>{const rc=row.pct>=70?'var(--cl)':row.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(row.t)+'</div><div style="font-family:monospace;font-size:.75rem;color:var(--muted)">'+row.correct+'/'+row.total+'</div><div style="width:38px;text-align:right;font-family:monospace;font-size:.75rem;font-weight:700;color:'+rc+'">'+row.pct+'%</div></div>';}).join('')+
+    '</div>':'');
 }
 async function assignSearchStudents(){
   const q=(document.getElementById('assignSearch').value||'').trim().toLowerCase();
@@ -14333,6 +14393,10 @@ function practiceFinish(){
   bd.innerHTML=passBar+focusBox+topicTable+reviewHtml;
 }
 
+// Cache of this student's practiceHistory rows, keyed by exam _key — populated by
+// practiceLoadHistory() and read by pxCombineSelected() so combining doesn't need extra DB reads.
+let _pxHistCache={};
+let _pxCombinedLast=null; // last-rendered "Combine Selected Exams" breakdown
 async function practiceLoadHistory(){
   if(!stuSession?.uid) return;
   try {
@@ -14346,30 +14410,143 @@ async function practiceLoadHistory(){
     // number chronologically (oldest=1), then show newest first
     rows.forEach((r,i)=>{ r._num=i+1; });
     rows.reverse();
+    _pxHistCache={};
+    rows.forEach(r=>{ _pxHistCache[r._key]=r; });
     const el=document.getElementById('pxHistoryList');
     if(!el) return;
     if(!rows.length){ el.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">No attempts yet</div>'; return; }
+    const hasCompleted=rows.some(r=>r.status==='complete');
     el.innerHTML='<div class="pxh-wrap"><table class="pxh-table"><thead><tr>'+
+      '<th>'+(hasCompleted?'<input type="checkbox" onchange="pxToggleHistSelectAll(this)" title="Select all">':'')+'</th>'+
       '<th>#</th><th>Date</th><th>Pool</th><th>Result</th><th>Size</th><th>Not&nbsp;Ans.</th><th>Incorrect</th><th>Correct</th><th>Problem&nbsp;Areas</th><th></th>'+
-      '</tr></thead><tbody>'+rows.map(r=>buildPxHistoryRow(r)).join('')+'</tbody></table></div>';
+      '</tr></thead><tbody>'+rows.map(r=>buildPxHistoryRow(r)).join('')+'</tbody></table></div>'+
+      (hasCompleted?'<div style="display:flex;align-items:center;gap:10px;margin-top:10px">'+
+        '<button id="pxCombineBtn" class="btn btn-primary btn-sm" style="font-size:.8rem" disabled onclick="pxCombineSelected()">📊 Combine Selected (0)</button>'+
+        '<span style="font-family:monospace;font-size:.7rem;color:var(--muted)">Check 2 or more attempts above (any subject) to see one combined weak-area breakdown.</span>'+
+      '</div>':'')+
+      '<div id="pxCombinedOut" style="margin-top:14px"></div>';
   } catch(e){ console.error('practiceLoadHistory',e); }
+}
+function pxToggleHistSelectAll(cb){
+  document.querySelectorAll('.pxh-select-cb').forEach(box=>{ box.checked=cb.checked; });
+  pxUpdateCombineCount();
+}
+function pxUpdateCombineCount(){
+  const n=document.querySelectorAll('.pxh-select-cb:checked').length;
+  const btn=document.getElementById('pxCombineBtn');
+  if(!btn) return;
+  btn.textContent='📊 Combine Selected ('+n+')';
+  btn.disabled = n<1;
+}
+// Aggregate the student's checked history rows (any subject, mixed) into one weak-area
+// breakdown — same underlying aggregator as the per-subject Comprehensive view.
+function pxCombineSelected(){
+  const keys=[...document.querySelectorAll('.pxh-select-cb:checked')].map(b=>b.dataset.key);
+  const exams=keys.map(k=>_pxHistCache[k]).filter(r=>r && r.status==='complete');
+  const out=document.getElementById('pxCombinedOut');
+  if(!out) return;
+  if(!exams.length){ out.innerHTML=''; return; }
+  const subjects=[...new Set(exams.map(r=>({general:'General',airframe:'Airframe',powerplant:'Powerplant'})[r.subject]||null).filter(Boolean))];
+  const label='Combined — '+exams.length+' exam'+(exams.length===1?'':'s')+(subjects.length?' ('+subjects.join(', ')+')':'');
+  const comp=_pxAggregateExams(exams,label);
+  _pxCombinedLast=comp;
+  out.innerHTML='<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">'+_pxRenderBreakdownHTML(comp,'_pxCombinedLast')+'</div>';
+  out.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+// Self-assign a practice exam scoped to a breakdown's weak topics. storeKey names the global
+// var holding the {weak:[...]} comp object (set by pxComprehensive or pxCombineSelected).
+// Length matches official FAA exam length — reuses the same rule the instructor's "Assign"
+// tab uses for custom-topic class exams (_asgTopicsFullLength, index.html ~7658).
+function pxGenerateFocusExam(storeKey){
+  const comp=window[storeKey];
+  if(!comp || !comp.weak || !comp.weak.length){ if(typeof showToast==='function') showToast('No weak areas to focus on.','error'); return; }
+  const topics=comp.weak.map(r=>r.t);
+  const total=_asgTopicsFullLength(topics);
+  _pxMode='topic'; _pxOfficialSubject=null; _pxAssignId=null; _pxClassId=null; _pxClassExamId=null;
+  pxRunExam(topics, total, 'Weak-Area Focus Exam ('+total+'q)', {focusedMix:true});
+}
+
+// ── Send a weak-area breakdown to an instructor (one-time snapshot, not the ongoing
+// practiceShares grant — see shareGrant/shareRenderGrants for that separate feature) ──────────
+let _pxPendingSendReport=null;
+let _pxOwnInstructorsCache=null;
+// This student's own classroom instructor(s), deduped — the quick-pick chips in the send modal.
+async function _pxGetOwnInstructors(){
+  if(_pxOwnInstructorsCache) return _pxOwnInstructorsCache;
+  const out=[]; const seen=new Set();
+  const classrooms=(stuSession && stuSession.classrooms)||[];
+  for(const cls of classrooms){
+    try{
+      const room=await dbGet('classrooms/'+cls.classroomId);
+      if(!room || !room.instructorId || seen.has(room.instructorId)) continue;
+      seen.add(room.instructorId);
+      const inst=await dbGet('instructors/'+room.instructorId);
+      out.push({uid:room.instructorId, name:(inst&&inst.name)||'Instructor'});
+    }catch(e){}
+  }
+  _pxOwnInstructorsCache=out;
+  return out;
+}
+async function pxOpenSendReportModal(storeKey){
+  const comp=window[storeKey];
+  if(!comp){ if(typeof showToast==='function') showToast('Open a breakdown first.','error'); return; }
+  _pxPendingSendReport=comp;
+  const sumEl=document.getElementById('pxSendReportSummary');
+  if(sumEl) sumEl.innerHTML='Sending: <b>'+esc(comp.label)+'</b> — '+comp.overallPct+'% ('+comp.totCorrect+'/'+comp.totQ+') across '+comp.examCount+' exam'+(comp.examCount===1?'':'s')+'.';
+  const statusEl=document.getElementById('pxSendReportStatus'); if(statusEl) statusEl.textContent='';
+  const searchEl=document.getElementById('pxSendReportSearch'); if(searchEl) searchEl.value='';
+  const resultsEl=document.getElementById('pxSendReportResults'); if(resultsEl) resultsEl.innerHTML='';
+  const quickEl=document.getElementById('pxSendReportQuick');
+  show('pxSendReportModal');
+  if(quickEl){
+    quickEl.innerHTML='<div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Loading your instructor(s)…</div>';
+    const mine=await _pxGetOwnInstructors();
+    quickEl.innerHTML = mine.length
+      ? mine.map(m=>'<button onclick="pxSendReportTo(\''+m.uid+'\',\''+esc(m.name).replace(/\x27/g,'')+'\')" style="display:block;width:100%;text-align:left;padding:10px 12px;margin-bottom:6px;border:1px solid var(--accent);border-radius:var(--r);background:rgba(240,165,0,.08);color:var(--text);font-weight:700;cursor:pointer">👤 '+esc(m.name)+'</button>').join('')
+      : '<div style="font-family:monospace;font-size:.72rem;color:var(--muted)">No classroom instructor found — search below.</div>';
+  }
+}
+async function pxSendReportSearchInstructors(){
+  const q=(document.getElementById('pxSendReportSearch')?.value||'').trim().toLowerCase();
+  const box=document.getElementById('pxSendReportResults'); if(!box) return;
+  if(q.length<2){ box.innerHTML=''; return; }
+  const dir=await shareLoadDirectory(); // reuse the same public instructorDirectory lookup as Share My Results
+  const matches=Object.entries(dir).filter(([uid,name])=>typeof name==='string' && name.toLowerCase().includes(q)).slice(0,12);
+  box.innerHTML = matches.length ? matches.map(([uid,name])=>
+    '<button onclick="pxSendReportTo(\''+uid+'\',\''+esc(name).replace(/\x27/g,'')+'\')" style="display:block;width:100%;text-align:left;padding:8px 10px;margin-bottom:5px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);cursor:pointer">'+esc(name)+'</button>'
+  ).join('') : '<div style="font-family:monospace;font-size:.75rem;color:var(--muted)">No instructors found.</div>';
+}
+async function pxSendReportTo(instUid,instName){
+  const comp=_pxPendingSendReport;
+  if(!comp || !stuSession?.uid) return;
+  const statusEl=document.getElementById('pxSendReportStatus');
+  if(statusEl) statusEl.textContent='Sending…';
+  try{
+    const cls=(stuSession.classrooms && stuSession.classrooms[0])||null;
+    const payload={
+      studentUid: stuSession.uid,
+      studentName: stuSession.name||'(student)',
+      sentAt: Date.now(),
+      label: comp.label,
+      examCount: comp.examCount, overallPct: comp.overallPct, totCorrect: comp.totCorrect, totQ: comp.totQ,
+      rows: comp.rows, weak: comp.weak.slice(0,8),
+      ...(cls?{classroomId:cls.classroomId, classroomName:cls.classroomName||''}:{})
+    };
+    await db.ref('instructorReports/'+instUid).push(payload);
+    if(statusEl) statusEl.textContent='';
+    if(typeof showToast==='function') showToast('Sent to '+(instName||'instructor')+'.','success');
+    closeModal('pxSendReportModal');
+  }catch(e){
+    if(statusEl) statusEl.textContent='';
+    if(typeof showToast==='function') showToast('Could not send: '+(e&&e.message||e),'error');
+  }
 }
 
 let _pxCompLast=null; // last-rendered comprehensive breakdown, for Print/PDF
-// Comprehensive breakdown: aggregate topic performance across ALL completed exams in a subject
-async function pxComprehensive(subject){
-  if(!stuSession?.uid) return;
-  ['general','airframe','powerplant'].forEach(s=>{ const b=document.getElementById('pxcb-'+s); if(b) b.classList.toggle('active', s===subject); });
-  const out=document.getElementById('pxComprehensiveOut');
-  if(!out) return;
-  out.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">Loading…</div>';
-  let data;
-  try { data=await dbGet('practiceHistory/'+stuSession.uid); }
-  catch(e){ out.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.78rem">Could not load history.</div>'; return; }
-  const subjLabel={general:'General',airframe:'Airframe',powerplant:'Powerplant'}[subject]||subject;
-  const exams=Object.values(data||{}).filter(r=>r && r.status==='complete' && r.subject===subject);
-  if(!exams.length){ out.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">No completed '+subjLabel+' exams yet. Finish a '+subjLabel+' practice exam to build your breakdown.</div>'; return; }
-  // Aggregate topic stats + overall
+// Shared aggregation: sums topicStats (+ overall score) across a list of practiceHistory
+// records into weakest-first topic rows. Used by both the per-subject Comprehensive view and
+// the student-picked "Combine Selected Exams" view (index.html — see pxCombineSelected).
+function _pxAggregateExams(exams, label){
   const agg={}; let totCorrect=0, totQ=0;
   exams.forEach(r=>{
     const ts=r.topicStats||{};
@@ -14386,27 +14563,59 @@ async function pxComprehensive(subject){
     .map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)}))
     .sort((a,b)=>a.pct-b.pct);
   const overallPct=totQ?Math.round(totCorrect/totQ*100):0;
-  const oc=overallPct>=70?'var(--cl)':overallPct>=50?'#f59e0b':'var(--wl)';
-  const weak=rows.filter(r=>r.pct<70 && r.total>=2).slice(0,3);
-  _pxCompLast={subject,subjLabel,examCount:exams.length,overallPct,totCorrect,totQ,rows,weak}; // for Print/PDF
-  let html='<div style="text-align:right;margin-bottom:10px"><button onclick="pxComprehensivePrint()" class="btn btn-ghost btn-sm" style="font-size:.78rem">🖨 Print / Save as PDF</button></div>'+
-    '<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'+
+  const weak=rows.filter(r=>r.pct<70 && r.total>=2);
+  return {label, examCount:exams.length, overallPct, totCorrect, totQ, rows, weak};
+}
+// Shared renderer for an aggregated breakdown: overall %, "work on these most" callout, full
+// topic table, and the Focus-Exam / Send-to-Instructor actions. storeKey names the global
+// variable (e.g. '_pxCompLast') holding the comp object, so the action buttons can read it back
+// without embedding a whole object literal into an onclick attribute.
+function _pxRenderBreakdownHTML(comp, storeKey){
+  const oc=comp.overallPct>=70?'var(--cl)':comp.overallPct>=50?'#f59e0b':'var(--wl)';
+  const weakTop=comp.weak.slice(0,3);
+  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">'+
-      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.2rem;letter-spacing:1px;color:var(--accent)">'+subjLabel+' — Comprehensive</div>'+
-      '<div style="font-family:monospace;font-size:.85rem;font-weight:700;color:'+oc+'">'+overallPct+'% &nbsp;('+totCorrect+'/'+totQ+')</div>'+
+      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.2rem;letter-spacing:1px;color:var(--accent)">'+_qEsc(comp.label)+'</div>'+
+      '<div style="font-family:monospace;font-size:.85rem;font-weight:700;color:'+oc+'">'+comp.overallPct+'% &nbsp;('+comp.totCorrect+'/'+comp.totQ+')</div>'+
     '</div>'+
-    '<div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across '+exams.length+' completed '+subjLabel+' exam'+(exams.length===1?'':'s')+'</div>'+
+    '<div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across '+comp.examCount+' exam'+(comp.examCount===1?'':'s')+'</div>'+
   '</div>';
-  if(weak.length){
+  if(weakTop.length){
     html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px">'+
       '<div style="font-family:monospace;font-size:.72rem;letter-spacing:1px;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Work on these most</div>'+
-      weak.map((r,i)=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:'+(i<weak.length-1?'4px':'0')+'">'+_qEsc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+
+      weakTop.map((r,i)=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:'+(i<weakTop.length-1?'4px':'0')+'">'+_qEsc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+
     '</div>';
   }
-  html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px">'+
+  html+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'+
     '<div style="font-family:monospace;font-size:.7rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px">All Topics (weakest first)</div>'+
-    rows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.t)+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+
+    comp.rows.map(r=>{const col=r.pct>=70?'var(--cl)':r.pct>=50?'#f59e0b':'var(--wl)';return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-family:monospace;font-size:.77rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.t)+'</div><div style="font-family:monospace;font-size:.77rem;color:var(--muted);white-space:nowrap">'+r.correct+'/'+r.total+'</div><div style="width:40px;text-align:right;font-family:monospace;font-size:.77rem;font-weight:700;color:'+col+'">'+r.pct+'%</div><div style="width:70px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0"><div style="width:'+r.pct+'%;height:100%;background:'+col+';border-radius:3px"></div></div></div>';}).join('')+
   '</div>';
+  html+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+    (comp.weak.length
+      ? '<button onclick="pxGenerateFocusExam(\''+storeKey+'\')" class="btn btn-primary btn-sm" style="font-size:.8rem">🎯 Generate Focused Practice Exam</button>'
+      : '<span style="font-family:monospace;font-size:.75rem;color:var(--cl)">✓ No weak areas — nothing to focus on.</span>')+
+    '<button onclick="pxOpenSendReportModal(\''+storeKey+'\')" class="btn btn-ghost btn-sm" style="font-size:.8rem">📤 Send to Instructor</button>'+
+  '</div>';
+  return html;
+}
+// Comprehensive breakdown: aggregate topic performance across ALL completed exams in a subject
+async function pxComprehensive(subject){
+  if(!stuSession?.uid) return;
+  ['general','airframe','powerplant'].forEach(s=>{ const b=document.getElementById('pxcb-'+s); if(b) b.classList.toggle('active', s===subject); });
+  const out=document.getElementById('pxComprehensiveOut');
+  if(!out) return;
+  out.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">Loading…</div>';
+  let data;
+  try { data=await dbGet('practiceHistory/'+stuSession.uid); }
+  catch(e){ out.innerHTML='<div style="color:var(--wl);font-family:monospace;font-size:.78rem">Could not load history.</div>'; return; }
+  const subjLabel={general:'General',airframe:'Airframe',powerplant:'Powerplant'}[subject]||subject;
+  const exams=Object.values(data||{}).filter(r=>r && r.status==='complete' && r.subject===subject);
+  if(!exams.length){ out.innerHTML='<div style="font-family:monospace;font-size:.8rem;color:var(--muted);padding:12px 0">No completed '+subjLabel+' exams yet. Finish a '+subjLabel+' practice exam to build your breakdown.</div>'; return; }
+  const comp=_pxAggregateExams(exams, subjLabel+' — Comprehensive');
+  comp.subject=subject; comp.subjLabel=subjLabel; // kept for Print/PDF (pxComprehensivePrint)
+  _pxCompLast=comp;
+  let html='<div style="text-align:right;margin-bottom:10px"><button onclick="pxComprehensivePrint()" class="btn btn-ghost btn-sm" style="font-size:.78rem">🖨 Print / Save as PDF</button></div>';
+  html+=_pxRenderBreakdownHTML(comp,'_pxCompLast');
   out.innerHTML=html;
 }
 
@@ -14763,7 +14972,11 @@ function buildPxHistoryRow(r){
   const areasHtml=areas.length
     ?'<span class="pxh-areas">'+areas.join(' · ')+'</span>'
     :'<span class="pxh-areas none">'+(answered?(incorrect>0?(incorrect+' missed — review'):'None — solid!'):'—')+'</span>';
+  const selectCell=isComplete
+    ?'<td data-label="" onclick="event.stopPropagation()"><input type="checkbox" class="pxh-select-cb" data-key="'+r._key+'" onchange="pxUpdateCombineCount()"></td>'
+    :'<td data-label=""></td>';
   return '<tr onclick="practiceOpenReview(\''+r._key+'\')">'+
+    selectCell+
     '<td data-label="#"><span class="pxh-num">'+r._num+'</span></td>'+
     '<td data-label="Date" class="pxh-mono" style="color:var(--muted);font-size:.73rem">'+dateStr+'</td>'+
     '<td data-label="Pool">'+pool+'</td>'+
