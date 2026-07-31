@@ -15794,6 +15794,18 @@ async function renderStudyHome(){
         </div>
       </div>
 
+      <!-- Custom Listening Session — combine any decks, optionally skip known cards -->
+      <div class="starred-box" style="background:rgba(74,158,255,.06);border:1px solid rgba(74,158,255,.35);cursor:pointer" onclick="renderListenBuilder()">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:1.2rem">🎧</span>
+          <div style="flex:1">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--blue)">Build a Listening Session</div>
+            <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Pick any decks to combine, and skip cards you already know</div>
+          </div>
+          <div style="font-family:monospace;font-size:.8rem;color:var(--blue)">→</div>
+        </div>
+      </div>
+
       <!-- Flashcard Banks -->
       ${buildBankCard('General', '📋', '#f0a500', QB, TOPICS, 'general')}
       ${buildBankCard('Airframe', '✈', '#4a9eff', QB_AIRFRAME, TOPICS_AIRFRAME, 'airframe')}
@@ -16386,6 +16398,7 @@ async function startListenStarred(...sections){
 
   // Feed directly into listen mode
   _lmTopic = banks.join('+') + '::__starred__';
+  _lmReplayFn = () => startListenStarred(...banks);
   _lmDeck = cards;
   _lmCur = 0;
   _lmStopped = false;
@@ -16496,6 +16509,7 @@ async function startListenPrimeTime(){
   if(!cards.length){ alert('No PrimeTime cards matched your ACS codes yet.'); return; }
   for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
   _lmTopic = 'general+airframe+powerplant::__primetime__';
+  _lmReplayFn = () => startListenPrimeTime();
   _lmDeck = cards; _lmCur = 0; _lmStopped = false; _lmPaused = false;
   await new Promise(res => {
     if(window.speechSynthesis.getVoices().length){ res(); return; }
@@ -16520,11 +16534,13 @@ let _lmTimer = null;
 let _lmKeepAlive = null;   // pause/resume interval — defeats Chrome's ~15s cutoff
 let _lmSpeakTimer = null;  // safety timeout — advance if onend/onerror never fire (mobile)
 let _lmTopic = null;
+let _lmReplayFn = null;   // no-arg closure that restarts the current listen session — set by whichever start* function kicked it off
 
 async function startListenMode(topicKey){
   if(!window.speechSynthesis){ alert('Your browser does not support text-to-speech. Try Chrome or Edge.'); return; }
   navPush({ screen:'stuApp', view:'flashcards' });
   _lmTopic = topicKey;
+  _lmReplayFn = () => startListenMode(topicKey);
   _lmStopped = false;
   _lmPaused = false;
   _lmCur = 0;
@@ -16721,20 +16737,20 @@ function lmFinish(){
   window.speechSynthesis.cancel();
   const el = document.getElementById('stuStudyView');
   if(!el) return;
-  const topicPart2 = (_lmTopic||'').includes('::') ? _lmTopic.substring(_lmTopic.indexOf('::')+2) : '';
-  const isStarredDeck = topicPart2 === '__starred__';
-  const replayFn = isStarredDeck
-    ? `startListenStarred(${(_lmTopic||'').split('::')[0].split('+').map(b=>"'"+b+"'").join(',')})`
-    : `startListenMode('${esc(_lmTopic)}')`;
   el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:18px;padding:32px 20px;text-align:center">
     <div style="font-size:3rem">🎧</div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:var(--accent)">All Done!</div>
     <div style="font-family:monospace;font-size:.85rem;color:var(--muted)">You listened to all ${_lmDeck.length} cards.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px">
-      <button class="btn btn-primary" onclick="${replayFn}">🔁 Listen Again</button>
+      <button class="btn btn-primary" onclick="lmReplayAgain()">🔁 Listen Again</button>
       <button class="btn btn-ghost" onclick="renderStudyHome()">← Back to Topics</button>
     </div>
   </div>`;
+}
+
+function lmReplayAgain(){
+  if(typeof _lmReplayFn === 'function') _lmReplayFn();
+  else renderStudyHome();
 }
 
 function renderListenPlayer(){
@@ -16744,7 +16760,7 @@ function renderListenPlayer(){
   const bankId2 = sepIdx >= 0 ? _lmTopic.substring(0, sepIdx) : 'general';
   const topicPart = sepIdx >= 0 ? _lmTopic.substring(sepIdx + 2) : _lmTopic;
   const bankLabel = bankId2.includes('+') ? '' : (bankId2 === 'airframe' ? 'Airframe' : bankId2 === 'powerplant' ? 'Powerplant' : 'General');
-  const topicDisplay = topicPart === '__all__' ? 'All Topics' : (topicPart === '__starred__' ? '★ Starred' : (topicPart === '__primetime__' ? '🔥 PrimeTime' : topicPart));
+  const topicDisplay = topicPart === '__all__' ? 'All Topics' : (topicPart === '__starred__' ? '★ Starred' : (topicPart === '__primetime__' ? '🔥 PrimeTime' : (topicPart === '__session__' ? 'Custom Session' : topicPart)));
 
   // Build the voice picker options — English voices, realistic ones flagged with ⭐.
   const _curVoice = lmPickVoice();
@@ -16839,6 +16855,147 @@ function _lmKeyHandler(e){
   if(e.code === 'Space'){ e.preventDefault(); lmPauseResume(); }
   else if(e.code === 'ArrowRight'){ e.preventDefault(); lmSkip(); }
   else if(e.code === 'ArrowLeft'){ e.preventDefault(); lmReplay(); }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🎧 LISTENING SESSION BUILDER — combine any decks across all three
+// banks into one shuffled listen-mode queue, with an option to skip
+// cards already marked "known" (same known-set used by study mode).
+// ═══════════════════════════════════════════════════════════
+let _lmBuilderSel = new Set();       // 'bankId::topic' keys chosen for the session
+let _lmBuilderUnknownOnly = false;   // skip cards already marked known
+
+function _lmBuilderBankMeta(bankId){
+  return bankId === 'airframe' ? { qb: QB_AIRFRAME, topics: TOPICS_AIRFRAME, label:'Airframe', icon:'✈', color:'#4a9eff' }
+       : bankId === 'powerplant' ? { qb: QB_POWERPLANT, topics: TOPICS_POWERPLANT, label:'Powerplant', icon:'⚙', color:'#cc4444' }
+       : { qb: QB, topics: TOPICS, label:'General', icon:'📋', color:'#f0a500' };
+}
+
+function _lmBuilderCards(){
+  const cards = [];
+  for(const key of _lmBuilderSel){
+    const sepIdx = key.indexOf('::');
+    const bankId = key.substring(0, sepIdx);
+    const topic = key.substring(sepIdx + 2);
+    const qb = _lmBuilderBankMeta(bankId).qb;
+    const known = _lmBuilderUnknownOnly ? fcGetKnown(key) : null;
+    (qb[topic]||[]).forEach((q, i) => {
+      if(known && known.has(key+'_'+i)) return;
+      cards.push({ q:q.q, a:q.a, topic, idx:i, bankId });
+    });
+  }
+  return cards;
+}
+
+function lmBuilderToggle(key){
+  if(_lmBuilderSel.has(key)) _lmBuilderSel.delete(key); else _lmBuilderSel.add(key);
+  lmBuilderUpdateCount();
+}
+
+function lmBuilderSelectAll(bankId){
+  _lmBuilderBankMeta(bankId).topics.forEach(t => _lmBuilderSel.add(bankId+'::'+t));
+  renderListenBuilder();
+}
+
+function lmBuilderSelectNone(bankId){
+  _lmBuilderBankMeta(bankId).topics.forEach(t => _lmBuilderSel.delete(bankId+'::'+t));
+  renderListenBuilder();
+}
+
+function lmBuilderSetUnknownOnly(checked){
+  _lmBuilderUnknownOnly = !!checked;
+  lmBuilderUpdateCount();
+}
+
+function lmBuilderUpdateCount(){
+  const n = _lmBuilderCards().length;
+  const countEl = document.getElementById('lmbCount');
+  if(countEl) countEl.textContent = n + ' card' + (n!==1?'s':'') + ' in this session';
+  const btn = document.getElementById('lmbStartBtn');
+  if(btn) btn.disabled = (n === 0);
+}
+
+async function renderListenBuilder(){
+  if(!window.speechSynthesis){ alert('Your browser does not support text-to-speech. Try Chrome or Edge.'); return; }
+  navPush({ screen:'stuApp', view:'flashcards' });
+  const el = document.getElementById('stuStudyView');
+
+  function bankSection(bankId){
+    const { qb, topics, label, icon, color } = _lmBuilderBankMeta(bankId);
+    if(!topics.length) return '';
+    const rows = topics.map(t => {
+      const qs = qb[t]||[];
+      const known = fcGetKnown(bankId+'::'+t);
+      const remaining = qs.length - known.size;
+      const key = bankId+'::'+t;
+      const checked = _lmBuilderSel.has(key) ? ' checked' : '';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox"${checked} onchange="lmBuilderToggle('${esc(key)}')" style="width:16px;height:16px;accent-color:${color};flex-shrink:0">
+        <span style="flex:1;font-family:monospace;font-size:.78rem;color:var(--text)">${esc(t)}</span>
+        <span style="font-family:monospace;font-size:.65rem;color:var(--muted)">${qs.length} cards &nbsp;·&nbsp; ${remaining} unknown</span>
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${color}12;border-bottom:1px solid var(--border)">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;color:${color};flex:1">${icon} ${label}</span>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="lmBuilderSelectAll('${bankId}')">Select All</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="lmBuilderSelectNone('${bankId}')">Clear</button>
+      </div>
+      ${rows}
+    </div>`;
+  }
+
+  el.innerHTML = `<div class="study-wrap" style="max-width:640px">
+    <div class="fc-nav">
+      <button class="btn btn-ghost btn-sm" onclick="renderStudyHome()">← Topics</button>
+      <div style="font-family:monospace;font-size:.65rem;color:var(--blue);background:rgba(74,158,255,.1);border:1px solid rgba(74,158,255,.3);border-radius:3px;padding:3px 8px">🎧 SESSION BUILDER</div>
+    </div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:6px">Build a Listening Session</div>
+    <div style="font-family:monospace;font-size:.72rem;color:var(--muted);text-align:center;margin-bottom:16px">Pick any decks to combine — they'll play together, shuffled, in one session.</div>
+
+    <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;cursor:pointer">
+      <input type="checkbox" ${_lmBuilderUnknownOnly?'checked':''} onchange="lmBuilderSetUnknownOnly(this.checked)" style="width:16px;height:16px;accent-color:var(--blue)">
+      <span style="font-family:monospace;font-size:.78rem;color:var(--text)">Skip cards I already know ✓</span>
+    </label>
+
+    ${bankSection('general')}
+    ${bankSection('airframe')}
+    ${bankSection('powerplant')}
+
+    <div style="position:sticky;bottom:0;background:var(--bg);padding:12px 0;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div id="lmbCount" style="font-family:monospace;font-size:.72rem;color:var(--muted)">0 cards in this session</div>
+      <button id="lmbStartBtn" class="btn btn-primary" onclick="startListenSession()" disabled style="font-weight:700">▶ Start Listening</button>
+    </div>
+  </div>`;
+  lmBuilderUpdateCount();
+}
+
+async function startListenSession(){
+  if(!window.speechSynthesis){ alert('Your browser does not support text-to-speech. Try Chrome or Edge.'); return; }
+  const cards = _lmBuilderCards();
+  if(!cards.length) return;
+
+  // Shuffle
+  for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
+
+  const bankIds = new Set();
+  _lmBuilderSel.forEach(key => bankIds.add(key.substring(0, key.indexOf('::'))));
+  _lmTopic = [...bankIds].join('+') + '::__session__';
+  _lmReplayFn = () => startListenSession();
+  _lmDeck = cards;
+  _lmCur = 0;
+  _lmStopped = false;
+  _lmPaused = false;
+
+  await new Promise(res => {
+    if(window.speechSynthesis.getVoices().length){ res(); return; }
+    window.speechSynthesis.onvoiceschanged = res;
+    setTimeout(res, 1000);
+  });
+
+  navPush({ screen:'stuApp', view:'flashcards' });
+  renderListenPlayer();
+  lmPlayCard();
 }
 
 function fcKeyHandler(e){
