@@ -17026,8 +17026,6 @@ function acAdvancePhase(){
 }
 
 function acUpdateCountdown(){
-  const el = document.getElementById('acCountdown');
-  if(el) el.textContent = Math.max(0, _acRemaining) + 's';
   const bar = document.getElementById('acPhaseBar');
   if(bar){
     const total = _acPhase === 'q' ? _acQSecs : _acASecs;
@@ -17130,11 +17128,10 @@ function renderAutoCycle(){
       <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width .4s"></div>
     </div>
 
-    <!-- Phase indicator + countdown -->
-    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:14px">
+    <!-- Phase indicator + time-remaining bar (no numeric countdown, just the drain) -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:14px">
       <div style="font-family:monospace;font-size:.68rem;letter-spacing:2px;color:${_acPhase==='q'?'var(--accent)':'var(--cl)'}">${_acPhase==='q' ? 'QUESTION' : 'ANSWER'}</div>
-      <div id="acCountdown" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:${_acPhase==='q'?'var(--accent)':'var(--cl)'};background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:3px 20px;min-width:56px;text-align:center">${_acRemaining}s</div>
-      <div style="width:120px;height:3px;background:var(--border);border-radius:2px;overflow:hidden">
+      <div style="width:160px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
         <div id="acPhaseBar" style="height:100%;width:100%;background:${_acPhase==='q'?'var(--accent)':'var(--correct)'};border-radius:2px;transition:width 1s linear"></div>
       </div>
     </div>
