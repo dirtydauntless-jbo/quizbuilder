@@ -229,6 +229,10 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .btn-listen{background:rgba(74,158,255,.12);color:var(--blue);border:1px solid rgba(74,158,255,.3);transition:background .15s,border-color .15s,color .15s,box-shadow .15s;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .btn-listen:hover{background:rgba(74,158,255,.28);border-color:var(--blue);color:#fff;box-shadow:0 0 8px rgba(74,158,255,.35)}
 
+/* Auto Cycle Mode — hands-free timed question/answer playback */
+.btn-auto{background:rgba(240,165,0,.12);color:var(--accent);border:1px solid rgba(240,165,0,.35);transition:background .15s,border-color .15s,color .15s,box-shadow .15s;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.btn-auto:hover{background:rgba(240,165,0,.28);border-color:var(--accent);color:#000;box-shadow:0 0 8px rgba(240,165,0,.35)}
+
 /* DME Mode — typed-answer oral exam practice, AI-graded */
 @keyframes dmeGlow{0%,100%{box-shadow:0 0 8px rgba(155,109,255,.4)}50%{box-shadow:0 0 16px rgba(155,109,255,.75)}}
 .btn-dme{position:relative;background:linear-gradient(135deg,#9b6dff,#5b8dff);color:#fff;border:1px solid rgba(255,255,255,.25);font-weight:700;animation:dmeGlow 2.6s ease-in-out infinite;transition:transform .15s,filter .15s;min-width:0;overflow:hidden;text-overflow:ellipsis}
@@ -15569,6 +15573,10 @@ async function renderStudyHome(){
             style="font-size:.65rem;padding:3px 10px;flex:1 1 auto">
             🎧 Listen
           </button>
+          <button class="btn btn-sm btn-auto" onclick="event.stopPropagation();startAutoCycle('${esc(bankId)}::${esc(t)}')"
+            style="font-size:.65rem;padding:3px 10px;flex:1 1 auto" title="Auto Cycle — hands-free: shows the question, then the answer, then moves on">
+            🔄 Auto
+          </button>
           <button class="btn btn-sm btn-dme" onclick="event.stopPropagation();startDmeMode('${esc(bankId)}::${esc(t)}')"
             style="font-size:.65rem;padding:3px 10px;flex:1 1 auto" title="DME Mode — type your answer, AI grades it like an oral examiner would">
             🎙️ DME
@@ -15601,6 +15609,11 @@ async function renderStudyHome(){
             style="font-weight:700"
             title="Listen mode — auto-reads questions and answers aloud">
             🎧 Listen
+          </button>
+          <button class="btn btn-sm btn-auto" onclick="startAutoCycle('${bankId}::__all__')"
+            style="font-weight:700"
+            title="Auto Cycle — hands-free: shows the question, then the answer, then moves on">
+            🔄 Auto Cycle
           </button>
           <button class="btn btn-sm btn-dme" onclick="startDmeMode('${bankId}::__all__')"
             style="font-weight:700"
@@ -15859,6 +15872,18 @@ async function renderStudyHome(){
             <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Pick any decks to combine, and skip cards you already know</div>
           </div>
           <div style="font-family:monospace;font-size:.8rem;color:var(--blue)">→</div>
+        </div>
+      </div>
+
+      <!-- Custom Auto Cycle Session — combine any decks into a hands-free timed playthrough -->
+      <div class="starred-box" style="background:rgba(240,165,0,.06);border:1px solid rgba(240,165,0,.35);cursor:pointer" onclick="renderAutoCycleBuilder()">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:1.2rem">🔄</span>
+          <div style="flex:1">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">Build an Auto Cycle Session</div>
+            <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Pick any decks to combine — cards auto-advance on a timer, hands-free</div>
+          </div>
+          <div style="font-family:monospace;font-size:.8rem;color:var(--accent)">→</div>
         </div>
       </div>
 
@@ -16914,6 +16939,257 @@ function _lmKeyHandler(e){
 }
 
 // ═══════════════════════════════════════════════════════════
+// 🔄 AUTO CYCLE MODE — hands-free deck playback. Shows the question for
+// N seconds, flips to the answer for M seconds, then moves to the next
+// card automatically. No typing, no tapping — just watch it go.
+// ═══════════════════════════════════════════════════════════
+let _acDeck = [];
+let _acCur = 0;
+let _acPaused = false;
+let _acStopped = false;
+let _acPhase = 'q';        // 'q' (showing question) or 'a' (showing answer)
+let _acRemaining = 0;      // seconds left in the current phase
+let _acQSecs = (function(){ const v = parseInt(localStorage.getItem('ac_qSecs')); return (v>=1) ? v : 8; })();
+let _acASecs = (function(){ const v = parseInt(localStorage.getItem('ac_aSecs')); return (v>=1) ? v : 8; })();
+let _acTimer = null;
+let _acTopic = null;
+let _acReplayFn = null;
+
+function startAutoCycle(topicKey){
+  navPush({ screen:'stuApp', view:'flashcards' });
+  _acTopic = topicKey;
+  _acReplayFn = () => startAutoCycle(topicKey);
+  _acStopped = false;
+  _acPaused = false;
+  _acCur = 0;
+
+  const sepIdx = topicKey.indexOf('::');
+  const bankId = sepIdx >= 0 ? topicKey.substring(0, sepIdx) : 'general';
+  const topic  = sepIdx >= 0 ? topicKey.substring(sepIdx + 2) : topicKey;
+  const qbMap  = bankId === 'airframe' ? QB_AIRFRAME : bankId === 'powerplant' ? QB_POWERPLANT : QB;
+  const topicList = bankId === 'airframe' ? TOPICS_AIRFRAME : bankId === 'powerplant' ? TOPICS_POWERPLANT : TOPICS;
+
+  let cards = [];
+  if(topic === '__all__'){
+    topicList.forEach(t => {
+      (qbMap[t]||[]).forEach((q,i) => cards.push({q:q.q, a:q.a, topic:t, idx:i, bankId}));
+    });
+  } else {
+    (qbMap[topic]||[]).forEach((q,i) => cards.push({q:q.q, a:q.a, topic, idx:i, bankId}));
+  }
+  // Shuffle
+  for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
+  _acDeck = cards;
+
+  if(!_acDeck.length){ alert('No cards in this deck.'); renderStudyHome(); return; }
+
+  document.removeEventListener('keydown', fcKeyHandler);
+  document.removeEventListener('keydown', _lmKeyHandler);
+  document.removeEventListener('keydown', _acKeyHandler);
+  document.addEventListener('keydown', _acKeyHandler);
+
+  acPlayCard();
+}
+
+function acPlayCard(){
+  if(_acStopped) return;
+  if(_acCur >= _acDeck.length){ acFinish(); return; }
+  _acPhase = 'q';
+  _acRemaining = _acQSecs;
+  renderAutoCycle();
+  acStartPhaseTimer(_acQSecs);
+}
+
+function acStartPhaseTimer(seconds){
+  clearTimeout(_acTimer);
+  function tick(){
+    if(_acStopped) return;
+    if(_acPaused){ _acTimer = setTimeout(tick, 300); return; }
+    _acRemaining--;
+    acUpdateCountdown();
+    if(_acRemaining <= 0){ acAdvancePhase(); return; }
+    _acTimer = setTimeout(tick, 1000);
+  }
+  _acTimer = setTimeout(tick, 1000);
+}
+
+function acAdvancePhase(){
+  if(_acPhase === 'q'){
+    _acPhase = 'a';
+    _acRemaining = _acASecs;
+    renderAutoCycle();
+    acStartPhaseTimer(_acASecs);
+  } else {
+    _acCur++;
+    acPlayCard();
+  }
+}
+
+function acUpdateCountdown(){
+  const el = document.getElementById('acCountdown');
+  if(el) el.textContent = Math.max(0, _acRemaining) + 's';
+  const bar = document.getElementById('acPhaseBar');
+  if(bar){
+    const total = _acPhase === 'q' ? _acQSecs : _acASecs;
+    bar.style.width = Math.round(Math.max(0, _acRemaining) / Math.max(1,total) * 100) + '%';
+  }
+}
+
+function acPauseResume(){
+  _acPaused = !_acPaused;
+  const btn = document.getElementById('acPauseBtn');
+  if(btn) btn.textContent = _acPaused ? '▶ Resume' : '⏸ Pause';
+}
+
+function acReplay(){
+  clearTimeout(_acTimer);
+  _acPaused = false;
+  _acPhase = 'q';
+  _acRemaining = _acQSecs;
+  renderAutoCycle();
+  acStartPhaseTimer(_acQSecs);
+}
+
+function acSkip(){
+  clearTimeout(_acTimer);
+  _acPaused = false;
+  _acCur++;
+  acPlayCard();
+}
+
+function acStop(){
+  _acStopped = true;
+  clearTimeout(_acTimer);
+  document.removeEventListener('keydown', _acKeyHandler);
+  renderStudyHome();
+}
+
+function acChangeQTime(val){
+  _acQSecs = parseInt(val);
+  try{ localStorage.setItem('ac_qSecs', val); }catch(e){}
+  const el = document.getElementById('acQLabel');
+  if(el) el.textContent = val + 's';
+}
+
+function acChangeATime(val){
+  _acASecs = parseInt(val);
+  try{ localStorage.setItem('ac_aSecs', val); }catch(e){}
+  const el = document.getElementById('acALabel');
+  if(el) el.textContent = val + 's';
+}
+
+function acFinish(){
+  _acStopped = true;
+  clearTimeout(_acTimer);
+  const el = document.getElementById('stuStudyView');
+  if(!el) return;
+  el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:18px;padding:32px 20px;text-align:center">
+    <div style="font-size:3rem">🔄</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:var(--accent)">All Done!</div>
+    <div style="font-family:monospace;font-size:.85rem;color:var(--muted)">You cycled through all ${_acDeck.length} cards.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px">
+      <button class="btn btn-primary" onclick="acReplayAgain()">🔁 Cycle Again</button>
+      <button class="btn btn-ghost" onclick="renderStudyHome()">← Back to Topics</button>
+    </div>
+  </div>`;
+}
+
+function acReplayAgain(){
+  if(typeof _acReplayFn === 'function') _acReplayFn();
+  else renderStudyHome();
+}
+
+function renderAutoCycle(){
+  const el = document.getElementById('stuStudyView');
+  if(!el) return;
+  const card = _acDeck[_acCur];
+  if(!card){ acFinish(); return; }
+
+  const sepIdx = (_acTopic||'').indexOf('::');
+  const bankId2 = sepIdx >= 0 ? _acTopic.substring(0, sepIdx) : 'general';
+  const topicPart = sepIdx >= 0 ? _acTopic.substring(sepIdx + 2) : _acTopic;
+  const bankLabel = bankId2.includes('+') ? '' : (bankId2 === 'airframe' ? 'Airframe' : bankId2 === 'powerplant' ? 'Powerplant' : 'General');
+  const topicDisplay = topicPart === '__all__' ? 'All Topics' : (topicPart === '__session__' ? 'Custom Session' : topicPart);
+  const pct = Math.round(_acCur / _acDeck.length * 100);
+
+  el.innerHTML = `<div class="study-wrap">
+    <!-- Top nav -->
+    <div class="fc-nav">
+      <button class="btn btn-ghost btn-sm" onclick="acStop()">← Topics</button>
+      <div class="fc-counter">${_acCur + 1} / ${_acDeck.length}</div>
+      <div style="font-family:monospace;font-size:.65rem;color:var(--accent);background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.3);border-radius:3px;padding:3px 8px">🔄 AUTO CYCLE</div>
+    </div>
+
+    <!-- Topic label -->
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:10px">
+      ${esc(bankLabel ? bankLabel + ' — ' + topicDisplay : topicDisplay)}
+    </div>
+
+    <!-- Deck progress bar -->
+    <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:14px">
+      <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width .4s"></div>
+    </div>
+
+    <!-- Phase indicator + countdown -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:14px">
+      <div style="font-family:monospace;font-size:.68rem;letter-spacing:2px;color:${_acPhase==='q'?'var(--accent)':'var(--cl)'}">${_acPhase==='q' ? 'QUESTION' : 'ANSWER'}</div>
+      <div id="acCountdown" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:${_acPhase==='q'?'var(--accent)':'var(--cl)'};background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:3px 20px;min-width:56px;text-align:center">${_acRemaining}s</div>
+      <div style="width:120px;height:3px;background:var(--border);border-radius:2px;overflow:hidden">
+        <div id="acPhaseBar" style="height:100%;width:100%;background:${_acPhase==='q'?'var(--accent)':'var(--correct)'};border-radius:2px;transition:width 1s linear"></div>
+      </div>
+    </div>
+
+    <!-- Flip card, driven by the timer instead of taps -->
+    <div class="fc-scene" id="acScene" style="cursor:default">
+      <div class="fc-card${_acPhase==='a'?' flipped':''}" id="acCard">
+        <div class="fc-face fc-front">
+          <div class="fc-label">Question</div>
+          <div class="fc-text">${esc(card.q)}</div>
+        </div>
+        <div class="fc-face fc-back">
+          <div class="fc-label">Answer</div>
+          <div class="fc-text">${esc(card.a)}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:18px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="acReplay()" title="Replay this card">↩ Replay</button>
+      <button id="acPauseBtn" class="btn btn-primary btn-sm" onclick="acPauseResume()" style="min-width:100px">${_acPaused?'▶ Resume':'⏸ Pause'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="acSkip()" title="Skip to next card">Skip →</button>
+    </div>
+
+    <!-- Timing settings -->
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:320px;margin:0 auto 6px;font-family:monospace;font-size:.72rem;color:var(--muted)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:78px">Question:</span>
+        <input type="range" min="2" max="30" step="1" value="${_acQSecs}" oninput="acChangeQTime(this.value)" style="flex:1;accent-color:var(--accent)">
+        <span id="acQLabel" style="width:32px;text-align:right">${_acQSecs}s</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:78px">Answer:</span>
+        <input type="range" min="2" max="30" step="1" value="${_acASecs}" oninput="acChangeATime(this.value)" style="flex:1;accent-color:var(--cl)">
+        <span id="acALabel" style="width:32px;text-align:right">${_acASecs}s</span>
+      </div>
+    </div>
+
+    <!-- Keyboard hint -->
+    <div class="fc-kbd-hint" style="margin-top:12px">
+      <kbd>Space</kbd> pause &nbsp;·&nbsp; <kbd>→</kbd> skip &nbsp;·&nbsp; <kbd>←</kbd> replay
+    </div>
+  </div>`;
+}
+
+function _acKeyHandler(e){
+  if(!_acDeck.length || _acStopped) return;
+  if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if(e.code === 'Space'){ e.preventDefault(); acPauseResume(); }
+  else if(e.code === 'ArrowRight'){ e.preventDefault(); acSkip(); }
+  else if(e.code === 'ArrowLeft'){ e.preventDefault(); acReplay(); }
+}
+
+// ═══════════════════════════════════════════════════════════
 // 🎧 LISTENING SESSION BUILDER — combine any decks across all three
 // banks into one shuffled listen-mode queue, with an option to skip
 // cards already marked "known" (same known-set used by study mode).
@@ -17052,6 +17328,136 @@ async function startListenSession(){
   navPush({ screen:'stuApp', view:'flashcards' });
   renderListenPlayer();
   lmPlayCard();
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🔄 AUTO CYCLE SESSION BUILDER — combine any decks across all three
+// banks into one shuffled auto-cycle queue, with an option to skip
+// cards already marked "known" (same known-set used by study mode).
+// ═══════════════════════════════════════════════════════════
+let _acBuilderSel = new Set();       // 'bankId::topic' keys chosen for the session
+let _acBuilderUnknownOnly = false;   // skip cards already marked known
+
+function _acBuilderCards(){
+  const cards = [];
+  for(const key of _acBuilderSel){
+    const sepIdx = key.indexOf('::');
+    const bankId = key.substring(0, sepIdx);
+    const topic = key.substring(sepIdx + 2);
+    const qb = _lmBuilderBankMeta(bankId).qb;
+    const known = _acBuilderUnknownOnly ? fcGetKnown(key) : null;
+    (qb[topic]||[]).forEach((q, i) => {
+      if(known && known.has(key+'_'+i)) return;
+      cards.push({ q:q.q, a:q.a, topic, idx:i, bankId });
+    });
+  }
+  return cards;
+}
+
+function acBuilderToggle(key){
+  if(_acBuilderSel.has(key)) _acBuilderSel.delete(key); else _acBuilderSel.add(key);
+  acBuilderUpdateCount();
+}
+
+function acBuilderSelectAll(bankId){
+  _lmBuilderBankMeta(bankId).topics.forEach(t => _acBuilderSel.add(bankId+'::'+t));
+  renderAutoCycleBuilder();
+}
+
+function acBuilderSelectNone(bankId){
+  _lmBuilderBankMeta(bankId).topics.forEach(t => _acBuilderSel.delete(bankId+'::'+t));
+  renderAutoCycleBuilder();
+}
+
+function acBuilderSetUnknownOnly(checked){
+  _acBuilderUnknownOnly = !!checked;
+  acBuilderUpdateCount();
+}
+
+function acBuilderUpdateCount(){
+  const n = _acBuilderCards().length;
+  const countEl = document.getElementById('acbCount');
+  if(countEl) countEl.textContent = n + ' card' + (n!==1?'s':'') + ' in this session';
+  const btn = document.getElementById('acbStartBtn');
+  if(btn) btn.disabled = (n === 0);
+}
+
+async function renderAutoCycleBuilder(){
+  navPush({ screen:'stuApp', view:'flashcards' });
+  const el = document.getElementById('stuStudyView');
+
+  function bankSection(bankId){
+    const { qb, topics, label, icon, color } = _lmBuilderBankMeta(bankId);
+    if(!topics.length) return '';
+    const rows = topics.map(t => {
+      const qs = qb[t]||[];
+      const known = fcGetKnown(bankId+'::'+t);
+      const remaining = qs.length - known.size;
+      const key = bankId+'::'+t;
+      const checked = _acBuilderSel.has(key) ? ' checked' : '';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox"${checked} onchange="acBuilderToggle('${esc(key)}')" style="width:16px;height:16px;accent-color:${color};flex-shrink:0">
+        <span style="flex:1;font-family:monospace;font-size:.78rem;color:var(--text)">${esc(t)}</span>
+        <span style="font-family:monospace;font-size:.65rem;color:var(--muted)">${qs.length} cards &nbsp;·&nbsp; ${remaining} unknown</span>
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${color}12;border-bottom:1px solid var(--border)">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;color:${color};flex:1">${icon} ${label}</span>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="acBuilderSelectAll('${bankId}')">Select All</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="acBuilderSelectNone('${bankId}')">Clear</button>
+      </div>
+      ${rows}
+    </div>`;
+  }
+
+  el.innerHTML = `<div class="study-wrap" style="max-width:640px">
+    <div class="fc-nav">
+      <button class="btn btn-ghost btn-sm" onclick="renderStudyHome()">← Topics</button>
+      <div style="font-family:monospace;font-size:.65rem;color:var(--accent);background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.3);border-radius:3px;padding:3px 8px">🔄 SESSION BUILDER</div>
+    </div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:6px">Build an Auto Cycle Session</div>
+    <div style="font-family:monospace;font-size:.72rem;color:var(--muted);text-align:center;margin-bottom:16px">Pick any decks to combine — they'll auto-advance together, shuffled, in one session.</div>
+
+    <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;cursor:pointer">
+      <input type="checkbox" ${_acBuilderUnknownOnly?'checked':''} onchange="acBuilderSetUnknownOnly(this.checked)" style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-family:monospace;font-size:.78rem;color:var(--text)">Skip cards I already know ✓</span>
+    </label>
+
+    ${bankSection('general')}
+    ${bankSection('airframe')}
+    ${bankSection('powerplant')}
+
+    <div style="position:sticky;bottom:0;background:var(--bg);padding:12px 0;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div id="acbCount" style="font-family:monospace;font-size:.72rem;color:var(--muted)">0 cards in this session</div>
+      <button id="acbStartBtn" class="btn btn-primary" onclick="startAutoCycleSession()" disabled style="font-weight:700">▶ Start Auto Cycle</button>
+    </div>
+  </div>`;
+  acBuilderUpdateCount();
+}
+
+async function startAutoCycleSession(){
+  const cards = _acBuilderCards();
+  if(!cards.length) return;
+
+  // Shuffle
+  for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
+
+  const bankIds = new Set();
+  _acBuilderSel.forEach(key => bankIds.add(key.substring(0, key.indexOf('::'))));
+  _acTopic = [...bankIds].join('+') + '::__session__';
+  _acReplayFn = () => startAutoCycleSession();
+  _acDeck = cards;
+  _acCur = 0;
+  _acStopped = false;
+  _acPaused = false;
+
+  navPush({ screen:'stuApp', view:'flashcards' });
+  document.removeEventListener('keydown', fcKeyHandler);
+  document.removeEventListener('keydown', _lmKeyHandler);
+  document.removeEventListener('keydown', _acKeyHandler);
+  document.addEventListener('keydown', _acKeyHandler);
+  acPlayCard();
 }
 
 function fcKeyHandler(e){
