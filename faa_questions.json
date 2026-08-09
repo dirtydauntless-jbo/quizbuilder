@@ -3404,20 +3404,6 @@
     ]
    },
    {
-    "id": "631",
-    "question": "The following is a table of airspeed limits as given in an FAA-issued aircraft specification: Normal operating speed 260 knots Never-exceed speed 293 knots Maximum landing gear operation speed 174 knots Maximum flap extended speed 139 knots The high end of the white arc on the airspeed instrument would be at",
-    "choices": {
-     "A": "260 knots.",
-     "B": "293 knots.",
-     "C": "139 knots."
-    },
-    "correct": "C",
-    "explanation": "The white arc on an airspeed indicator represents the flap operating range, with its high end (upper limit) at the maximum flap extended speed (V_FE), which is 139 knots in this specification. The white arc does not extend to normal operating or never-exceed speeds. (Ref: FAA-H-8083-30B, Ch 1 — Mathematics and Aviation Fundamentals)",
-    "acs": [
-     "AM.I.H.K11"
-    ]
-   },
-   {
     "id": "640",
     "question": "A repair, as performed on an airframe, shall mean",
     "choices": {
@@ -8503,6 +8489,20 @@
     "explanation": "Per 14 CFR 65.13, a temporary airman certificate issued while the applicant is awaiting the issuance of a permanent certificate is valid for up to 120 days. (Ref: FAA-H-8083-30B, Ch 1 — Aviation Regulations)",
     "acs": [
      "AM.I.I.K1"
+    ]
+   },
+   {
+    "id": "631",
+    "question": "The following is a table of airspeed limits as given in an FAA-issued aircraft specification: Normal operating speed 260 knots Never-exceed speed 293 knots Maximum landing gear operation speed 174 knots Maximum flap extended speed 139 knots The high end of the white arc on the airspeed instrument would be at",
+    "choices": {
+     "A": "260 knots.",
+     "B": "293 knots.",
+     "C": "139 knots."
+    },
+    "correct": "C",
+    "explanation": "The white arc on an airspeed indicator represents the flap operating range, with its high end (upper limit) at the maximum flap extended speed (V_FE), which is 139 knots in this specification. The white arc does not extend to normal operating or never-exceed speeds. (Ref: FAA-H-8083-30B, Ch 4 — Type Certificate Data Sheets)",
+    "acs": [
+     "AM.I.H.K11"
     ]
    }
   ]
