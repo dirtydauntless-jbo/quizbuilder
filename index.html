@@ -9315,7 +9315,7 @@ function _faaBankToQuizQuestion(bq, i, choiceCount){
     shuffle(options);
     correct = options.indexOf(correctText);
   }
-  return { id:i, q:fixAMTText(bq.question), topic:bq.topic, type:'mc', options:options.map(fixAMTText), correct };
+  return { id:i, q:fixAMTText(bq.question), topic:bq.topic, type:'mc', options:options.map(fixAMTText), correct, ...(bq.figureNum ? {figureNum:bq.figureNum} : {}) };
 }
 
 // ===============================================
@@ -17636,8 +17636,12 @@ function buildQuizPrintHTML(quiz, includeAnswerKey){
         &nbsp;&nbsp;&nbsp;&nbsp;${letterOf(i)}.&nbsp; ${eh(c)}
       </div>`).join('');
     }
+    const figHtml = q.figureNum
+      ? `<div style="margin:6px 0 8px 28px;text-align:center"><img src="/public/figures/figure-${q.figureNum}.jpg" alt="Figure ${q.figureNum}" style="max-width:4in;border:1px solid #999"></div>`
+      : '';
     return `<div style="margin-bottom:14px;page-break-inside:avoid">
       <div style="font-size:11pt;font-weight:600;margin-bottom:2px">${label} ${eh(q.q)}</div>
+      ${figHtml}
       ${choices}
     </div>`;
   }
@@ -17807,6 +17811,7 @@ async function openPrintPreview(quizId, editMode = false){
               style="background:#ffebee;color:#c62828;border:1px solid #ef9a9a;border-radius:3px;font-size:.7rem;padding:3px 7px;cursor:pointer;font-weight:600">✕</button>
           </div>
         </div>
+        ${q.figureNum ? `<div style="margin:0 0 8px 0;text-align:center"><img src="/public/figures/figure-${q.figureNum}.jpg" alt="Figure ${q.figureNum}" style="max-width:280px;border:1px solid #ddd;border-radius:4px" onerror="this.parentNode.innerHTML='<div style=&quot;padding:8px 10px;border:1px dashed #ccc;border-radius:4px;font-size:.72rem;color:#999&quot;>⚠ Figure ${q.figureNum} image unavailable</div>'"></div>` : ''}
         ${optHtml}${fibAns}
       </div>`;
     };
