@@ -2795,11 +2795,13 @@ async function logAccessEvent(user){
     await db.ref(`${basePath}/meta/email`).set(user.email||'');
     await db.ref(`${basePath}/meta/uid`).set(user.uid);
     await db.ref(`${basePath}/meta/role`).set(role);
-    // firstSeen: only write if it doesn't exist yet
-    const firstSeenRef = db.ref(`${basePath}/meta/firstSeen`);
-    firstSeenRef.once('value').then(snap => {
-      if(!snap.exists()) firstSeenRef.set(nowMs);
-    }).catch(()=>{});
+    // firstSeen: write-once, enforced server-side by the security rule (".write":
+    // "!data.exists()") rather than a client read-then-write — accessLog reads are
+    // admin-only, so a client-side check-then-set (or transaction, which needs read
+    // access to simulate) silently lost this write almost every time. A plain blind
+    // set() here either lands (first time) or is rejected by the rule (every time
+    // after) — either way it can't race or get lost.
+    await db.ref(`${basePath}/meta/firstSeen`).set(nowMs).catch(()=>{});
     await db.ref(`${basePath}/sessions/${nowMs}`).set({ ts: nowMs, name });
     console.log(`✓ accessLog written: ${role}/${logKey}`);
   } catch(e){
@@ -3045,7 +3047,7 @@ async function doStuOAuth(provider){
 async function showStuJoinScreen(user){
 
   stuAuthUser = user;
-  logAccessEvent(user).catch(()=>{});
+  await logAccessEvent(user).catch(()=>{});
   try {
     // Get or create profile
     let profile = await dbGet('studentProfiles/' + user.uid);

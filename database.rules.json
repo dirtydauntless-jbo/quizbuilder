@@ -164,7 +164,23 @@
     },
     "accessLog": {
       ".read": "auth != null && (root.child('config/masterAdmins').child(auth.uid).val() === true || root.child('config/superAdmins').child(auth.uid).val() === true)",
-      ".write": "auth != null"
+      "$role": {
+        "$key": {
+          "meta": {
+            "firstSeen": {
+              ".write": "auth != null && !data.exists()"
+            },
+            "$field": {
+              ".write": "auth != null"
+            }
+          },
+          "sessions": {
+            "$ts": {
+              ".write": "auth != null"
+            }
+          }
+        }
+      }
     },
     "moderationLog": {
       ".read": "auth != null && (root.child('config/masterAdmins').child(auth.uid).val() === true || root.child('config/superAdmins').child(auth.uid).val() === true)",
