@@ -1844,6 +1844,7 @@ setTimeout(function(){
           <div class="q-text" id="aqQText" style="margin:0;flex:1;min-width:200px"></div>
           <span class="tag" id="aqQTag"></span>
         </div>
+        <div id="aqFigure" style="display:none;margin:-8px 0 18px;text-align:center"></div>
         <div id="aqOptArea"></div>
         <div class="feedback" id="aqFB"></div>
       </div>
@@ -11466,6 +11467,16 @@ function renderStuQ(){
   }
   document.getElementById('aqQText').textContent = q.q;
   document.getElementById('aqSecBadge').textContent = q.topic;
+  const figEl = document.getElementById('aqFigure');
+  if(figEl){
+    if(q.figureNum){
+      figEl.style.display = 'block';
+      figEl.innerHTML = `<img src="/public/figures/figure-${q.figureNum}.jpg" alt="Figure ${q.figureNum}" style="max-width:100%;max-height:340px;border:1px solid var(--border);border-radius:var(--r)" onerror="this.parentNode.innerHTML='<div style=&quot;padding:11px 14px;border:1px dashed var(--border);border-radius:var(--r);font-family:monospace;font-size:.78rem;color:var(--muted);text-align:center&quot;>⚠ Figure ${q.figureNum} image unavailable — contact your instructor</div>'">`;
+    } else {
+      figEl.style.display = 'none';
+      figEl.innerHTML = '';
+    }
+  }
   document.getElementById('aqQ').textContent = `${stuCur+1}/${TQ}`;
   document.getElementById('aqCorrect').textContent = answered; // show answered count, not correct
   document.getElementById('aqScore').textContent = answered>0 ? `${answered}/${TQ}` : '--'; // show progress not score
