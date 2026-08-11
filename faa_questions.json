@@ -3242,8 +3242,8 @@
      "B": "36,002",
      "C": "62,208"
     },
-    "correct": "A",
-    "explanation": "Evaluating the expression in Figure 66 using proper order of operations and arithmetic yields 35,998 as the correct result. Basic arithmetic and algebraic operations are covered in the mathematics chapter of the AMT handbook. (Ref: FAA-H-8083-30B, Ch 1 — Mathematics)",
+    "correct": "B",
+    "explanation": "Evaluating the expression in Figure 66 using proper order of operations — 10^3 = 1,000 and the square root of 1,296 = 36, so 1,000 x 36 = 36,000, then -4 + 6 + 36,000 = 36,002. Basic arithmetic and algebraic operations are covered in the mathematics chapter of the AMT handbook. (Ref: FAA-H-8083-30B, Ch 1 — Mathematics)",
     "acs": [
      "AM.I.H.K6"
     ],
