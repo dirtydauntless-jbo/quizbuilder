@@ -19,3 +19,6 @@ answer-key.txt
 figures-disagreements.csv
 figures-review.html
 _changed.json
+
+# codemap index (regenerated locally)
+.codemap/

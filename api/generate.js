@@ -303,6 +303,19 @@ function getFaaQuestions(topic, n, seenSet) {
   }));
 }
 
+// Pull one random slice of a topic's 8083 reference text (capped) to ground a prompt that isn't
+// itself batch-rotating across the whole section (variant rewriting and its QC pass need SOME
+// grounding, but don't need the full per-batch rotation generateForTopic does for from-scratch
+// generation).
+function topicRefSlice(topic, content, cap = 6000) {
+  const subject = TOPIC_SUBJECT[topic] || 'general';
+  const text = content[subject]?.[topic] || '';
+  if (!text) return '';
+  if (text.length <= cap) return text;
+  const start = Math.floor(Math.random() * (text.length - cap));
+  return text.slice(start, start + cap);
+}
+
 // ── AI-generate questions for a topic (3-choice to match FAA format) ─────────
 // Generated in small batches (≤8 per Claude call) so every question stays tightly on the
 // SELECTED topic and its 8083 section — a single large request overflows the token budget and
@@ -386,13 +399,14 @@ Format: [{"question":"...","choices":{"A":"...","B":"...","C":"..."},"correct":"
 // Generate BRAND-NEW O&P multiple-choice from the O&P study bank, vetting each one (QC pass +
 // distinctness vet) so what we cache/serve is already clean. The pool-aware generateFromOP() below
 // reuses cached O&P from the cookie jar first and only calls this to top up.
-async function generateFreshOP(topic, qCount) {
+async function generateFreshOP(topic, qCount, content) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const op = getOPBank();
   const pool = op[subject] && op[subject][topic];
   if (!Array.isArray(pool) || !pool.length) return [];
   const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
+  const ref = content ? topicRefSlice(topic, content) : '';
   const picks = shuffle(pool.slice()).slice(0, Math.min(qCount + 3, pool.length));  // extra; vetting drops some
   let raw = [];
   for (let i = 0; i < picks.length; i += AI_BATCH) {
@@ -417,8 +431,9 @@ ${JSON.stringify(batch.map(c => ({ question: c.q, answer: c.a })))}`;
   raw = await filterOnTopic(raw, topic, subject); // topic guard (see generateFreshVariants)
   if (!raw.length) return [];
   const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
-  raw = (await Promise.all(chunk(raw, 10).map(c => qcBatch(c)))).flat();
+  raw = (await Promise.all(chunk(raw, 10).map(c => qcBatch(c, ref)))).flat();
   raw = (await Promise.all(chunk(raw, 10).map(c => vetDistinctChoices(c)))).flat();
+  raw = (await Promise.all(chunk(raw, 10).map(c => vetSingleCorrectAnswer(c, ref)))).flat();
   raw = raw.filter(q => q && q.question && choicesAllDistinct(q.choices) && q.correct && (q.correct in q.choices));
   return raw.slice(0, qCount).map(q => ({ question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation || '', topic, subject, handbook, source: 'op' }));
 }
@@ -426,7 +441,7 @@ ${JSON.stringify(batch.map(c => ({ question: c.q, answer: c.a })))}`;
 // Pool-aware O&P supplier — mirrors generateFaaVariants. Reuses vetted O&P from the SAME cookie
 // jar (entries tagged kind:'op'), generating fresh only to top up, and registers fresh ones so
 // they accrue clean deploys and graduate to the jar (reused instead of regenerated every exam).
-async function generateFromOP(topic, qCount, flaggedMap) {
+async function generateFromOP(topic, qCount, flaggedMap, content) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const safeT = _safeKey(topic);
@@ -447,7 +462,7 @@ async function generateFromOP(topic, qCount, flaggedMap) {
   reuse = reuse.slice(0, reuseN);
   const reused = reuse.map(p => ({ ...p.q, topic, subject, source: 'op', _vid: p.vid, _vstage: p.stage }));
 
-  const fresh = freshN > 0 ? await generateFreshOP(topic, freshN) : [];
+  const fresh = freshN > 0 ? await generateFreshOP(topic, freshN, content) : [];
   for (const q of fresh) {
     const vid = _qHash(q.question);
     q._vid = vid; q._vstage = 'pending';
@@ -503,7 +518,7 @@ ${items.map((q, i) => `[${i}] ${q.question}`).join('\n')}`;
   return items; // never drop everything on a parse/API failure
 }
 
-async function generateFreshVariants(topic, qCount, overrides) {
+async function generateFreshVariants(topic, qCount, overrides, content) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const handbook = subject === 'general' ? 'FAA-H-8083-30B' : subject === 'airframe' ? 'FAA-H-8083-31B' : 'FAA-H-8083-32B';
@@ -515,12 +530,21 @@ async function generateFreshVariants(topic, qCount, overrides) {
   if (!seeds.length) return [];
   // Number-tweak recomputes an answer, so keep it off pure-calculation and spec/timing topics.
   const allowNumberTweak = !FAA_ONLY_TOPICS.has(topic) && !HIGH_FAA_TOPICS.has(topic);
+  // Ground the rewrite in the actual 8083 text — without this, a DEFINITION FLIP (which requires
+  // correctly reasoning about which of the ORIGINAL WRONG choices becomes true under a negated
+  // stem, e.g. "which will NOT...") has nothing to check itself against but the model's unaided
+  // recall, which is the leading cause of wrong-answer-key variants (esp. on CFR/regulation topics
+  // with "except" carve-outs).
+  const ref = content ? topicRefSlice(topic, content) : '';
+  const refBlock = ref
+    ? `\n\nGround every fact in this reference text from ${handbook} (the "${topic}" section) — verify your new correct answer against it, and do not rely on outside/general knowledge where it conflicts with this passage:\n\n${ref}\n`
+    : '';
 
-  const buildPrompt = (batch) => `You rewrite real FAA Aviation Maintenance Technician (AMT) written-test questions into NEW variant questions — the way the real FAA exam recycles its question bank. Every variant must stay STRICTLY on the topic "${topic}" (${subject} subject).
+  const buildPrompt = (batch) => `You rewrite real FAA Aviation Maintenance Technician (AMT) written-test questions into NEW variant questions — the way the real FAA exam recycles its question bank. Every variant must stay STRICTLY on the topic "${topic}" (${subject} subject).${refBlock}
 
 For EACH original question below (its choices are given with the correct one marked), produce ONE new 3-choice multiple-choice question (A, B, C; exactly one correct) by applying the SINGLE best-fitting strategy:
 
-1. DEFINITION FLIP — reword the stem so that a PREVIOUSLY-WRONG choice becomes the correct answer (ask for the opposite condition, the excluded case, the "least/except", or a different property). The new correct answer must be one of the original WRONG choices (or a correct restatement of it); include the original correct answer as a now-INCORRECT distractor.
+1. DEFINITION FLIP — reword the stem so that a PREVIOUSLY-WRONG choice becomes the correct answer (ask for the opposite condition, the excluded case, the "least/except", or a different property). The new correct answer must be one of the original WRONG choices (or a correct restatement of it); include the original correct answer as a now-INCORRECT distractor. SELF-CHECK before finalizing: this strategy is the easiest one to get backwards — after drafting, re-read the reference text (if given) and re-derive from scratch which choice the passage actually supports for the NEW (flipped) stem; do not just assume "the old wrong answer is now right" without re-verifying it against the source. If you cannot confidently verify the flipped answer, use strategy 2 or 3 instead.
 
 2. DISTRACTOR FOCAL POINT — take one of the original answer choices and make IT the subject of a brand-new question, then write two fresh, plausible-but-false distractors. The variant now directly tests that concept.
 
@@ -562,10 +586,15 @@ ${JSON.stringify(batch.map(q => ({ question: q.question, choices: q.choices, cor
 
   // Vet fresh variants NOW (QC pass + dedicated distinctness vet), in chunks of 10, so what we
   // store in the cookie jar is already clean. Reused pool variants skip this — they were vetted
-  // when first created and are frozen.
+  // when first created and are frozen. Pass the same reference slice into the QC pass so its 0a
+  // accuracy re-check has actual source material to verify against, not just unaided recall.
   const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
-  raw = (await Promise.all(chunk(raw, 10).map(c => qcBatch(c)))).flat();
+  raw = (await Promise.all(chunk(raw, 10).map(c => qcBatch(c, ref)))).flat();
   raw = (await Promise.all(chunk(raw, 10).map(c => vetDistinctChoices(c)))).flat();
+  // Variants are the highest-risk source for a hidden second correct answer (DEFINITION FLIP
+  // in particular manufactures a "which will NOT..." stem, exactly the shape that tends to admit
+  // more than one true choice), so run the dedicated single-correct-answer vet here too.
+  raw = (await Promise.all(chunk(raw, 10).map(c => vetSingleCorrectAnswer(c, ref)))).flat();
   raw = raw.filter(q => q && q.question && choicesAllDistinct(q.choices) && q.correct && (q.correct in q.choices));
 
   return raw.slice(0, qCount).map(q => ({
@@ -577,7 +606,7 @@ ${JSON.stringify(batch.map(q => ({ question: q.question, choices: q.choices, cor
 // Pool-aware variant supplier: reuse vetted variants from the cookie jar (and give pending ones
 // exam exposure so they can graduate), generating fresh only to cover the shortfall + a small
 // "grow" trickle while the jar is still thin. Fresh variants are registered into the pool here.
-async function generateFaaVariants(topic, qCount, overrides, flaggedMap, seenSet) {
+async function generateFaaVariants(topic, qCount, overrides, flaggedMap, seenSet, content) {
   if (qCount < 1) return [];
   const subject = TOPIC_SUBJECT[topic] || 'general';
   const safeT = _safeKey(topic);
@@ -612,7 +641,7 @@ async function generateFaaVariants(topic, qCount, overrides, flaggedMap, seenSet
 
   // Fresh: generate (already QC'd + distinctness-vetted inside), register into the pool as
   // pending, and tag with their new variant id + stage for the client's lifecycle tracking.
-  const fresh = freshN > 0 ? await generateFreshVariants(topic, freshN, overrides) : [];
+  const fresh = freshN > 0 ? await generateFreshVariants(topic, freshN, overrides, content) : [];
   for (const q of fresh) {
     const vid = _qHash(q.question);
     q._vid = vid; q._vstage = 'pending';
@@ -626,13 +655,20 @@ async function generateFaaVariants(topic, qCount, overrides, flaggedMap, seenSet
 }
 
 // ── QC pass — run on AI-generated and O&P-converted questions ────────────────
-async function qcBatch(questions) {
+// refText (optional): a slice of the source 8083 reference material for this topic. Without it,
+// the 0a accuracy check has nothing to verify against but the model's own unaided recall — which
+// is exactly how wrong "corrected" answers slip through on inverted (NOT/EXCEPT) rewrites.
+async function qcBatch(questions, refText) {
   if (!questions.length) return questions;
 
-  const prompt = `You are a quality-control editor for FAA A&P exam questions. Review each question below and fix any issues with the answer choices.
+  const groundingBlock = refText
+    ? `\n\nUse this reference text as ground truth for the ACCURACY check (item 0a) below — verify the marked correct answer against it, and do not rely on outside/general knowledge where it conflicts with this passage:\n\n${refText}\n`
+    : '';
 
+  const prompt = `You are a quality-control editor for FAA A&P exam questions. Review each question below and fix any issues with the answer choices.
+${groundingBlock}
 Check for and fix:
-0a. ACCURACY: confirm the marked correct answer is factually correct per FAA standards. If the marked answer is actually wrong, fix it — re-mark the truly correct choice, or correct that choice's wording. Never leave a wrong answer marked correct.
+0a. ACCURACY (critical): confirm the marked correct answer is factually correct per FAA standards${refText ? ' and the reference text above' : ''}. If the marked answer is actually wrong, FIX IT — re-mark the truly correct choice (updating the "correct" field), or correct that choice's wording. Never leave a wrong answer marked correct. This is especially error-prone on questions phrased with "NOT / EXCEPT / which will not" — re-derive the answer from first principles rather than trusting the existing mark.
 0b. DIFFICULTY: if a question is trivially easy or answerable without real subject knowledge (obvious answer, silly distractors), rewrite it to FAA-written-test level — make the distractors plausible and, where natural, turn it into an application/scenario question. Keep it accurate.
 0. EXACTLY ONE CORRECT ANSWER (most important): verify that ONLY the marked correct choice is factually true; the other two MUST be factually FALSE. If any wrong choice is ALSO a true/defensible statement or a valid alternative formula for what the question asks, REWRITE that choice so it is genuinely incorrect — use a wrong formula, a wrong definition, or a value that does not apply. Two common traps to fix: (a) multiple valid formulas for the same quantity (e.g., "how is electrical power calculated" with both P = V × I and P = I² × R) and (b) a law asked open-endedly whose choices are just correct rearrangements (e.g., "relationship between voltage, current, resistance?" with V = I × R, I = V / R, and R = V / I — all correct). In these cases, keep the marked answer and rewrite the OTHER choices into incorrect rearrangements/formulas (e.g., R = I / V, P = V / I) so only one choice is right. After editing, re-read all three choices and confirm a knowledgeable A&P technician would accept exactly one and reject the other two.
 1. If the correct answer has a number, every wrong answer must also have a DIFFERENT specific number (same units — do not drop units or change to a different unit type)
@@ -645,7 +681,7 @@ Check for and fix:
 
 8. EXPLANATION must NOT reference choices by letter (no "Choice A/B/C" or "option B") — the choice order is randomized after this step, so any letter reference will be wrong. Rewrite such references to describe the option by its content, or just explain why the correct answer is right.
 
-Return the corrected questions as a JSON array in EXACTLY the same format, preserving all fields (question, choices, correct, explanation, topic, handbook, source). Do not change the question text or the correct answer's meaning — only fix the wrong answer choices (and, if a distractor was independently correct, make it incorrect). No markdown, just the JSON array.
+Return the corrected questions as a JSON array in EXACTLY the same format, preserving all fields (question, choices, correct, explanation, topic, handbook, source). Do not change the question text. Leave the correct answer as-is UNLESS item 0a found it factually wrong — in that case, update "correct" (and the choice wording if needed) to the true answer. Otherwise, only fix the wrong answer choices (and, if a distractor was independently correct, make it incorrect). No markdown, just the JSON array.
 
 Questions to review:
 ${JSON.stringify(questions)}`;
@@ -690,6 +726,47 @@ ${JSON.stringify(questions)}`;
   } catch { return questions; }
 }
 
+// ── Dedicated "exactly one TRUE choice" vet (runs AFTER vetDistinctChoices) ──
+// vetDistinctChoices only catches choices that mean the SAME thing (paraphrases/duplicates).
+// It does NOT catch two choices that are worded completely differently but are BOTH
+// independently, factually defensible as correct — e.g. for "which will NOT result in galvanic
+// corrosion?", both "isolating unlike metals with a coating" and "a single metal with no
+// dissimilar metal present" are legitimately true, even though neither is a paraphrase of the
+// other. This is the failure mode qcBatch's item 0 is supposed to cover too, but qcBatch is a
+// long checklist reviewing everything at once (units, length, difficulty, distinctness...) and
+// this specific judgment call — "could a knowledgeable tech also defend choice B or C as true?"
+// — needs its own focused pass instead of being one line among many. Same remediation pattern as
+// vetDistinctChoices: rewrite the extra-true choice into something unambiguously false, or blank
+// `correct` if that can't be done confidently so the caller drops the question.
+async function vetSingleCorrectAnswer(questions, refText) {
+  if (!questions.length) return questions;
+
+  const groundingBlock = refText
+    ? `\n\nUse this reference text as ground truth when judging each choice's truth value — do not rely on outside/general knowledge where it conflicts with this passage:\n\n${refText}\n`
+    : '';
+
+  const prompt = `You are a strict FAA A&P exam auditor. Your ONLY job is to catch questions that have MORE THAN ONE defensible correct answer, even when the choices are worded nothing alike.
+${groundingBlock}
+For EACH question below:
+- IGNORE which choice is currently marked "correct." Independently evaluate A, B, and C each on their own: would a knowledgeable A&P technician, reading ONLY this choice against the question stem, accept it as a TRUE statement that correctly answers the question?
+- This is different from checking for duplicate wording — two choices can use completely different words and STILL both be true answers to the stem. Watch especially for: negated stems ("which will NOT...", "EXCEPT", "which is LEAST likely...") where more than one listed condition genuinely satisfies the negation; broad or compound stems where two choices are each partially or fully correct; and choices that are both valid depending on unstated interpretation.
+- If you find that ONLY the marked choice is true and both others are genuinely false: return the question unchanged.
+- If you find that a WRONG-marked choice is also true (or arguably true) alongside the marked correct one: KEEP the marked correct choice exactly as-is, and REWRITE the other true choice into a clearly FALSE but plausible statement on the same topic — matching its original length, units, and style — so only one choice remains true.
+- If you cannot confidently rewrite it into something unambiguously false (e.g. the question concept itself doesn't logically support a single answer), set that question's "correct" field to "" (empty string) so it will be discarded rather than shipped with a double answer.
+- Do NOT change the question text, the marked correct choice, or the explanation — except remove any "Choice A/B/C"/"option B" letter reference (choice order is randomized later).
+
+Return a JSON array in the SAME order and format, preserving ALL fields present on each item (question, choices, correct, explanation, topic, handbook, source, subject, id, figureNum). No markdown — just the JSON array.
+
+Questions:
+${JSON.stringify(questions)}`;
+
+  try {
+    const arr = parseJSON(await callClaude(prompt, 4096));
+    if (Array.isArray(arr) && arr.length === questions.length) return arr;
+    return questions;
+  } catch { return questions; }
+}
+
 // ── Mix FAA + O&P + AI questions for one topic ───────────────────────────────
 async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride, varRatioOverride, overrides, flaggedMap, seenSet) {
   if (total < 1) return [];
@@ -718,8 +795,8 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
 
   const [faaQuestions, varQuestions, opQuestions, aiQuestions] = await Promise.all([
     Promise.resolve(getFaaQuestions(topic, faaCount, seenSet)),
-    generateFaaVariants(topic, varCount, overrides, flaggedMap, seenSet),
-    generateFromOP(topic, opCount, flaggedMap),
+    generateFaaVariants(topic, varCount, overrides, flaggedMap, seenSet, content),
+    generateFromOP(topic, opCount, flaggedMap, content),
     generateForTopic(topic, aiCount, content),
   ]);
 
@@ -818,7 +895,15 @@ module.exports = async function handler(req, res) {
     const vchunks = [];
     for (let i = 0; i < genReviewed.length; i += 10) vchunks.push(genReviewed.slice(i, i + 10));
     const vetted = await Promise.all(vchunks.map(c => vetDistinctChoices(c)));
-    questions = [...faaQs, ...vetted.flat()];
+    let genVetted = vetted.flat();
+
+    // Step 2.3: dedicated single-correct-answer vet — catch two choices that are worded nothing
+    // alike but are BOTH independently defensible as correct (distinct from 2.2, which only
+    // catches worded duplicates). Re-chunk and run focused, same pattern as 2.2.
+    const schunks = [];
+    for (let i = 0; i < genVetted.length; i += 10) schunks.push(genVetted.slice(i, i + 10));
+    const singleChecked = await Promise.all(schunks.map(c => vetSingleCorrectAnswer(c)));
+    questions = [...faaQs, ...singleChecked.flat()];
 
     // Step 2.4: drop any question whose choices aren't all distinct OR whose correct answer is
     // missing/invalid (the vet blanks `correct` on questions it could not make distinct).

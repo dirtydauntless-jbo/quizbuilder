@@ -866,6 +866,7 @@ setTimeout(function(){
     <button class="tab-btn" onclick="instSwitchTab('quizzes')">Create/Assign a Quiz</button>
     <button class="tab-btn" onclick="instSwitchTab('assign')">📝 Assign Practice Exam</button>
     <button class="tab-btn" id="instTabSim" onclick="instSwitchTab('sim')">📐 Measurement Simulator</button>
+    <button class="tab-btn" onclick="instOpenClassStudy()">🃏 Study / Flashcards</button>
     <button class="tab-btn hidden" id="adminTabBtn" onclick="instSwitchTab('admin')">⚙ Admin</button>
     <button class="tab-btn hidden" id="masterDashTabBtn" onclick="instSwitchTab('masterdash')">📊 Master Dashboard</button>
   </div>
@@ -1429,13 +1430,17 @@ setTimeout(function(){
   </div>
   <div id="opSimStuBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator"></div>
   <button id="opSimStuBtn" class="hidden" onclick="opSimOpenSignup()" style="display:block;margin:8px auto;padding:10px 24px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:monospace;font-weight:700;letter-spacing:1px;font-size:.8rem;cursor:pointer">✈ Sign Up for the O&amp;P Simulator</button>
+  <div id="instClassStudyBanner" class="hidden" style="background:rgba(139,92,246,.12);border-bottom:1px solid rgba(139,92,246,.35);padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap">
+    <span style="font-family:monospace;font-size:.78rem;color:#8b5cf6;font-weight:700">🃏 INSTRUCTOR STUDY MODE — flashcard progress saves under your instructor account, not a student</span>
+    <button onclick="instReturnFromClassStudy()" class="btn btn-sm" style="font-size:.75rem;background:#8b5cf6;border-color:#8b5cf6;color:#fff">← Back to Instructor Dashboard</button>
+  </div>
   <div id="announceStuBanner" class="announce-banner-wrap hidden"></div>
 
   <!-- Student nav tabs -->
   <div style="background:var(--panel2);border-bottom:2px solid var(--border);display:flex;gap:0;overflow-x:auto">
     <button id="stuTabStudy" onclick="stuSwitchTab('study')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:monospace;font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--blue);color:#fff;border-bottom:3px solid var(--blue)">
-      ✈ STUDY O&amp;P QUESTIONS
+      ✈ STUDY ORAL &amp; PRACTICAL QUESTIONS
     </button>
     <button id="stuTabPractice" onclick="stuSwitchTab('practice')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:monospace;font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
@@ -1591,7 +1596,8 @@ setTimeout(function(){
     <div style="max-width:720px;margin:0 auto;padding:20px">
       <div style="margin-bottom:20px">
         <div class="section-head" style="margin:0 0 4px">📋 My FAA Test Codes</div>
-        <div style="font-family:monospace;font-size:.75rem;color:var(--muted)">Upload your AKTR or type in your missed ACS codes to find what to study.</div>
+        <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:12px">Upload your AKTR or type in your missed ACS codes to find what to study.</div>
+        <button onclick="acsScrollToPracticals()" class="btn btn-primary" style="font-size:.82rem;padding:9px 16px">🎯 Show Me My Expected Practicals</button>
       </div>
 
       <!-- Upload / Paste Panel -->
@@ -2426,6 +2432,8 @@ let stuCur = 0;
 let stuQuizNavList = []; // ordered list of {qid, iid, classroomId} for prev/next navigation
 let _retakeUsedThisSession = false; // blocks re-retake on same results screen
 let _stuScoreListener = null; // Firebase listener for live score updates on results screen
+let _stuOverrideListener = null; // Firebase listener for live instructor-override updates on results screen
+let stuAnswerOverrides = {}; // {questionIndex: true|false} — instructor grading overrides for the active finished quiz
 let _spScoreMode = 'quiz'; // 'quiz' = latest/current quiz score, 'avg' = average all
 // OAuth redirect flag — prevents onAuthStateChanged racing getRedirectResult
 let _handlingRedirect = false;
@@ -4943,7 +4951,7 @@ const LANG_STRINGS = {
     forgot_password:'Forgot password?',sign_out:'Sign Out',
     join_title:'Join a Classroom',join_sub:'Enter the 5-character code from your instructor',
     join_placeholder:'XXXXX',join_btn:'Join Classroom',
-    nav_study:'Study O&P Questions',nav_quizzes:'Instructor Quizzes',
+    nav_study:'Study Oral & Practical Questions',nav_quizzes:'Instructor Quizzes',
     nav_faa:'My FAA Test Codes',nav_sim:'Measurement Simulator',nav_dme:'DME Locator',
     quiz_submit:'✓ Submit Quiz',quiz_prev:'← Prev',quiz_next:'Next →',quiz_finish:'Finish',
     quiz_review:'Review Your Answers',quiz_keep_reviewing:'← Keep Reviewing',
@@ -4979,7 +4987,7 @@ const LANG_STRINGS = {
     forgot_password:'¿Olvidaste tu contraseña?',sign_out:'Cerrar Sesión',
     join_title:'Unirse a un Aula',join_sub:'Ingresa el código de 5 caracteres de tu instructor',
     join_placeholder:'XXXXX',join_btn:'Unirse al Aula',
-    nav_study:'Estudiar Preguntas O&P',nav_quizzes:'Cuestionarios del Instructor',
+    nav_study:'Estudiar Preguntas Orales y Prácticas',nav_quizzes:'Cuestionarios del Instructor',
     nav_faa:'Mis Códigos de Prueba FAA',nav_sim:'Simulador de Medición',nav_dme:'Localizador DME',
     quiz_submit:'✓ Enviar Cuestionario',quiz_prev:'← Anterior',quiz_next:'Siguiente →',quiz_finish:'Terminar',
     quiz_review:'Revisar tus Respuestas',quiz_keep_reviewing:'← Seguir Revisando',
@@ -5015,7 +5023,7 @@ const LANG_STRINGS = {
     forgot_password:'Mot de passe oublié?',sign_out:'Déconnexion',
     join_title:'Rejoindre une Classe',join_sub:'Entrez le code à 5 caractères de votre instructeur',
     join_placeholder:'XXXXX',join_btn:'Rejoindre la Classe',
-    nav_study:'Étudier les Questions O&P',nav_quizzes:'Quiz de l\'Instructeur',
+    nav_study:'Étudier les Questions Orales et Pratiques',nav_quizzes:'Quiz de l\'Instructeur',
     nav_faa:'Mes Codes de Test FAA',nav_sim:'Simulateur de Mesure',nav_dme:'Localisateur DME',
     quiz_submit:'✓ Soumettre le Quiz',quiz_prev:'← Précédent',quiz_next:'Suivant →',quiz_finish:'Terminer',
     quiz_review:'Réviser vos Réponses',quiz_keep_reviewing:'← Continuer la Révision',
@@ -5051,7 +5059,7 @@ const LANG_STRINGS = {
     forgot_password:'忘记密码？',sign_out:'退出登录',
     join_title:'加入课堂',join_sub:'输入教师提供的5位代码',
     join_placeholder:'XXXXX',join_btn:'加入课堂',
-    nav_study:'学习O&P题目',nav_quizzes:'教师测验',
+    nav_study:'学习口头和实践题目',nav_quizzes:'教师测验',
     nav_faa:'我的FAA测试代码',nav_sim:'测量模拟器',nav_dme:'DME定位器',
     quiz_submit:'✓ 提交测验',quiz_prev:'← 上一题',quiz_next:'下一题 →',quiz_finish:'完成',
     quiz_review:'复查您的答案',quiz_keep_reviewing:'← 继续复查',
@@ -10899,6 +10907,12 @@ async function openStuQuizReview(){
   body.innerHTML = '<div class="empty-state">Loading...</div>';
   aiEl.innerHTML = '';
 
+  try{
+    const _ocClassId = activeQuiz.classroomId || stuSession.classroomId;
+    const _ocKey = stuSession.uid || safeKey(stuSession.name);
+    stuAnswerOverrides = (await dbGet(`quizOverrides/${_ocClassId}/${activeQuiz.id}/${_ocKey}`)) || {};
+  }catch(e){ stuAnswerOverrides = {}; }
+
   const questions = activeQuiz.questions;
   const TQ = questions.length;
   let correctCount = 0;
@@ -10907,7 +10921,7 @@ async function openStuQuizReview(){
   const rows = questions.map((q, i) => {
     const ans = stuAnswers[i];
     const answered = ans !== null && ans !== undefined;
-    const isCorrect = answered && stuCheckOk(q, ans);
+    const isCorrect = answered && stuCheckOkEff(q, i, ans);
     if(isCorrect) correctCount++;
 
     // Get display text for student's answer
@@ -10970,7 +10984,7 @@ async function openStuQuizReview(){
   aiEl.innerHTML = '<div class="empty-state" style="padding:12px">Generating personalized feedback...</div>';
 
   const wrongQ = questions
-    .map((q,i)=>({q, i, ans: stuAnswers[i], correct: stuCheckOk(q,stuAnswers[i])}))
+    .map((q,i)=>({q, i, ans: stuAnswers[i], correct: stuCheckOkEff(q,i,stuAnswers[i])}))
     .filter(x=>!x.correct && x.ans !== null)
     .slice(0,5);
 
@@ -11574,6 +11588,15 @@ function stuCheckOk(q, ans){
   return fibSmartMatch(String(ans), String(q.answer || q.a || ''));
 }
 
+// Same as stuCheckOk, but honors an instructor's post-grading override for question index i
+// (set via the "Mark Correct" button in the instructor's student-profile review). Every place
+// that scores a FINISHED quiz for display (breakdown, inline review, perf insight) should use
+// this instead of calling stuCheckOk directly, so those views stay in sync with the score.
+function stuCheckOkEff(q, i, ans){
+  if(stuAnswerOverrides[i] !== undefined) return stuAnswerOverrides[i];
+  return stuCheckOk(q, ans);
+}
+
 function fibSmartMatch(student, correct){
   const norm = s => s.toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -11808,15 +11831,17 @@ async function stuShowResults(silent=false){
   const TQ = questions.length;
   let correct = stuAnswers.filter((a,i)=>a!==null&&stuCheckOk(questions[i],a)).length;
 
+  const _rcClassId = activeQuiz.classroomId || stuSession.classroomId;
+  const _rcKey = stuSession.uid || safeKey(stuSession.name);
+
   if(!silent){
     await stuSaveProgress(true);
+    stuAnswerOverrides = {};
   } else {
     // When reviewing a finished quiz: use max(recomputed, stored) so that
     // - quiz-answer edits by instructor increase the score
     // - instructor overrides (quizOverrides) are never overwritten with a lower value
     try{
-      const _rcClassId = activeQuiz.classroomId || stuSession.classroomId;
-      const _rcKey = stuSession.uid || safeKey(stuSession.name);
       const stored = (await dbGet(`quizProgress/${_rcClassId}/${activeQuiz.id}/${_rcKey}/correctCount`)) || 0;
       if(correct > stored){
         await dbUpdate(`quizProgress/${_rcClassId}/${activeQuiz.id}/${_rcKey}`, { correctCount: correct, totalCount: TQ });
@@ -11824,13 +11849,17 @@ async function stuShowResults(silent=false){
         correct = stored; // instructor gave extra credit via override — show that number
       }
     }catch(e){}
+    // Pull instructor grading overrides so the breakdown/review below match the score above
+    try{
+      stuAnswerOverrides = (await dbGet(`quizOverrides/${_rcClassId}/${activeQuiz.id}/${_rcKey}`)) || {};
+    }catch(e){ stuAnswerOverrides = {}; }
   }
 
   document.getElementById('aqQArea').style.display='none';
   document.getElementById('aqFinalScore').textContent=`${correct}/${TQ}`;
   const groups=getStuSecGroups();
   document.getElementById('aqBreakdown').innerHTML=Object.entries(groups).map(([topic,idxs])=>{
-    const tc=idxs.filter(i=>stuAnswers[i]!==null&&stuCheckOk(questions[i],stuAnswers[i])).length;
+    const tc=idxs.filter(i=>stuAnswers[i]!==null&&stuCheckOkEff(questions[i],i,stuAnswers[i])).length;
     const pct=Math.round((tc/idxs.length)*100);
     return `<div class="breakdown-item"><span class="breakdown-name">${topic}</span>
       <div class="breakdown-bar"><div class="breakdown-fill" style="width:${pct}%"></div></div>
@@ -11860,6 +11889,31 @@ async function stuShowResults(silent=false){
     });
   }catch(e){}
 
+  // Live-update breakdown/review/insight if the instructor marks an answer correct/incorrect
+  // while the student is on this screen — same trigger as the score listener above, but this
+  // one also has to rebuild the per-topic and per-question displays, not just a number.
+  if(_stuOverrideListener){ _stuOverrideListener.off(); _stuOverrideListener = null; }
+  try{
+    const _oClassId = activeQuiz.classroomId || stuSession?.classroomId;
+    const _oKey = stuSession?.uid || safeKey(stuSession?.name || '');
+    const _overrideRef = db.ref(`quizOverrides/${_oClassId}/${activeQuiz.id}/${_oKey}`);
+    _stuOverrideListener = _overrideRef;
+    _overrideRef.on('value', snap => {
+      stuAnswerOverrides = snap.val() || {};
+      const groups2 = getStuSecGroups();
+      const bdEl = document.getElementById('aqBreakdown');
+      if(bdEl) bdEl.innerHTML = Object.entries(groups2).map(([topic,idxs])=>{
+        const tc=idxs.filter(i=>stuAnswers[i]!==null&&stuCheckOkEff(questions[i],i,stuAnswers[i])).length;
+        const pct=Math.round((tc/idxs.length)*100);
+        return `<div class="breakdown-item"><span class="breakdown-name">${topic}</span>
+          <div class="breakdown-bar"><div class="breakdown-fill" style="width:${pct}%"></div></div>
+          <span class="breakdown-score" style="color:${pct>=70?'var(--cl)':'var(--wl)'}">${tc}/${idxs.length}</span></div>`;
+      }).join('');
+      stuBuildInlineReview();
+      stuBuildPerfInsight();
+    });
+  }catch(e){}
+
   // Build inline answer review
   stuBuildInlineReview();
 
@@ -11886,7 +11940,7 @@ function stuBuildInlineReview(){
   const rows = questions.map((q, i) => {
     const ans = stuAnswers[i];
     const answered = ans !== null && ans !== undefined;
-    const isCorrect = answered && stuCheckOk(q, ans);
+    const isCorrect = answered && stuCheckOkEff(q, i, ans);
     if(isCorrect) correctCount++;
 
     let stuAnsText = '(not answered)';
@@ -11936,7 +11990,7 @@ function stuBuildInlineReview(){
   aiEl.innerHTML = '<div class="empty-state" style="padding:12px">Generating personalized feedback...</div>';
   const TQ = questions.length;
   const pct = Math.round((correctCount / TQ) * 100);
-  const wrongQ = questions.map((q,i)=>({q, i, ans:stuAnswers[i], correct:stuCheckOk(q,stuAnswers[i])}))
+  const wrongQ = questions.map((q,i)=>({q, i, ans:stuAnswers[i], correct:stuCheckOkEff(q,i,stuAnswers[i])}))
     .filter(x=>!x.correct && x.ans !== null).slice(0,5);
 
   const prompt = `You are a helpful aviation maintenance training assistant giving a student feedback on their quiz results.
@@ -11982,7 +12036,7 @@ function stuBuildPerfInsight(){
   const groups = getStuSecGroups();
 
   const topicResults = Object.entries(groups).map(([topic, idxs]) => {
-    const correct = idxs.filter(i => stuAnswers[i] !== null && stuCheckOk(questions[i], stuAnswers[i])).length;
+    const correct = idxs.filter(i => stuAnswers[i] !== null && stuCheckOkEff(questions[i], i, stuAnswers[i])).length;
     const pct = Math.round((correct / idxs.length) * 100);
     return { topic, correct, total: idxs.length, pct };
   });
@@ -13125,14 +13179,21 @@ async function spOpenAttemptReview(quizId, attemptIndex, isCurrentProgress=false
       answerHtml = (q.options||[]).map((opt,j) => {
         const isCorrectOpt = j === q.correct;
         const isStudentPick = j === studentAns;
-        const overriddenCorrect = isOverridden && overrides[i] === true;
         let cls = 'ar-ans-neutral';
         let prefix = 'ABC'[j]+'.';
         let suffix = '';
-        if(isCorrectOpt && isStudentPick){ cls='ar-ans-correct'; prefix='v '+prefix; }
-        else if(isCorrectOpt){ cls='ar-ans-correct'; prefix='v '+prefix; }
-        else if(isStudentPick && overriddenCorrect){ cls='ar-ans-correct'; prefix='v '+prefix; suffix=' <span style="font-size:.6rem;opacity:.7">(marked correct)</span>'; }
-        else if(isStudentPick){ cls='ar-ans-wrong'; prefix='x '+prefix; }
+        if(isOverridden){
+          // An instructor override replaces the raw answer key for display — show which option
+          // is actually credited, not the original key, so a corrected wrong key doesn't keep
+          // showing green right alongside the now-credited answer.
+          if(isStudentPick && overrides[i] === true){ cls='ar-ans-correct'; prefix='v '+prefix; suffix=' <span style="font-size:.6rem;opacity:.7">(marked correct)</span>'; }
+          else if(isStudentPick && overrides[i] === false){ cls='ar-ans-wrong'; prefix='x '+prefix; suffix=' <span style="font-size:.6rem;opacity:.7">(marked incorrect)</span>'; }
+          else if(isCorrectOpt){ prefix='· '+prefix; suffix=' <span style="font-size:.6rem;opacity:.7">(original key)</span>'; }
+        } else {
+          if(isCorrectOpt && isStudentPick){ cls='ar-ans-correct'; prefix='v '+prefix; }
+          else if(isCorrectOpt){ cls='ar-ans-correct'; prefix='v '+prefix; }
+          else if(isStudentPick){ cls='ar-ans-wrong'; prefix='x '+prefix; }
+        }
         return `<div class="ar-ans ${cls}">${prefix} ${esc(opt)}${suffix}</div>`;
       }).join('');
     } else {
@@ -13394,6 +13455,31 @@ function showStuApp(){
   refreshMyAllStarBadge().catch(()=>{});
   _checkStudentAdmin().catch(()=>{});
   _stuWatchAssigned();
+}
+
+// Lets an instructor open the Study/Flashcards tab directly — for running flashcards with the
+// whole class — without signing out and logging back in as a separate student account. Uses a
+// lightweight synthetic stuSession scoped to the instructor's own uid (so progress saves under
+// their account, isolated from any real student's) and skips the full student-app init (quiz
+// loading, assigned-exam badges, etc.) since none of that applies here.
+let _instClassStudyMode = false;
+function instOpenClassStudy(){
+  if(!instUser) return;
+  _instClassStudyMode = true;
+  stuSession = { uid: instUser.uid, name: (instProfile && instProfile.name) || instUser.displayName || 'Instructor', email: instUser.email || '', classroomId: null };
+  showScreen('stuApp');
+  const nameEl = document.getElementById('stuUserName');
+  if(nameEl) nameEl.textContent = stuSession.name;
+  document.getElementById('instClassStudyBanner')?.classList.remove('hidden');
+  applyLanguage(_currentLang);
+  stuSwitchTab('study');
+}
+
+function instReturnFromClassStudy(){
+  _instClassStudyMode = false;
+  stuSession = null;
+  document.getElementById('instClassStudyBanner')?.classList.add('hidden');
+  showScreen('instApp');
 }
 
 // Badge + login heads-up for instructor-assigned practice exams. The badge counts UNSEEN assigned
@@ -15798,7 +15884,7 @@ async function renderStudyHome(){
       ${streakWidget}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <div>
-          <div class="section-head" style="margin:0 0 2px 0">✈ Study O&P Questions</div>
+          <div class="section-head" style="margin:0 0 2px 0">✈ Study Oral &amp; Practical Questions</div>
           <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Tap a section to expand topics</div>
         </div>
       </div>
@@ -16806,6 +16892,15 @@ function lmSkip(){
   lmPlayCard();
 }
 
+function lmBack(){
+  if(_lmCur <= 0) return; // already on the first card
+  clearTimeout(_lmTimer);
+  window.speechSynthesis.cancel();
+  _lmPaused = false;
+  _lmCur--;
+  lmPlayCard();
+}
+
 function lmReplay(){
   clearTimeout(_lmTimer);
   window.speechSynthesis.cancel();
@@ -16918,6 +17013,7 @@ function renderListenPlayer(){
 
     <!-- Controls -->
     <div style="display:flex;gap:8px;justify-content:center;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="lmBack()" title="Go back to the previous card" ${_lmCur<=0?'disabled style="opacity:.4;cursor:default"':''}>⏮ Back</button>
       <button class="btn btn-ghost btn-sm" onclick="lmReplay()" title="Replay this card">↩ Replay</button>
       <button id="lmPauseBtn" class="btn btn-primary btn-sm" onclick="lmPauseResume()" style="min-width:100px">⏸ Pause</button>
       <button class="btn btn-ghost btn-sm" onclick="lmSkip()" title="Skip to next card">Skip →</button>
@@ -16934,7 +17030,7 @@ function renderListenPlayer(){
 
     <!-- Keyboard hint -->
     <div class="fc-kbd-hint" style="margin-top:12px">
-      <kbd>Space</kbd> pause &nbsp;·&nbsp; <kbd>→</kbd> skip &nbsp;·&nbsp; <kbd>←</kbd> replay
+      <kbd>Space</kbd> pause &nbsp;·&nbsp; <kbd>→</kbd> skip &nbsp;·&nbsp; <kbd>←</kbd> back &nbsp;·&nbsp; <kbd>R</kbd> replay
     </div>
   </div>`;
 
@@ -16949,7 +17045,8 @@ function _lmKeyHandler(e){
   if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if(e.code === 'Space'){ e.preventDefault(); lmPauseResume(); }
   else if(e.code === 'ArrowRight'){ e.preventDefault(); lmSkip(); }
-  else if(e.code === 'ArrowLeft'){ e.preventDefault(); lmReplay(); }
+  else if(e.code === 'ArrowLeft'){ e.preventDefault(); lmBack(); }
+  else if(e.code === 'KeyR'){ e.preventDefault(); lmReplay(); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -17069,6 +17166,14 @@ function acSkip(){
   acPlayCard();
 }
 
+function acBack(){
+  if(_acCur <= 0) return; // already on the first card
+  clearTimeout(_acTimer);
+  _acPaused = false;
+  _acCur--;
+  acPlayCard();
+}
+
 function acStop(){
   _acStopped = true;
   clearTimeout(_acTimer);
@@ -17166,6 +17271,7 @@ function renderAutoCycle(){
 
     <!-- Controls -->
     <div style="display:flex;gap:8px;justify-content:center;margin-bottom:18px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="acBack()" title="Go back to the previous card" ${_acCur<=0?'disabled style="opacity:.4;cursor:default"':''}>⏮ Back</button>
       <button class="btn btn-ghost btn-sm" onclick="acReplay()" title="Replay this card">↩ Replay</button>
       <button id="acPauseBtn" class="btn btn-primary btn-sm" onclick="acPauseResume()" style="min-width:100px">${_acPaused?'▶ Resume':'⏸ Pause'}</button>
       <button class="btn btn-ghost btn-sm" onclick="acSkip()" title="Skip to next card">Skip →</button>
@@ -17187,7 +17293,7 @@ function renderAutoCycle(){
 
     <!-- Keyboard hint -->
     <div class="fc-kbd-hint" style="margin-top:12px">
-      <kbd>Space</kbd> pause &nbsp;·&nbsp; <kbd>→</kbd> skip &nbsp;·&nbsp; <kbd>←</kbd> replay
+      <kbd>Space</kbd> pause &nbsp;·&nbsp; <kbd>→</kbd> skip &nbsp;·&nbsp; <kbd>←</kbd> back &nbsp;·&nbsp; <kbd>R</kbd> replay
     </div>
   </div>`;
 }
@@ -17197,7 +17303,8 @@ function _acKeyHandler(e){
   if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if(e.code === 'Space'){ e.preventDefault(); acPauseResume(); }
   else if(e.code === 'ArrowRight'){ e.preventDefault(); acSkip(); }
-  else if(e.code === 'ArrowLeft'){ e.preventDefault(); acReplay(); }
+  else if(e.code === 'ArrowLeft'){ e.preventDefault(); acBack(); }
+  else if(e.code === 'KeyR'){ e.preventDefault(); acReplay(); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -19977,6 +20084,10 @@ async function acsClearAll(){
   _acsNewCodes.clear();
   document.getElementById('acsUploadStatus').textContent = 'All codes cleared.';
   await acsRenderAll();
+}
+
+function acsScrollToPracticals(){
+  document.getElementById('acsPracticalSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function acsDeleteCode(code){
