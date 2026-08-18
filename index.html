@@ -7968,13 +7968,56 @@ function _normTopic(t){ return TOPIC_ALIASES[t] || t; }
 // mode: 'cumulative' (default) folds together every completed practice exam a student has ever
 // taken; 'last' uses only each student's single most recent completed exam — a current snapshot
 // instead of an accumulation, useful right after a fresh round of practice exams.
+// Registry of instructor-assigned whole-class exams for a classroom (same source _classExamOptions
+// uses for its dropdown), returned as plain objects so the class-wide picker can render checkboxes.
+async function _classWideExamRegistry(classId){
+  try{
+    const ex=await dbGet('classrooms/'+classId+'/practiceExams')||{};
+    return Object.entries(ex).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0))
+      .map(([ceid,m])=>({id:ceid, label:m.label||'FAA Practice Exam', createdAt:m.createdAt||0, studentCount:m.studentCount||0}));
+  }catch(e){ return []; }
+}
 async function loadClassWideWeakSpots(classId, targetElId, mode){
   mode = mode || window._classWideMode || 'cumulative';
   window._classWideMode = mode;
   const el=document.getElementById(targetElId||'cdPerfContent'); if(!el) return;
   el.innerHTML='<div class="empty-state">Loading class-wide data…</div>';
   const mkBtn=(m,label)=>'<button onclick="loadClassWideWeakSpots(\''+classId+'\','+(targetElId?"'"+targetElId+"'":'null')+',\''+m+'\')" style="flex:1;padding:9px;border:none;cursor:pointer;font-family:monospace;font-size:.75rem;font-weight:700;letter-spacing:.5px;background:'+(mode===m?'var(--accent)':'var(--panel2)')+';color:'+(mode===m?'#000':'var(--muted)')+'">'+label+'</button>';
-  const toggleHtml='<div style="display:flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:12px">'+mkBtn('cumulative','CUMULATIVE (ALL EXAMS)')+mkBtn('last','LAST EXAM ONLY')+'</div>';
+  let toggleHtml='<div style="display:flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:12px">'+mkBtn('cumulative','CUMULATIVE (ALL EXAMS)')+mkBtn('select','SELECT EXAMS')+mkBtn('last','LAST EXAM ONLY')+'</div>';
+
+  // ---- 'select' mode: let the instructor pick exactly which assigned exams count toward cumulative ----
+  let selectedSet=null, includeOther=true;
+  if(mode==='select'){
+    const registry=await _classWideExamRegistry(classId);
+    if(!window._classWideSelectedIds || window._classWideSelectedClassId!==classId){
+      window._classWideSelectedIds=new Set(registry.map(r=>r.id));
+      window._classWideIncludeOther=true;
+      window._classWideSelectedClassId=classId;
+    }
+    selectedSet=window._classWideSelectedIds; includeOther=window._classWideIncludeOther;
+    if(!registry.length){
+      el.innerHTML=toggleHtml+'<div class="empty-state">No instructor-assigned class exams yet — assign a practice exam to the whole class first.</div>';
+      return;
+    }
+    const rerun="loadClassWideWeakSpots('"+classId+"',"+(targetElId?"'"+targetElId+"'":'null')+",'select')";
+    const allChecked=registry.every(r=>selectedSet.has(r.id)) && includeOther;
+    toggleHtml+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px"><div style="font-family:monospace;font-size:.7rem;text-transform:uppercase;color:var(--muted)">Select which exams to include</div>'
+      +'<button onclick="window._classWideSelectedIds=new Set('+(allChecked?'[]':JSON.stringify(registry.map(r=>r.id)))+');window._classWideIncludeOther='+(allChecked?'false':'true')+';'+rerun+'" style="font-family:monospace;font-size:.68rem;background:none;border:1px solid var(--border);border-radius:3px;padding:3px 9px;cursor:pointer;color:var(--muted)">'+(allChecked?'CLEAR ALL':'SELECT ALL')+'</button></div>'
+      +registry.map(r=>{
+        const checked=selectedSet.has(r.id);
+        const dateStr=r.createdAt?new Date(r.createdAt).toLocaleDateString():'';
+        return '<label style="display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:.85rem">'
+          +'<input type="checkbox" '+(checked?'checked':'')+' onchange="(window._classWideSelectedIds.has(\''+r.id+'\')?window._classWideSelectedIds.delete(\''+r.id+'\'):window._classWideSelectedIds.add(\''+r.id+'\'));'+rerun+'">'
+          +'<span style="flex:1">'+esc(r.label)+'</span>'
+          +'<span style="font-family:monospace;font-size:.68rem;color:var(--muted)">'+dateStr+(r.studentCount?' · '+r.studentCount+' student'+(r.studentCount===1?'':'s'):'')+'</span>'
+          +'</label>';
+      }).join('')
+      +'<label style="display:flex;align-items:center;gap:9px;padding:6px 0 0;cursor:pointer;font-size:.85rem;color:var(--muted)">'
+      +'<input type="checkbox" '+(includeOther?'checked':'')+' onchange="window._classWideIncludeOther=this.checked;'+rerun+'">'
+      +'<span>Also include self-directed &amp; individually-assigned practice</span></label>'
+      +'</div>';
+  }
   const stu=await dbGet('classroomStudents/'+classId)||{};
   const roster=Object.entries(stu).filter(([,v])=>v&&typeof v==='object').map(([k,v])=>({uid:(v&&v.uid)||k,name:(v&&v.name)||'(student)'}));
   if(!roster.length){ el.innerHTML=toggleHtml+'<div class="empty-state">No students in this class.</div>'; return; }
@@ -7994,6 +8037,17 @@ async function loadClassWideWeakSpots(classId, targetElId, mode){
     let completed=Object.entries(hist).filter(([,a])=>a&&a.status==='complete');
     completed.sort((a,b)=>(b[1].date||0)-(a[1].date||0)); // newest first, always
     if(mode==='last') completed=completed.slice(0,1);
+    if(mode==='select'){
+      // Map this student's assignId -> classExamId so we can tell which whole-class exam (if any)
+      // each practiceHistory entry belongs to, then keep only the ones the instructor checked.
+      const assignedMap=await dbGet('assignedExams/'+u.uid).catch(()=>null)||{};
+      completed=completed.filter(([,a])=>{
+        if(!a.assignId) return includeOther; // self-directed
+        const ceid=assignedMap[a.assignId] && assignedMap[a.assignId].classExamId;
+        if(!ceid) return includeOther; // assigned to this student individually, not as a class exam
+        return selectedSet.has(ceid);
+      });
+    }
     const sTs={}; let sCorrect=0, sTotal=0, sExams=0;
     completed.forEach(([,a])=>{ const ts=a.topicStats; if(!ts||typeof ts!=='object') return; examsCounted++; sExams++;
       if(a.assignId) assignedCounted++; else selfCounted++;
@@ -8027,7 +8081,7 @@ async function loadClassWideWeakSpots(classId, targetElId, mode){
   // out of a single asking isn't a reliable signal.
   const weak=rows.filter(r=>r.pct<70 && r.total>=2);
   window._classRemTopics=weak.slice(0,8).map(r=>r.t);
-  const modeLabel=mode==='last'?'each student\'s most recent exam only':'all practice exams in this class ('+assignedCounted+' assigned · '+selfCounted+' self-directed)';
+  const modeLabel=mode==='last'?'each student\'s most recent exam only':mode==='select'?'the selected exam'+(selectedSet.size===1?'':'s')+(includeOther?' + self-directed/individual practice':'')+' ('+assignedCounted+' assigned · '+selfCounted+' self-directed)':'all practice exams in this class ('+assignedCounted+' assigned · '+selfCounted+' self-directed)';
   let html=toggleHtml+'<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across '+modeLabel+' · '+studentsWithData+' student'+(studentsWithData===1?'':'s')+' with data · '+examsCounted+' exam'+(examsCounted===1?'':'s')+' counted</div></div>';
   if(weak.length){
     html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Topics the class struggles with most</div>'+weak.slice(0,8).map(r=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:3px">'+esc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+'<button onclick="startClassRemediation(\''+classId+'\')" class="btn btn-primary" style="margin-top:10px;font-size:.82rem;padding:9px 16px;letter-spacing:.5px">🎯 Assign Remediation Exam to Whole Class</button></div>';
