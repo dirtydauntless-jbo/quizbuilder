@@ -2,6 +2,7 @@
 <!-- AMT Classroom v9.24e | Built: 2026-05-10 | Changes: i18n language system (EN/ES/FR/ZH), master dashboard accordion UI, student/instructor total fix, duplicate id auth fix, page-close integrity flag, absent/not-in-session tracking -->
 <html lang="en">
 <head>
+  <script>try{document.documentElement.setAttribute('data-theme', localStorage.getItem('amtTheme')==='modern' ? 'modern' : 'classic');}catch(e){}</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="FAA Aviation Maintenance Technician (A&P) study platform — General, Airframe & Powerplant practice written exams, instructor quizzes, and progress tracking.">
@@ -35,7 +36,7 @@
   gtag('config', 'G-LLP88M24VH');
 </script>
 <!-- End Google Analytics -->
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;600&family=Montserrat:wght@800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;600&family=Montserrat:wght@800;900&family=Hanken+Grotesk:wght@400;500;600;700;800&family=Bricolage+Grotesque:wght@500;700;800&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -43,14 +44,23 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
 <style>
 :root{
-  --bg:#0a0c0f;--panel:#111417;--panel2:#161a1f;--border:#1e2328;
-  --accent:#f0a500;--accent2:#e05c2a;--text:#dce3ea;--muted:#8a96a3;
-  --cl:#3aaa66;--correct:#2a7a4a;--wl:#cc4444;--wrong:#7a2a2a;--r:4px;
+  --bg:#0a0c0f;--panel:#12161d;--panel2:#181e26;--border:#262d37;
+  --accent:#f5ac1a;--accent2:#ff6a35;--text:#eef2f6;--muted:#95a2b0;
+  --cl:#3aaa66;--correct:#2a7a4a;--wl:#cc4444;--wrong:#7a2a2a;--r:8px;
   --blue:#4a9eff;--purple:#9b6dff;--green:#3aaa66;
+  --font-ui:'IBM Plex Sans',sans-serif;--font-display:'Bebas Neue',sans-serif;
+  --shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 10px 24px rgba(0,0,0,.4);
+}
+:root[data-theme="modern"]{
+  --bg:#f6f5fb;--panel:#ffffff;--panel2:#efedfa;--border:#e3ddf7;
+  --accent:#6653e6;--accent2:#f0a500;--text:#1c1730;--muted:#6f6a86;
+  --r:22px;
+  --font-ui:'Hanken Grotesk',sans-serif;--font-display:'Bricolage Grotesque',sans-serif;
+  --shadow:0 2px 0 rgba(28,23,48,.05), 0 14px 28px rgba(102,83,230,.14);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{font-size:20px}
-body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:1rem;min-height:100vh;overflow-x:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:1rem;min-height:100vh;overflow-x:hidden}
 .hidden{display:none!important}
 a{color:var(--accent);text-decoration:none}
 
@@ -61,15 +71,15 @@ a{color:var(--accent);text-decoration:none}
    editable fields so typing still shows a cursor. */
 *{caret-color:transparent}
 input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:auto}
-.app-title{font-family:'Bebas Neue',sans-serif;font-size:1.95rem;letter-spacing:3px;color:var(--accent);white-space:nowrap}
+.app-title{font-family:var(--font-display);font-size:1.95rem;letter-spacing:3px;color:var(--accent);white-space:nowrap}
 .brand-logo{display:flex;flex-direction:column;line-height:.9;font-family:'Montserrat',sans-serif;white-space:nowrap}
 .brand-logo .bl-top{font-weight:900;font-size:1.7rem;letter-spacing:.5px;display:flex;align-items:center}
-.brand-logo .bl-ca{color:#eef3f8}
+.brand-logo .bl-ca{color:var(--text)}
 .brand-logo .bl-m{color:#1565c0}
 .brand-logo .bl-t{color:var(--accent)}
-.brand-logo .bl-plane{color:#eef3f8;font-size:.85rem;margin-left:5px;transform:translateY(-7px)}
+.brand-logo .bl-plane{color:var(--text);font-size:.85rem;margin-left:5px;transform:translateY(-7px)}
 .brand-logo .bl-bot{font-weight:800;font-size:.82rem;letter-spacing:.3px;margin-top:3px}
-.brand-logo .bl-c1{color:#cfd8e2}
+.brand-logo .bl-c1{color:var(--muted)}
 .brand-logo .bl-c2{color:var(--accent)}
 .brand-logo .bl-com{color:var(--muted);font-size:.72rem}
 .brand-logo.ctr{align-items:center}
@@ -98,9 +108,9 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .btn-green{background:rgba(58,170,102,.13);color:var(--cl);border:1px solid var(--correct)}
 .btn-green:hover:not(:disabled){background:rgba(58,170,102,.22)}
 .btn-sm{padding:6px 12px;font-size:.9rem}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:14px;box-shadow:var(--shadow)}
 .label{font-family:monospace;font-size:.95rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
-.input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:1.15rem;padding:10px 13px;outline:none;transition:border-color .15s}
+.input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font-ui);font-size:1.15rem;padding:10px 13px;outline:none;transition:border-color .15s}
 .input:focus{border-color:var(--accent)}
 .input::placeholder{color:var(--muted)}
 .input-sm{padding:7px 10px;font-size:1.08rem}
@@ -113,13 +123,13 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .tag-draft{background:var(--border);color:var(--muted);border:1px solid var(--border)}
 .tag-all{background:rgba(240,165,0,.12);color:var(--accent);border:1px solid rgba(240,165,0,.3)}
 .empty-state{text-align:center;padding:32px 20px;color:var(--muted);font-family:monospace;font-size:.96rem;letter-spacing:1px;line-height:1.8}
-.section-head{font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:2px;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.section-head{font-family:var(--font-display);font-size:1.25rem;letter-spacing:2px;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .divider{border:none;border-top:1px solid var(--border);margin:18px 0}
 .err-msg{color:var(--wl);font-family:monospace;font-size:.96rem;margin-top:8px}
 .ok-msg{color:var(--cl);font-family:monospace;font-size:.96rem;margin-top:8px}
 .modal-overlay{position:fixed;inset:0;background:rgba(10,12,15,.88);display:flex;align-items:center;justify-content:center;z-index:500;padding:20px;overflow-y:auto}
-.modal{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:var(--r);padding:32px;width:100%;max-width:480px;animation:fadeUp .2s ease}
-.modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:2px;color:var(--accent);margin-bottom:20px}
+.modal{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:var(--r);padding:32px;width:100%;max-width:480px;animation:fadeUp .2s ease;box-shadow:var(--shadow)}
+.modal-title{font-family:var(--font-display);font-size:1.5rem;letter-spacing:2px;color:var(--accent);margin-bottom:20px}
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .tab-bar{display:flex;gap:0;background:var(--bg);border-bottom:1px solid var(--border);padding:0 20px;overflow-x:auto}
 .tab-btn{font-family:monospace;font-size:.95rem;letter-spacing:1.5px;text-transform:uppercase;padding:12px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;transition:all .15s;margin-bottom:-1px;white-space:nowrap}
@@ -132,12 +142,12 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .conn-badge{font-family:monospace;font-size:.95rem;padding:3px 8px;border-radius:3px;letter-spacing:1px}
 .conn-ok{background:rgba(58,170,102,.14);color:var(--cl)}.conn-err{background:rgba(204,68,68,.14);color:var(--wl)}
-.code-badge{font-family:'Bebas Neue',sans-serif;font-size:1.95rem;letter-spacing:6px;color:var(--accent);background:var(--bg);border:2px solid var(--border);border-radius:var(--r);padding:8px 20px;display:inline-block}
+.code-badge{font-family:var(--font-display);font-size:1.95rem;letter-spacing:6px;color:var(--accent);background:var(--bg);border:2px solid var(--border);border-radius:var(--r);padding:8px 20px;display:inline-block}
 
 /* -- ANNOUNCEMENT BANNER -- */
 .announce-banner-wrap{overflow:hidden;background:linear-gradient(90deg,#92400e,#b45309,#d97706,#b45309,#92400e);border-top:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);user-select:none;width:100%}
 .announce-banner-track{display:flex;white-space:nowrap;-webkit-animation:announceScroll 36s linear infinite;animation:announceScroll 36s linear infinite}
-.announce-banner-item{display:inline-flex;align-items:center;gap:14px;padding:10px 32px;font-family:'Bebas Neue',monospace;font-size:1rem;letter-spacing:2px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
+.announce-banner-item{display:inline-flex;align-items:center;gap:14px;padding:10px 32px;font-family:var(--font-display);font-size:1rem;letter-spacing:2px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
 .announce-banner-dot{color:rgba(255,255,255,.5);font-size:.75rem}
 @-webkit-keyframes announceScroll{0%{-webkit-transform:translateX(0)}100%{-webkit-transform:translateX(-50%)}}
 @keyframes announceScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
@@ -147,25 +157,25 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .opsim-banner-track{display:flex;white-space:nowrap;-webkit-animation:opSimScroll 32s linear infinite;animation:opSimScroll 32s linear infinite}
 .opsim-banner-track:hover{animation-play-state:paused}
 .opsim-banner-static{display:flex;justify-content:center;align-items:center;padding:2px 4px}
-.opsim-banner-item{display:inline-flex;align-items:center;gap:14px;padding:10px 32px;font-family:'Bebas Neue',monospace;font-size:1rem;letter-spacing:2px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
+.opsim-banner-item{display:inline-flex;align-items:center;gap:14px;padding:10px 32px;font-family:var(--font-display);font-size:1rem;letter-spacing:2px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.45)}
 .opsim-banner-dot{color:rgba(255,255,255,.5);font-size:.75rem}
 @-webkit-keyframes opSimScroll{0%{-webkit-transform:translateX(0)}100%{-webkit-transform:translateX(-50%)}}
 @keyframes opSimScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 /* -- LANDING / AUTH -- */
 .landing{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;flex-direction:column;gap:20px}
-.landing-logo{font-family:'Bebas Neue',sans-serif;font-size:3.78rem;letter-spacing:6px;color:var(--accent);text-align:center}
+.landing-logo{font-family:var(--font-display);font-size:3.78rem;letter-spacing:6px;color:var(--accent);text-align:center}
 .landing-sub{font-family:monospace;font-size:.98rem;letter-spacing:3px;text-transform:uppercase;color:var(--muted);text-align:center;margin-top:-12px}
 .landing-cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;width:100%;max-width:640px}
 @media(max-width:500px){.landing-cards{grid-template-columns:1fr}}
-.landing-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:28px;cursor:pointer;transition:border-color .2s,transform .15s;text-align:center}
+.landing-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:28px;cursor:pointer;transition:border-color .2s,transform .15s;text-align:center;box-shadow:var(--shadow)}
 .landing-card:hover{border-color:var(--accent);transform:translateY(-3px)}
 .landing-card-icon{font-size:2.5rem;margin-bottom:10px}
-.landing-card-title{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent);margin-bottom:6px}
+.landing-card-title{font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--accent);margin-bottom:6px}
 .landing-card-desc{font-family:monospace;font-size:.95rem;color:var(--muted);letter-spacing:.5px;line-height:1.6}
 
 /* Auth form */
-.auth-box{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:var(--r);padding:36px;width:100%;max-width:420px}
-.auth-title{font-family:'Bebas Neue',sans-serif;font-size:2.1rem;letter-spacing:3px;color:var(--accent);margin-bottom:3px}
+.auth-box{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:var(--r);padding:36px;width:100%;max-width:420px;box-shadow:var(--shadow)}
+.auth-title{font-family:var(--font-display);font-size:2.1rem;letter-spacing:3px;color:var(--accent);margin-bottom:3px}
 .auth-sub{font-family:monospace;font-size:.95rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:26px}
 .auth-tabs{display:flex;gap:0;margin-bottom:22px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
 .auth-tab{flex:1;padding:9px;background:transparent;border:none;color:var(--muted);font-family:monospace;font-size:.94rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .15s}
@@ -177,9 +187,9 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .oauth-icon{font-size:1.2rem}
 
 /* Student join */
-.join-box{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--blue);border-radius:var(--r);padding:36px;width:100%;max-width:420px}
-.join-title{font-family:'Bebas Neue',sans-serif;font-size:2.1rem;letter-spacing:3px;color:var(--blue);margin-bottom:3px}
-.code-input{text-transform:uppercase;letter-spacing:6px;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;text-align:center}
+.join-box{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--blue);border-radius:var(--r);padding:36px;width:100%;max-width:420px;box-shadow:var(--shadow)}
+.join-title{font-family:var(--font-display);font-size:2.1rem;letter-spacing:3px;color:var(--blue);margin-bottom:3px}
+.code-input{text-transform:uppercase;letter-spacing:6px;font-family:var(--font-display);font-size:1.5rem;text-align:center}
 
 /* -- INSTRUCTOR APP -- */
 .inst-layout{display:grid;grid-template-columns:260px 1fr;min-height:calc(100vh - 100px)}
@@ -258,12 +268,12 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .dash-wrap{padding:22px;max-width:1100px;margin:0 auto}
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
 @media(max-width:700px){.stats-row{grid-template-columns:repeat(2,1fr)}}
-.stat-box{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px;text-align:center}
-.stat-val{font-family:'Bebas Neue',sans-serif;font-size:2.3rem;color:var(--accent);line-height:1}
+.stat-box{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px;text-align:center;box-shadow:var(--shadow)}
+.stat-val{font-family:var(--font-display);font-size:2.3rem;color:var(--accent);line-height:1}
 .stat-lbl{font-family:monospace;font-size:.95rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:3px}
 .student-row{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:8px;transition:border-color .2s}
 .student-row:hover{border-color:var(--muted)}
-.stu-avatar{width:32px;height:32px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.12rem;color:var(--accent);flex-shrink:0;overflow:hidden}
+.stu-avatar{width:32px;height:32px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1.12rem;color:var(--accent);flex-shrink:0;overflow:hidden}
 .avatar-opt{cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 8px;border-radius:8px;border:2px solid var(--border);transition:border-color .15s,background .15s}
 .avatar-opt:hover{border-color:var(--muted)}
 .avatar-opt.selected{border-color:var(--accent);background:rgba(240,165,0,.08)}
@@ -292,11 +302,11 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 /* -- STUDENT CLASSROOM -- */
 .stu-layout{max-width:880px;margin:0 auto;padding:22px}
 .classroom-banner{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--blue);border-radius:var(--r);padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.cb-code{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:4px;color:var(--blue);background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:4px 12px}
+.cb-code{font-family:var(--font-display);font-size:1.6rem;letter-spacing:4px;color:var(--blue);background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:4px 12px}
 .cb-info{flex:1;min-width:0}
 .cb-name{font-weight:600;font-size:1.15rem}
 .cb-meta{font-family:monospace;font-size:.97rem;color:var(--muted);margin-top:2px}
-.quiz-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:12px;cursor:pointer;transition:border-color .2s,transform .15s}
+.quiz-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:12px;cursor:pointer;transition:border-color .2s,transform .15s;box-shadow:var(--shadow)}
 .quiz-card:hover{border-color:var(--accent);transform:translateY(-2px)}
 .quiz-card-title{font-weight:600;font-size:1.17rem;margin-bottom:6px}
 .quiz-card-meta{font-family:monospace;font-size:.97rem;color:var(--muted);display:flex;gap:9px;flex-wrap:wrap}
@@ -306,7 +316,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 
 /* -- ACTIVE QUIZ -- */
 .quiz-header-bar{background:var(--panel);border-bottom:1px solid var(--border);padding:11px 24px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.quiz-title-bar{font-family:'Bebas Neue',sans-serif;font-size:1.35rem;letter-spacing:2px}
+.quiz-title-bar{font-family:var(--font-display);font-size:1.35rem;letter-spacing:2px}
 .qstat{font-family:monospace;font-size:.95rem;color:var(--muted);display:flex;flex-direction:column}
 .qstat-val{font-size:1.12rem;color:var(--text);font-weight:500}
 .qstat-val.ac{color:var(--accent)}
@@ -318,12 +328,12 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .section-tab.done{border-color:var(--correct);color:var(--cl)}
 .q-area{max-width:820px;margin:0 auto;padding:22px}
 .q-sec-badge{display:inline-flex;align-items:center;background:var(--border);border-left:3px solid var(--accent);padding:5px 12px;font-family:monospace;font-size:.97rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:13px}
-.q-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:24px;margin-bottom:16px;animation:fadeUp .25s ease}
+.q-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:24px;margin-bottom:16px;animation:fadeUp .25s ease;box-shadow:var(--shadow)}
 @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .q-num{font-family:monospace;font-size:.95rem;color:var(--muted);letter-spacing:2px;margin-bottom:8px}
 .q-text{font-size:1.15rem;font-weight:300;line-height:1.65;margin-bottom:20px}
 .options{display:flex;flex-direction:column;gap:8px}
-.opt-btn{display:flex;align-items:flex-start;gap:11px;background:transparent;border:1px solid var(--border);border-radius:var(--r);padding:11px 14px;cursor:pointer;text-align:left;font-family:'IBM Plex Sans',sans-serif;font-size:1.1rem;color:var(--text);transition:border-color .15s,background .15s;line-height:1.5;width:100%}
+.opt-btn{display:flex;align-items:flex-start;gap:11px;background:transparent;border:1px solid var(--border);border-radius:var(--r);padding:11px 14px;cursor:pointer;text-align:left;font-family:var(--font-ui);font-size:1.1rem;color:var(--text);transition:border-color .15s,background .15s;line-height:1.5;width:100%}
 .opt-btn:hover:not(:disabled){border-color:var(--accent);background:rgba(240,165,0,.05)}
 .opt-btn:disabled{cursor:default}
 .opt-letter{font-family:monospace;font-size:.94rem;font-weight:500;color:var(--muted);min-width:14px;padding-top:1px;flex-shrink:0}
@@ -334,7 +344,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .opt-btn.wrong{border-color:var(--wl);background:rgba(204,68,68,.1)}
 .opt-btn.wrong .opt-letter{color:var(--wl)}
 .fib-wrap{display:flex;gap:9px;align-items:flex-start;flex-wrap:wrap}
-.fib-input{flex:1;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:1.15rem;padding:10px 13px;outline:none;transition:border-color .15s}
+.fib-input{flex:1;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font-ui);font-size:1.15rem;padding:10px 13px;outline:none;transition:border-color .15s}
 .fib-input:focus{border-color:var(--accent)}
 .fib-input.correct{border-color:var(--cl);background:rgba(58,170,102,.07)}
 .fib-input.wrong{border-color:var(--wl);background:rgba(204,68,68,.07)}
@@ -346,8 +356,8 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .nav-row{display:flex;justify-content:space-between;align-items:center;margin-top:22px}
 .results-screen{display:none;text-align:center;padding:36px 24px 60px;max-width:620px;margin:0 auto}
 .results-screen.show{display:block;animation:fadeUp .4s}
-.result-title{font-family:'Bebas Neue',sans-serif;font-size:3.4rem;letter-spacing:4px;color:var(--accent);margin-bottom:4px}
-.result-score{font-family:'Bebas Neue',sans-serif;font-size:5rem;color:var(--text);line-height:1;margin-bottom:2px}
+.result-title{font-family:var(--font-display);font-size:3.4rem;letter-spacing:4px;color:var(--accent);margin-bottom:4px}
+.result-score{font-family:var(--font-display);font-size:5rem;color:var(--text);line-height:1;margin-bottom:2px}
 .result-label{font-family:monospace;font-size:.94rem;color:var(--muted);letter-spacing:2px;margin-bottom:24px}
 .breakdown-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);text-align:left}
 .breakdown-name{flex:1;font-size:1.05rem;text-align:left}
@@ -363,7 +373,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .gen-sub{font-family:monospace;font-size:.95rem;color:var(--muted)}
 
 /* Student profile modal */
-.stu-modal{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--blue);border-radius:var(--r);width:100%;max-width:720px;height:90vh;display:flex;flex-direction:column;animation:fadeUp .2s ease;overflow:hidden}
+.stu-modal{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--blue);border-radius:var(--r);width:100%;max-width:720px;height:90vh;display:flex;flex-direction:column;animation:fadeUp .2s ease;overflow:hidden;box-shadow:var(--shadow)}
 .stu-modal-header{padding:22px 24px 0;flex-shrink:0}
 .stu-modal-body{overflow-y:auto;padding:0 24px 24px;flex:1;min-height:0}
 .stu-modal-body::-webkit-scrollbar{width:4px}
@@ -439,7 +449,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .fc-dme-partial{background:rgba(240,165,0,.1);border-color:var(--accent)}
 .fc-dme-incorrect{background:rgba(204,68,68,.1);border-color:var(--wrong)}
 .fc-dme-error{background:rgba(138,150,163,.1);border-color:var(--muted)}
-.fc-dme-verdict{font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:1.15rem;margin-bottom:6px}
+.fc-dme-verdict{font-family:var(--font-display);letter-spacing:2px;font-size:1.15rem;margin-bottom:6px}
 .fc-dme-correct .fc-dme-verdict{color:var(--cl)}
 .fc-dme-partial .fc-dme-verdict{color:var(--accent)}
 .fc-dme-incorrect .fc-dme-verdict{color:var(--wl)}
@@ -457,11 +467,11 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 
 .fc-progress{font-family:monospace;font-size:.97rem;color:var(--muted);text-align:center;margin-bottom:16px}
 .fc-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
-.fc-counter{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent)}
+.fc-counter{font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--accent)}
 
 .study-complete{text-align:center;padding:48px 20px}
 .study-complete-icon{font-size:3.5rem;margin-bottom:14px}
-.study-complete-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:var(--cl);margin-bottom:8px}
+.study-complete-title{font-family:var(--font-display);font-size:2rem;letter-spacing:3px;color:var(--cl);margin-bottom:8px}
 .study-complete-sub{font-family:monospace;font-size:.95rem;color:var(--muted);line-height:1.7;margin-bottom:24px}
 
 /* ── FLASHCARD FLY ANIMATIONS ─────────────────────────────── */
@@ -491,7 +501,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .fc-track-box{flex:1;max-width:160px;border-radius:var(--r);padding:10px 14px;text-align:center;border:2px solid}
 .fc-track-know{background:rgba(58,170,102,.1);border-color:var(--correct)}
 .fc-track-learn{background:rgba(204,68,68,.1);border-color:var(--wrong)}
-.fc-track-num{font-family:'Bebas Neue',sans-serif;font-size:2rem;line-height:1}
+.fc-track-num{font-family:var(--font-display);font-size:2rem;line-height:1}
 .fc-track-lbl{font-family:monospace;font-size:.75rem;letter-spacing:1.5px;text-transform:uppercase;margin-top:3px}
 .fc-track-know .fc-track-num{color:var(--cl)}
 .fc-track-learn .fc-track-num{color:var(--wl)}
@@ -510,7 +520,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 #bank-powerplant:hover{box-shadow:0 4px 24px rgba(0,0,0,.22),0 0 12px rgba(204,68,68,.35)}
 .bank-card-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .bank-card-icon{font-size:2rem;line-height:1}
-.bank-card-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;flex:1}
+.bank-card-title{font-family:var(--font-display);font-size:2rem;letter-spacing:3px;flex:1}
 .bank-card-meta{font-family:monospace;font-size:.8rem;color:var(--muted);margin-top:4px}
 .bank-card-progress{height:4px;border-radius:2px;background:rgba(255,255,255,.12);margin-top:12px;overflow:hidden}
 .bank-card-progress-fill{height:100%;border-radius:2px;transition:width .4s}
@@ -529,7 +539,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .dme-search-bar .input{flex:1;min-width:180px}
 .dme-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:12px;transition:border-color .18s}
 .dme-card:hover{border-color:rgba(240,165,0,.4)}
-.dme-name{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--accent);margin-bottom:3px}
+.dme-name{font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:var(--accent);margin-bottom:3px}
 .dme-addr{font-family:monospace;font-size:.82rem;color:var(--muted);margin-bottom:3px}
 .dme-contact{font-family:monospace;font-size:.82rem;color:var(--blue);margin-bottom:6px}
 .dme-badges{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
@@ -585,7 +595,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 }
 
 /* ── QUIZ TIMER ───────────────────────────────── */
-.quiz-timer{display:flex;align-items:center;gap:5px;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;padding:3px 10px;border-radius:5px;border:2px solid var(--border);transition:color .3s,border-color .3s,background .3s}
+.quiz-timer{display:flex;align-items:center;gap:5px;font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;padding:3px 10px;border-radius:5px;border:2px solid var(--border);transition:color .3s,border-color .3s,background .3s}
 .quiz-timer.warning{color:#f0a500;border-color:#f0a500;background:rgba(240,165,0,.08)}
 .quiz-timer.critical{color:#cc4444;border-color:#cc4444;background:rgba(204,68,68,.1);animation:timerPulse .8s infinite}
 @keyframes timerPulse{0%,100%{opacity:1}50%{opacity:.5}}
@@ -593,9 +603,9 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 /* ── TAB SWITCH WARNING ──────────────────────────────── */
 .tab-warning-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:600;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:30px;text-align:center}
 .tab-warning-icon{font-size:3.5rem}
-.tab-warning-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:#f0a500}
+.tab-warning-title{font-family:var(--font-display);font-size:2rem;letter-spacing:3px;color:#f0a500}
 .tab-warning-sub{font-family:monospace;font-size:.95rem;color:rgba(255,255,255,.7);max-width:320px;line-height:1.6}
-.tab-warning-count{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:#cc4444}
+.tab-warning-count{font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:#cc4444}
 
 /* ── CHEAT / INTEGRITY FLAGS ─────────────────────── */
 .fb-cheat{background:rgba(204,68,68,.18);color:#e85555;border:1px solid rgba(204,68,68,.4)}
@@ -608,7 +618,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .lb-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r);margin-bottom:6px;background:var(--panel)}
 .lb-medal{font-size:1.4rem;min-width:28px;text-align:center}
 .lb-name{flex:1;font-weight:600;font-size:.97rem}
-.lb-score{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:1px}
+.lb-score{font-family:var(--font-display);font-size:1.2rem;letter-spacing:1px}
 .lb-you{border:1px solid var(--accent);background:rgba(240,165,0,.06)}
 .lb-title{font-family:monospace;font-size:.83rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;text-align:center}
 
@@ -654,7 +664,7 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .pxf-btn:hover{color:var(--text)}
 .pxf-btn.active{background:rgba(8,145,178,.15);border-color:#0891b2;color:#22b8d8}
 /* Performance-breakdown subject cards */
-.px-subj-btn{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1px;padding:14px 8px;border:1.5px solid var(--border);border-radius:10px;background:var(--panel2);color:var(--text);cursor:pointer;transition:all .15s;text-align:center}
+.px-subj-btn{font-family:var(--font-display);font-size:1.5rem;letter-spacing:1px;padding:14px 8px;border:1.5px solid var(--border);border-radius:10px;background:var(--panel2);color:var(--text);cursor:pointer;transition:all .15s;text-align:center}
 .px-subj-btn:hover{border-color:var(--accent);background:rgba(8,145,178,.12);transform:translateY(-1px)}
 .px-subj-btn.active{border-color:var(--accent);background:var(--accent);color:#04240f}
 .px-subj-btn>div{font-size:.92rem;letter-spacing:1px}
@@ -711,7 +721,7 @@ setTimeout(function(){
     <div style="display:flex;justify-content:center;margin-bottom:14px"><div class="brand-logo ctr lg"><div class="bl-top"><span class="bl-ca">C</span><span class="bl-t">A</span><span class="bl-m">M</span><span class="bl-t">T</span><span class="bl-plane">&#9992;</span></div><div class="bl-bot"><span class="bl-c1">classroom</span><span class="bl-c2">amt</span><span class="bl-com">.com</span></div></div></div>
     <div class="landing-sub" id="i18n-landing-sub" style="margin-top:0">Aviation Mechanic Training Platform</div>
     <!-- Language selector -->
-    <div style="margin:10px 0 20px;display:flex;align-items:center;gap:8px;justify-content:center">
+    <div style="margin:10px 0 12px;display:flex;align-items:center;gap:8px;justify-content:center">
       <span style="font-family:monospace;font-size:.72rem;color:var(--muted)">🌐</span>
       <select class="lang-select" onchange="applyLanguage(this.value)" style="font-family:monospace;font-size:.78rem;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;cursor:pointer">
         <option value="en">English</option>
@@ -719,6 +729,13 @@ setTimeout(function(){
         <option value="fr">Français</option>
         <option value="zh">中文</option>
       </select>
+    </div>
+    <!-- Theme toggle -->
+    <div style="margin:0 0 20px;display:flex;justify-content:center">
+      <div style="display:flex;border:1px solid var(--border);border-radius:20px;padding:2px;background:var(--bg)">
+        <button type="button" class="theme-toggle-btn" data-theme-btn="classic" onclick="setAmtTheme('classic')" style="font-family:monospace;font-size:.68rem;letter-spacing:.5px;padding:4px 12px;border:none;border-radius:16px;cursor:pointer">Classic</button>
+        <button type="button" class="theme-toggle-btn" data-theme-btn="modern" onclick="setAmtTheme('modern')" style="font-family:monospace;font-size:.68rem;letter-spacing:.5px;padding:4px 12px;border:none;border-radius:16px;cursor:pointer">Modern</button>
+      </div>
     </div>
   </div>
   <!-- O&P Simulator sign-up banner (landing) -->
@@ -856,7 +873,11 @@ setTimeout(function(){
       <div class="brand-logo"><div class="bl-top"><span class="bl-ca">C</span><span class="bl-t">A</span><span class="bl-m">M</span><span class="bl-t">T</span><span class="bl-plane">&#9992;</span></div><div class="bl-bot"><span class="bl-c1">classroom</span><span class="bl-c2">amt</span><span class="bl-com">.com</span></div></div>
       <div class="app-subtitle" id="instSubtitle">Instructor</div>
     </div>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;row-gap:8px">
+      <div style="display:flex;border:1px solid var(--border);border-radius:20px;padding:2px;background:var(--bg)">
+        <button type="button" class="theme-toggle-btn" data-theme-btn="classic" onclick="setAmtTheme('classic')" style="font-family:monospace;font-size:.68rem;letter-spacing:.5px;padding:4px 10px;border:none;border-radius:16px;cursor:pointer">Classic</button>
+        <button type="button" class="theme-toggle-btn" data-theme-btn="modern" onclick="setAmtTheme('modern')" style="font-family:monospace;font-size:.68rem;letter-spacing:.5px;padding:4px 10px;border:none;border-radius:16px;cursor:pointer">Modern</button>
+      </div>
       <span class="conn-badge conn-ok" id="instConn">● Live</span>
       <div class="user-pill">
         <span id="instRoleTitle" style="display:none;margin-right:7px"></span>
@@ -955,7 +976,7 @@ setTimeout(function(){
   <div id="assignResultModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:900;overflow-y:auto;align-items:flex-start;justify-content:center" onclick="if(event.target===this)document.getElementById('assignResultModal').style.display='none'">
     <div style="background:var(--bg);width:100%;max-width:760px;min-height:100%;padding:20px" onclick="event.stopPropagation()">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div id="asgResTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--text)"></div>
+        <div id="asgResTitle" style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--text)"></div>
         <button onclick="document.getElementById('assignResultModal').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
       </div>
       <div id="asgResContent"></div>
@@ -979,7 +1000,7 @@ setTimeout(function(){
       <button class="btn btn-ghost btn-sm" onclick="backToClassrooms()">← Classrooms</button>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px" id="cdTitle">--</div>
+          <div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px" id="cdTitle">--</div>
           <button onclick="renameClassroom()" title="Rename classroom" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:2px 4px;border-radius:3px;transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">✏️</button>
         </div>
         <div style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-top:2px">
@@ -987,12 +1008,12 @@ setTimeout(function(){
         </div>
         <div id="cdCoInstLine" style="font-family:monospace;font-size:.78rem;color:var(--muted);margin-top:3px;display:none"></div>
       </div>
-      <div style="background:var(--bg);border:2px dashed rgba(240,165,0,.4);border-radius:var(--r);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0">
-        <div>
+      <div style="background:var(--bg);border:2px dashed rgba(240,165,0,.4);border-radius:var(--r);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;flex-wrap:wrap">
+        <div style="min-width:0">
           <div style="font-family:monospace;font-size:.72rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:2px">Student Entry Code</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:10px;color:var(--accent);line-height:1" id="cdCode">--</div>
+          <div style="font-family:var(--font-display);font-size:2.2rem;letter-spacing:10px;color:var(--accent);line-height:1;word-break:break-all" id="cdCode">--</div>
         </div>
-        <button onclick="copyCode(document.getElementById('cdCode').textContent)" title="Copy code" style="background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.25);border-radius:var(--r);color:var(--accent);font-family:monospace;font-size:.75rem;letter-spacing:1px;padding:7px 11px;cursor:pointer;transition:background .15s;text-transform:uppercase" onmouseover="this.style.background='rgba(240,165,0,.2)'" onmouseout="this.style.background='rgba(240,165,0,.1)'">📋 Copy</button>
+        <button onclick="copyCode(document.getElementById('cdCode').textContent)" title="Copy code" style="flex-shrink:0;background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.25);border-radius:var(--r);color:var(--accent);font-family:monospace;font-size:.75rem;letter-spacing:1px;padding:7px 11px;cursor:pointer;transition:background .15s;text-transform:uppercase" onmouseover="this.style.background='rgba(240,165,0,.2)'" onmouseout="this.style.background='rgba(240,165,0,.1)'">📋 Copy</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-blue btn-sm" onclick="showAssignModal()">Assign Quiz</button>
@@ -1024,7 +1045,7 @@ setTimeout(function(){
     <div id="cd-tab-live" class="tab-pane" style="display:none;padding:20px 22px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)"><span class="live-dot"></span> Live Progress</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)"><span class="live-dot"></span> Live Progress</div>
           <div style="font-family:monospace;font-size:.65rem;color:var(--muted)">Real-time student activity for this classroom</div>
         </div>
         <span id="cdLiveLastUpd" style="font-family:monospace;font-size:.72rem;color:var(--muted)"></span>
@@ -1076,7 +1097,7 @@ setTimeout(function(){
       </div>
     </div>
     <div id="cd-tab-performance" class="tab-pane" style="display:none;padding:20px 22px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;color:var(--accent);margin-bottom:4px">Student Performance</div>
+      <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:3px;color:var(--accent);margin-bottom:4px">Student Performance</div>
       <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:16px">Class results and AI analysis for this classroom</div>
       <div style="margin-bottom:14px">
         <label class="label">Select Quiz or FAA Practice Exam</label>
@@ -1099,7 +1120,7 @@ setTimeout(function(){
   <!-- QUIZ BANK TAB -->
   <div id="inst-tab-quizzes" class="tab-pane" style="display:none;background:var(--bg)">
     <div style="padding:16px 22px 8px;border-bottom:1px solid var(--border);background:var(--panel2)">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">Create/Assign a Quiz</div>
+      <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)">Create/Assign a Quiz</div>
       <div style="font-family:monospace;font-size:.78rem;color:var(--muted)">Build and manage your quizzes</div>
     </div>
     <!-- Mobile: toggle sidebar button -->
@@ -1116,7 +1137,7 @@ setTimeout(function(){
       <div id="quizBuilderPanel" style="overflow-y:auto;padding:20px;flex:1;min-width:0">
         <div style="display:flex;flex-direction:column;align-items:center;padding:32px 20px 20px;text-align:center;gap:16px">
           <div style="font-size:2.5rem">📝</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Create/Assign a Quiz</div>
+          <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Create/Assign a Quiz</div>
           <div style="font-family:monospace;font-size:.78rem;color:var(--muted);max-width:300px;line-height:1.6">Select an existing quiz from the left panel to edit, or click below to build a new one from scratch.</div>
           <button class="btn btn-primary" style="padding:10px 28px;font-size:.95rem;letter-spacing:1px;margin-top:4px" onclick="startNewQuiz()">+ New Quiz</button>
         </div>
@@ -1130,7 +1151,7 @@ setTimeout(function(){
   <!-- MEASUREMENT SIMULATOR TAB (instructor) -->
   <div id="inst-tab-sim" class="tab-pane" style="display:none;padding:22px 24px;overflow-y:auto">
     <div style="max-width:960px;margin:0 auto">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;color:var(--accent);margin-bottom:2px">📐 Measurement Simulator</div>
+      <div style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:3px;color:var(--accent);margin-bottom:2px">📐 Measurement Simulator</div>
       <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:20px">Set a measurement and broadcast to your classroom for live reading practice.</div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;max-width:700px">
@@ -1160,10 +1181,10 @@ setTimeout(function(){
 
       <div id="instSimSessionBar" class="hidden" style="background:linear-gradient(135deg,rgba(240,165,0,.15),rgba(240,165,0,.05));border:2px solid var(--accent);border-radius:8px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
         <div style="flex:1">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">SESSION ACTIVE</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)">SESSION ACTIVE</div>
           <div id="instSimSessionInfo" style="font-family:monospace;font-size:.72rem;color:var(--muted)">Session 1 · Round 0</div>
         </div>
-        <div id="instSimSubmitCount" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--accent)">0 / 0 submitted</div>
+        <div id="instSimSubmitCount" style="font-family:var(--font-display);font-size:1.4rem;color:var(--accent)">0 / 0 submitted</div>
         <button class="btn btn-ghost btn-sm" onclick="instSimDeleteRound()" style="font-size:.75rem;color:var(--wl);border-color:var(--wl)">🗑 Delete Round</button>
         <button class="btn btn-danger btn-sm" onclick="instSimEndSession()">End Session</button>
       </div>
@@ -1198,7 +1219,7 @@ setTimeout(function(){
         <button class="btn btn-ghost btn-sm" onclick="simRandomize('inst')" style="font-size:.8rem">🎲 Randomize</button>
         <button id="instSimRevealBtn" class="btn btn-ghost btn-sm" onclick="simReveal('inst')" style="font-size:.8rem">👁 Reveal Answer</button>
         <button id="instSimGuideBtn" class="btn btn-ghost btn-sm" onclick="simToggleGuide('inst')" style="font-size:.8rem">📏 Hide Guide Line</button>
-        <div id="instSimRevealVal" class="hidden" style="display:none;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:#111;background:#f5f5f5;border-radius:5px;padding:4px 14px">0.0000"</div>
+        <div id="instSimRevealVal" class="hidden" style="display:none;font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:#111;background:#f5f5f5;border-radius:5px;padding:4px 14px">0.0000"</div>
         <div style="flex:1"></div>
         <button id="instSimStartBtn" class="btn btn-primary" onclick="instSimStartSession()" style="padding:10px 20px">▶ Start New Session</button>
         <button id="instSimSendBtn" class="btn btn-primary hidden" onclick="instSimSendRound()" style="padding:10px 20px;background:var(--cl);color:#fff">📡 Lock &amp; Send to Students</button>
@@ -1215,25 +1236,25 @@ setTimeout(function(){
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <div style="position:relative">
             <input id="instSimAnswer" type="text" class="input" placeholder="0.0000" maxlength="7"
-              style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;width:130px;text-align:center;padding:10px"
+              style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:3px;width:130px;text-align:center;padding:10px"
               oninput="this.value=this.value.replace(/[^0-9.]/g,'')"
               onkeydown="if(event.key==='Enter')simSubmit('inst')">
             <div style="font-family:monospace;font-size:.62rem;color:var(--muted);text-align:center;margin-top:3px">inches (e.g. 0.2537)</div>
           </div>
           <button id="instSimSubmitBtn" class="btn btn-primary" onclick="simSubmit('inst')" style="padding:12px 20px">Check Answer</button>
-          <div id="instSimFeedback" class="hidden" style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;padding:8px 16px;border-radius:5px"></div>
+          <div id="instSimFeedback" class="hidden" style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;padding:8px 16px;border-radius:5px"></div>
         </div>
       </div>
 
       <div id="instSimResponsesWrap" class="hidden">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px">Student Responses — Round <span id="instSimRoundLabel">1</span></div>
+          <div style="font-family:var(--font-display);font-size:1rem;letter-spacing:2px">Student Responses — Round <span id="instSimRoundLabel">1</span></div>
           <button class="btn btn-ghost btn-sm" onclick="instSimToggleHistory()" id="instSimHistoryBtn" style="font-size:.72rem;margin-left:auto">📋 View All Rounds</button>
         </div>
         <div id="instSimResponses"></div>
         <!-- Session history — all rounds -->
         <div id="instSimHistoryWrap" class="hidden" style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">SESSION HISTORY — ALL ROUNDS</div>
+          <div style="font-family:var(--font-display);font-size:.9rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">SESSION HISTORY — ALL ROUNDS</div>
           <div id="instSimHistory"></div>
         </div>
       </div>
@@ -1241,7 +1262,7 @@ setTimeout(function(){
       <!-- Permanent grades panel — shows whenever a classroom is selected -->
       <div id="instSimGradesWrap" class="hidden" style="margin-top:24px;border-top:2px solid var(--border);padding-top:18px">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">📊 Simulator Grades</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)">📊 Simulator Grades</div>
           <button class="btn btn-ghost btn-sm" onclick="instSimLoadGrades()" style="font-size:.72rem">↻ Refresh</button>
         </div>
         <div id="instSimGradesContent"><div class="empty-state" style="font-size:.8rem">Loading grades…</div></div>
@@ -1252,7 +1273,7 @@ setTimeout(function(){
   <!-- MASTER DASHBOARD TAB (master admin only) -->
   <div id="inst-tab-masterdash" style="display:none;padding:24px;max-width:860px;margin:0 auto">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:3px;color:var(--accent)">📊 Master Dashboard</div>
+      <div style="font-family:var(--font-display);font-size:1.6rem;letter-spacing:3px;color:var(--accent)">📊 Master Dashboard</div>
       <a href="https://analytics.google.com/analytics/web/" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="margin-left:auto;text-decoration:none" title="Opens Google Analytics — lands on whichever property you last viewed">📈 Google Analytics ↗</a>
       <button class="btn btn-ghost btn-sm" onclick="masterDashLoad()">↻ Refresh</button>
     </div>
@@ -1264,7 +1285,7 @@ setTimeout(function(){
   <!-- ADMIN TAB (super-admins only) -->
   <div id="inst-tab-admin" class="tab-pane" style="display:none;padding:22px 24px;overflow-y:auto">
     <div style="max-width:900px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;color:var(--accent);margin-bottom:2px">⚙ Admin Panel</div>
+      <div style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:3px;color:var(--accent);margin-bottom:2px">⚙ Admin Panel</div>
       <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:20px">Super-admin only · Full platform management</div>
 
       <!-- Sub-tabs -->
@@ -1279,7 +1300,7 @@ setTimeout(function(){
 
       <!-- ALL USERS sub-panel -->
       <div id="adminPanel-users" style="display:none">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:6px">All Students &amp; Instructors</div>
+        <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;margin-bottom:6px">All Students &amp; Instructors</div>
         <div style="font-family:monospace;font-size:.75rem;color:var(--muted);margin-bottom:12px">Every registered user — whether or not they're in a classroom. Search and rename. (Assigning admin rights is master-admin only.)</div>
         <input id="usersSearch_adm" oninput="_usersRender('adm')" placeholder="Search by name or email…" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.95rem;box-sizing:border-box;margin-bottom:12px">
         <div id="usersDirList_adm"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
@@ -1290,14 +1311,14 @@ setTimeout(function(){
         <!-- Pending approvals -->
         <div id="adminPendingSection" style="margin-bottom:20px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:#f59e0b">⏳ Pending Instructor Approvals</div>
+            <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:#f59e0b">⏳ Pending Instructor Approvals</div>
             <button class="btn btn-ghost btn-sm" onclick="adminLoadPending()">↺ Refresh</button>
           </div>
           <div id="adminPendingList"><div class="empty-state" style="font-size:.8rem">No pending applications.</div></div>
         </div>
         <div style="border-top:1px solid var(--border);margin-bottom:16px"></div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px">Registered Instructors</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px">Registered Instructors</div>
           <button class="btn btn-ghost btn-sm" onclick="adminLoadInstructors()">↺ Refresh</button>
         </div>
         <div id="adminInstructorList"><div class="empty-state">Loading...</div></div>
@@ -1306,7 +1327,7 @@ setTimeout(function(){
       <!-- CLASSROOMS sub-panel -->
       <div id="adminPanel-classrooms" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px">All Classrooms</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px">All Classrooms</div>
           <button class="btn btn-ghost btn-sm" onclick="adminLoadClassrooms()">↺ Refresh</button>
         </div>
         <div id="adminClassroomList"><div class="empty-state">Loading...</div></div>
@@ -1315,7 +1336,7 @@ setTimeout(function(){
       <!-- STUDENTS sub-panel -->
       <div id="adminPanel-students" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px">Students</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px">Students</div>
           <button class="btn btn-ghost btn-sm" onclick="adminLoadStudents()">↺ Refresh</button>
         </div>
         <div style="margin-bottom:12px">
@@ -1328,7 +1349,7 @@ setTimeout(function(){
 
       <!-- SEARCH sub-panel -->
       <div id="adminPanel-search" style="display:none">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:14px">🔍 Search Instructors &amp; Students</div>
+        <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;margin-bottom:14px">🔍 Search Instructors &amp; Students</div>
         <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
           <input id="adminSearchInput" class="input" type="text" placeholder="Name or email…" style="flex:1;min-width:200px;max-width:400px" oninput="adminSearchDebounce()" onkeydown="if(event.key==='Enter')adminDoSearch()">
           <select id="adminSearchType" class="select" style="min-width:140px" onchange="adminDoSearch()">
@@ -1343,7 +1364,7 @@ setTimeout(function(){
 
       <!-- ASSIGN QUIZ sub-panel -->
       <div id="adminPanel-assign" style="display:none">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;margin-bottom:14px">Assign Quiz to Classroom</div>
+        <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;margin-bottom:14px">Assign Quiz to Classroom</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;max-width:600px">
           <div>
             <label class="label">Classroom</label>
@@ -1361,7 +1382,7 @@ setTimeout(function(){
         <div id="adminAssignErr" class="err-msg hidden" style="margin-bottom:8px"></div>
         <button class="btn btn-primary" onclick="adminDoAssignQuiz()" style="margin-right:8px">Assign Quiz</button>
         <div style="margin-top:20px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">Currently Assigned</div>
+          <div style="font-family:var(--font-display);font-size:.95rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">Currently Assigned</div>
           <div id="adminAssignedList"><div class="empty-state">Select a classroom above.</div></div>
         </div>
       </div>
@@ -1372,7 +1393,7 @@ setTimeout(function(){
   <!-- DASHBOARD TAB (global) -->
   <div id="inst-tab-dashboard" class="tab-pane" style="display:none;overflow-y:auto">
     <div style="padding:16px 22px 8px;border-bottom:1px solid var(--border);background:var(--panel2);margin-bottom:20px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">Dashboard</div>
+      <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)">Dashboard</div>
       <div style="font-family:monospace;font-size:.65rem;color:var(--muted)">Overview of all classroom activity</div>
     </div>
     <div style="padding:0 20px">
@@ -1412,7 +1433,7 @@ setTimeout(function(){
   <!-- STUDENT PERFORMANCE TAB -->
   <div id="inst-tab-performance" class="tab-pane" style="display:none;padding:22px 24px;overflow-y:auto">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;color:var(--accent)">Student Performance</div>
+      <div style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:3px;color:var(--accent)">Student Performance</div>
       <select class="select" id="perfClassPicker" onchange="onPerfClassChange()" style="font-size:.9rem;max-width:200px"></select>
       <select class="select" id="perfQuizPicker" onchange="loadPerfTab()" style="font-size:.9rem;max-width:240px"></select>
     </div>
@@ -1427,11 +1448,17 @@ setTimeout(function(){
       <div class="brand-logo"><div class="bl-top"><span class="bl-ca">C</span><span class="bl-t">A</span><span class="bl-m">M</span><span class="bl-t">T</span><span class="bl-plane">&#9992;</span></div><div class="bl-bot"><span class="bl-c1">classroom</span><span class="bl-c2">amt</span><span class="bl-com">.com</span></div></div>
       <div class="app-subtitle" id="stuSubtitle">Student</div>
     </div>
-    <div class="user-pill">
-      <span id="stuRoleTitle" style="display:none;margin-right:7px"></span>
-      <span id="stuAllStarBadge" style="display:none;margin-right:7px"></span>
-      <span id="stuUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="stuShowMyProfile()" title="View my profile">--</span>
-      <button class="btn btn-ghost btn-sm i18n-signout" onclick="confirmSignOut('student')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:2px;border-radius:3px">Sign Out</button>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;row-gap:8px">
+      <div style="display:flex;border:1px solid var(--border);border-radius:20px;padding:2px;background:var(--bg)">
+        <button type="button" class="theme-toggle-btn" data-theme-btn="classic" onclick="setAmtTheme('classic')" style="font-family:monospace;font-size:.68rem;letter-spacing:.5px;padding:4px 10px;border:none;border-radius:16px;cursor:pointer">Classic</button>
+        <button type="button" class="theme-toggle-btn" data-theme-btn="modern" onclick="setAmtTheme('modern')" style="font-family:monospace;font-size:.68rem;letter-spacing:.5px;padding:4px 10px;border:none;border-radius:16px;cursor:pointer">Modern</button>
+      </div>
+      <div class="user-pill">
+        <span id="stuRoleTitle" style="display:none;margin-right:7px"></span>
+        <span id="stuAllStarBadge" style="display:none;margin-right:7px"></span>
+        <span id="stuUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="stuShowMyProfile()" title="View my profile">--</span>
+        <button class="btn btn-ghost btn-sm i18n-signout" onclick="confirmSignOut('student')" style="font-size:.78rem;padding:4px 10px;border-left:1px solid var(--border);margin-left:2px;border-radius:3px">Sign Out</button>
+      </div>
     </div>
   </div>
   <div id="opSimStuBanner" class="opsim-banner-wrap hidden" onclick="opSimOpenSignup()" title="Sign up for the Airframe O&P Simulator"></div>
@@ -1520,7 +1547,7 @@ setTimeout(function(){
         <!-- Comprehensive performance breakdown -->
         <div class="pxh-section" style="margin-top:24px">
           <div style="background:linear-gradient(135deg,rgba(8,145,178,.12),rgba(124,58,237,.10));border:1.5px solid var(--accent);border-radius:12px;padding:18px 18px 16px">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1.5px;color:var(--accent);line-height:1.1">📊 Performance Breakdown of All Comprehensive Exams by Subject</div>
+            <div style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:1.5px;color:var(--accent);line-height:1.1">📊 Performance Breakdown of All Comprehensive Exams by Subject</div>
             <div style="font-size:.85rem;color:var(--text);margin:6px 0 14px;line-height:1.4">Tap a subject below to see your <b>weakest topics across every exam you've taken</b> in it — so you know exactly what to study next. (You can also print it to PDF.)</div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
               <button id="pxcb-general" onclick="pxComprehensive('general')" class="px-subj-btn">📋<div style="margin-top:5px">General</div></button>
@@ -1532,7 +1559,7 @@ setTimeout(function(){
         </div>
         <!-- Classroom AMT All-Stars leaderboard -->
         <div class="pxh-section" style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1.5px;color:#f0c040;line-height:1.1">🏆 Classroom AMT All-Stars</div>
+          <div style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:1.5px;color:#f0c040;line-height:1.1">🏆 Classroom AMT All-Stars</div>
           <div style="font-size:.8rem;color:var(--muted);margin:5px 0 12px;line-height:1.4">Top 10 students ranked by accuracy, speed, and practice. Finish exams, score high, and move fast to climb the board.</div>
           <div id="pxAllStars"><div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">Loading rankings…</div></div>
         </div>
@@ -1547,7 +1574,7 @@ setTimeout(function(){
       <div id="practiceExam" class="hidden">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
           <button onclick="practiceReset()" class="btn" style="font-size:.8rem">← Exit</button>
-          <div id="pxExamTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--fg)"></div>
+          <div id="pxExamTitle" style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--fg)"></div>
         </div>
         <!-- Live score progress bar -->
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:16px">
@@ -1567,7 +1594,7 @@ setTimeout(function(){
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
           <button onclick="practiceReset()" class="btn" style="font-size:.8rem">← New Exam</button>
           <button onclick="practicePrintResults()" class="btn" style="font-size:.8rem">🖨 Print / Email Results</button>
-          <div id="pxResultsTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px"></div>
+          <div id="pxResultsTitle" style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px"></div>
         </div>
         <div id="pxResultsBreakdown"></div>
       </div>
@@ -1581,7 +1608,7 @@ setTimeout(function(){
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px">
           <div style="min-width:0">
-            <div id="pxRevTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--fg)"></div>
+            <div id="pxRevTitle" style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--fg)"></div>
             <div id="pxRevMeta" style="font-family:monospace;font-size:.73rem;color:var(--muted);margin-top:3px"></div>
           </div>
           <button onclick="practiceCloseReview()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1;flex-shrink:0;padding:4px">✕</button>
@@ -1644,7 +1671,7 @@ setTimeout(function(){
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:560px;max-height:85vh;overflow-y:auto;margin:16px" onclick="event.stopPropagation()">
           <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
             <div>
-              <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent)">📋 Review Extracted Codes</div>
+              <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent)">📋 Review Extracted Codes</div>
               <div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-top:2px">Check each code — edit or remove any that look wrong before adding</div>
             </div>
             <button onclick="acsCloseReview()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer">✕</button>
@@ -1663,7 +1690,7 @@ setTimeout(function(){
           <div style="padding:14px 18px;background:rgba(240,165,0,.07);border-bottom:1px solid rgba(240,165,0,.2);display:flex;align-items:center;gap:10px">
             <span style="font-size:1.3rem">🎯</span>
             <div>
-              <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--accent)">Expected Practical Tasks</div>
+              <div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:var(--accent)">Expected Practical Tasks</div>
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
               <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Ranked by skill subject matches and how often DMEs assign each practical (occurrences) · updates as you add codes</div>
               <div id="practicalDataBadge"></div>
@@ -1716,10 +1743,10 @@ setTimeout(function(){
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
         <div style="font-size:1.4rem">📡</div>
         <div style="flex:1">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">LIVE SESSION ACTIVE</div>
+          <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)">LIVE SESSION ACTIVE</div>
           <div id="stuSimLiveDesc" style="font-family:monospace;font-size:.72rem;color:var(--muted)">Your instructor has locked a measurement for you to read.</div>
         </div>
-        <div id="stuSimLiveRound" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--accent)">Round 1</div>
+        <div id="stuSimLiveRound" style="font-family:var(--font-display);font-size:1.4rem;color:var(--accent)">Round 1</div>
       </div>
       <div id="stuSimLiveClassInfo" style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:rgba(0,0,0,.2);border-radius:4px"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1731,7 +1758,7 @@ setTimeout(function(){
     <!-- Mode label -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:var(--accent)">📐 Measurement Simulator</div>
+        <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:3px;color:var(--accent)">📐 Measurement Simulator</div>
         <div id="stuSimModeLabel" style="font-family:monospace;font-size:.72rem;color:var(--muted)">Practice Mode — drag the thimble or use the controls below</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -1773,7 +1800,7 @@ setTimeout(function(){
       <button id="stuSimRandomBtn" class="btn btn-ghost btn-sm" onclick="simRandomize('stu')" style="font-size:.8rem">🎲 Randomize</button>
       <button id="stuSimRevealBtn" class="btn btn-ghost btn-sm" onclick="simReveal('stu')" style="font-size:.8rem">👁 Reveal Answer</button>
       <button id="stuSimGuideBtn" class="btn btn-ghost btn-sm" onclick="simToggleGuide('stu')" style="font-size:.8rem">📏 Hide Guide Line</button>
-      <div id="stuSimRevealVal" class="hidden" style="display:none;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:#111;background:#f5f5f5;border-radius:5px;padding:4px 14px">0.0000"</div>
+      <div id="stuSimRevealVal" class="hidden" style="display:none;font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:#111;background:#f5f5f5;border-radius:5px;padding:4px 14px">0.0000"</div>
     </div>
 
     <!-- Answer entry -->
@@ -1782,13 +1809,13 @@ setTimeout(function(){
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <div style="position:relative">
           <input id="stuSimAnswer" type="text" class="input" placeholder="0.0000" maxlength="7"
-            style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;width:130px;text-align:center;padding:10px"
+            style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:3px;width:130px;text-align:center;padding:10px"
             oninput="this.value=this.value.replace(/[^0-9.]/g,'')"
             onkeydown="if(event.key==='Enter')simSubmit('stu')">
           <div style="font-family:monospace;font-size:.62rem;color:var(--muted);text-align:center;margin-top:3px">inches (e.g. 1.2375)</div>
         </div>
         <button id="stuSimSubmitBtn" class="btn btn-primary" onclick="simSubmit('stu')" style="padding:12px 20px">Submit Answer</button>
-        <div id="stuSimFeedback" class="hidden" style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;padding:8px 16px;border-radius:5px"></div>
+        <div id="stuSimFeedback" class="hidden" style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;padding:8px 16px;border-radius:5px"></div>
       </div>
     </div>
 
@@ -1797,7 +1824,7 @@ setTimeout(function(){
 
     <!-- Live session previous rounds (shown during live session) -->
     <div id="stuSimLiveHistory" class="hidden" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">YOUR PREVIOUS ROUNDS THIS SESSION</div>
+      <div style="font-family:var(--font-display);font-size:.85rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">YOUR PREVIOUS ROUNDS THIS SESSION</div>
       <div id="stuSimLiveHistoryList"></div>
     </div>
   </div>
@@ -1820,7 +1847,7 @@ setTimeout(function(){
     <div id="stuReviewOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:400;flex-direction:column;overflow:hidden">
       <div style="background:var(--panel2);border-bottom:1px solid var(--border);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--accent)">Review Your Answers</div>
+          <div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:var(--accent)">Review Your Answers</div>
           <div style="display:flex;gap:14px;margin-top:2px">
             <span id="stuReviewUnanswered" style="font-family:monospace;font-size:.72rem"></span>
             <span id="stuReviewStarCount" style="font-family:monospace;font-size:.72rem;color:var(--accent)"></span>
@@ -1899,7 +1926,7 @@ setTimeout(function(){
 <div id="stuReviewModal" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:400;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px" onclick="if(event.target===this)closeStuReviewModal()">
   <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);max-width:620px;width:100%;padding:24px;margin:auto;position:relative">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px" id="srTitle">Quiz Review</div>
+      <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px" id="srTitle">Quiz Review</div>
       <button onclick="closeStuReviewModal()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
     </div>
     <div id="srBody">Loading...</div>
@@ -1913,7 +1940,7 @@ setTimeout(function(){
   <div class="stu-modal" style="max-width:860px;max-height:92vh">
     <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
       <div style="flex:1">
-        <div id="adminClassModalTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Class Detail</div>
+        <div id="adminClassModalTitle" style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Class Detail</div>
         <div id="adminClassModalMeta" style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:2px"></div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="closeAdminClassModal()">✕ Close</button>
@@ -1938,7 +1965,7 @@ setTimeout(function(){
   <div class="stu-modal" style="max-width:700px;max-height:88vh">
     <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
       <div style="flex:1">
-        <div id="adminInstModalTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Instructor Profile</div>
+        <div id="adminInstModalTitle" style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Instructor Profile</div>
         <div id="adminInstModalMeta" style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:2px"></div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="closeAdminInstModal()">✕ Close</button>
@@ -1954,7 +1981,7 @@ setTimeout(function(){
   <div class="stu-modal" style="max-width:700px;max-height:88vh">
     <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
       <div style="flex:1">
-        <div id="adminStuModalTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Student Profile</div>
+        <div id="adminStuModalTitle" style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Student Profile</div>
         <div id="adminStuModalMeta" style="font-family:monospace;font-size:.7rem;color:var(--muted);margin-top:2px"></div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="adminRenameStudent()">✏ Rename</button>
@@ -1970,7 +1997,7 @@ setTimeout(function(){
   <div class="modal" style="max-width:380px;width:92%">
     <div style="text-align:center;margin-bottom:20px">
       <div style="font-size:2rem;margin-bottom:10px">👋</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent)">Welcome!</div>
+      <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--accent)">Welcome!</div>
       <div style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-top:6px">Please enter your full name to get started.</div>
     </div>
     <label class="label">First & Last Name</label>
@@ -1989,7 +2016,7 @@ setTimeout(function(){
   <div class="modal" style="max-width:380px;width:92%">
     <div style="text-align:center;margin-bottom:20px">
       <div style="font-size:2rem;margin-bottom:10px">🔑</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent)">Access Code</div>
+      <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--accent)">Access Code</div>
       <div style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-top:6px">Enter the instructor access code to complete registration.</div>
     </div>
     <label class="label">Instructor Access Code</label>
@@ -2008,7 +2035,7 @@ setTimeout(function(){
 <div id="printPreviewModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('printPreviewModal')">
   <div class="modal" style="max-width:860px;width:96%;max-height:90vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
-      <div id="printPreviewTitle" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent)">🖨 Print Preview</div>
+      <div id="printPreviewTitle" style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--accent)">🖨 Print Preview</div>
       <div id="printPreviewActions" style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="printQuizPDF()" title="Print / Save as PDF">📄 Print / PDF</button>
         <button class="btn btn-primary btn-sm" onclick="downloadQuizDocx()" title="Download as Word document (.rtf)">📝 Download Word</button>
@@ -2093,7 +2120,7 @@ setTimeout(function(){
         <div style="display:flex;align-items:center;gap:12px">
           <div id="spAvatar" class="stu-avatar" style="width:42px;height:42px;font-size:1.1rem;background:rgba(74,158,255,.15);color:var(--blue);overflow:hidden"></div>
           <div>
-            <div id="spName" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--text)"></div>
+            <div id="spName" style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--text)"></div>
             <div id="spMeta" style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-top:2px"></div>
           </div>
         </div>
@@ -2681,7 +2708,7 @@ function stuShowMyProfile(){
     ? `<img src="${photoURL}" style="width:52px;height:52px;border-radius:50%;background:var(--panel2);object-fit:cover" alt="${esc(initials)}">`
     : (avatarStyle && avatarStyle !== 'initials')
       ? `<img src="${dicebearUrl(avatarStyle, seed)}" style="width:52px;height:52px;border-radius:50%;background:var(--panel2);object-fit:cover" alt="${esc(initials)}">`
-      : `<div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;flex-shrink:0">${initials}</div>`;
+      : `<div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1.5rem;flex-shrink:0">${initials}</div>`;
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
       <div style="position:relative;flex-shrink:0">
@@ -2713,7 +2740,7 @@ function instShowMyProfile(){
   const schoolVal = esc(instProfile.schoolName || '');
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-      <div style="width:52px;height:52px;border-radius:50%;background:rgba(240,165,0,.15);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;flex-shrink:0">
+      <div style="width:52px;height:52px;border-radius:50%;background:rgba(240,165,0,.15);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1.5rem;flex-shrink:0">
         ${(instProfile.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
       </div>
       <div>
@@ -3591,18 +3618,18 @@ async function masterDashLoad(){
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const bigNum = (n, col='var(--accent)') =>
-    `<span style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:${col};letter-spacing:2px">${n}</span>`;
+    `<span style="font-family:var(--font-display);font-size:2rem;color:${col};letter-spacing:2px">${n}</span>`;
 
   const row = (label, val, col) =>
     `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
       <span style="font-family:monospace;font-size:.78rem;color:var(--muted)">${label}</span>
-      <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${col||'var(--text)'};letter-spacing:1px">${val}</span>
+      <span style="font-family:var(--font-display);font-size:1.1rem;color:${col||'var(--text)'};letter-spacing:1px">${val}</span>
     </div>`;
 
   const panel = (id, title, icon, content, defaultOpen=false) =>
     `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
       <button onclick="masterDashToggle('${id}')" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--panel2);border:none;cursor:pointer;text-align:left">
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--accent)">${icon} ${title}</span>
+        <span style="font-family:var(--font-display);font-size:1rem;letter-spacing:2px;color:var(--accent)">${icon} ${title}</span>
         <span id="${id}-arrow" style="font-size:.8rem;color:var(--muted)">${defaultOpen?'▲':'▼'}</span>
       </button>
       <div id="${id}-body" style="padding:${defaultOpen?'16px 18px':'0 18px'};max-height:${defaultOpen?'500px':'0'};overflow:hidden;transition:max-height .3s,padding .3s">
@@ -3949,7 +3976,7 @@ async function _genCostLoad(){
   const l7=rows.filter(r=>r.ts>now-7*DAY), l30=rows.filter(r=>r.ts>now-30*DAY);
   const avg=exams?total/exams:0, inTok=sum(rows,r=>r.inTok), outTok=sum(rows,r=>r.outTok);
   const fmt=n=>'$'+((n||0)<0.01?(n||0).toFixed(4):(n||0).toFixed(2));
-  const stat=(l,v,s)=>'<div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px"><div style="font-family:monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">'+l+'</div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:var(--accent);letter-spacing:1px">'+v+'</div>'+(s?'<div style="font-family:monospace;font-size:.6rem;color:var(--muted)">'+s+'</div>':'')+'</div>';
+  const stat=(l,v,s)=>'<div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px"><div style="font-family:monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">'+l+'</div><div style="font-family:var(--font-display);font-size:1.4rem;color:var(--accent);letter-spacing:1px">'+v+'</div>'+(s?'<div style="font-family:monospace;font-size:.6rem;color:var(--muted)">'+s+'</div>':'')+'</div>';
   let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:12px">'+
     stat('Last 7 days',fmt(sum(l7,r=>r.costUsd)),l7.length+' exams')+
     stat('Last 30 days',fmt(sum(l30,r=>r.costUsd)),l30.length+' exams')+
@@ -4009,7 +4036,7 @@ function _vpoolRender(){
   const pend=_vpoolData.filter(r=>!r.flagged&&r.stage==='pending').length;
   const retired=_vpoolData.filter(r=>r.flagged).length;
   if(statsEl){
-    const card=(label,val,col)=>`<div style="flex:1;min-width:80px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center"><div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:${col};letter-spacing:1px">${val}</div><div style="font-family:monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase">${label}</div></div>`;
+    const card=(label,val,col)=>`<div style="flex:1;min-width:80px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center"><div style="font-family:var(--font-display);font-size:1.5rem;color:${col};letter-spacing:1px">${val}</div><div style="font-family:monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase">${label}</div></div>`;
     statsEl.innerHTML=card('Total',total,'var(--text)')+card('Jar',jar,'#f0c040')+card('Pending',pend,'#22b8d8')+card('Retired',retired,'#e06666');
   }
   const fs=(document.getElementById('vpoolSubject')||{}).value||'';
@@ -4765,8 +4792,8 @@ async function _opSimLoadArchive(){
   const totalSignups = sessions.reduce((n,s)=>n+(s.count||0),0);
   const fmtDate = ts => { try { return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); } catch(e){ return ''; } };
   const summary = '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:12px;font-family:monospace">'+
-    '<div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;line-height:1;color:var(--accent)">'+totalSignups+'</div><div style="font-size:.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Total Sign-Ups</div></div>'+
-    '<div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;line-height:1;color:var(--blue)">'+sessions.length+'</div><div style="font-size:.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Sessions Logged</div></div>'+
+    '<div><div style="font-family:var(--font-display);font-size:1.6rem;line-height:1;color:var(--accent)">'+totalSignups+'</div><div style="font-size:.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Total Sign-Ups</div></div>'+
+    '<div><div style="font-family:var(--font-display);font-size:1.6rem;line-height:1;color:var(--blue)">'+sessions.length+'</div><div style="font-size:.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Sessions Logged</div></div>'+
   '</div>';
   const rows = sessions.map((s,i)=>{
     const when = s.sessionDate ? _qEsc(s.sessionDate)+(s.sessionTime?(' · '+_qEsc(s.sessionTime)):'') : ('Archived '+fmtDate(s.archivedAt));
@@ -5156,6 +5183,23 @@ function initLang(){
   _currentLang=saved;
 }
 initLang();
+
+function setAmtTheme(mode){
+  mode = mode==='modern' ? 'modern' : 'classic';
+  document.documentElement.setAttribute('data-theme', mode);
+  try{ localStorage.setItem('amtTheme', mode); }catch(e){}
+  document.querySelectorAll('.theme-toggle-btn').forEach(function(b){
+    const on = b.getAttribute('data-theme-btn')===mode;
+    b.style.background = on ? 'var(--accent)' : 'transparent';
+    b.style.color = on ? 'var(--panel)' : 'var(--muted)';
+  });
+}
+function initAmtTheme(){
+  let saved='classic';
+  try{ saved = localStorage.getItem('amtTheme')==='modern' ? 'modern' : 'classic'; }catch(e){}
+  setAmtTheme(saved);
+}
+initAmtTheme();
 // ── END i18n ─────────────────────────────────────────────────────────────
 
 // ── SIM SESSION HISTORY ───────────────────────────────────────────────────
@@ -5219,7 +5263,7 @@ async function instSimLoadGrades(){
         <td style="padding:6px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--bg);font-size:.8rem">${esc(s.name||key)}</td>
         ${cells}
         <td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:rgba(240,165,0,.06)">
-          <span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;color:${avgCol}">${pct!==null?pct+'%':'—'}</span>
+          <span style="font-family:var(--font-display);font-size:1rem;color:${avgCol}">${pct!==null?pct+'%':'—'}</span>
           <div style="font-family:monospace;font-size:.6rem;color:var(--muted)">${stat.correct}/${stat.total}</div>
         </td>
       </tr>`;
@@ -5242,7 +5286,7 @@ async function instSimLoadGrades(){
           if(!totals.length) return '—';
           const avg = Math.round(totals.reduce((a,s)=>a+s.correct/s.total*100,0)/totals.length);
           const col = avg>=80?'#16a34a':avg>=60?'#d97706':'#dc2626';
-          return `<span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;color:${col}">${avg}%</span>`;
+          return `<span style="font-family:var(--font-display);font-size:1rem;color:${col}">${avg}%</span>`;
         })()}
       </td>
     </tr>`;
@@ -5299,7 +5343,7 @@ async function instSimLoadHistory(){
       const rounds=Object.entries(session.rounds||{}).sort((a,b)=>(a[1].sentAt||0)-(b[1].sentAt||0));
       const firstInst=rounds[0]?.[1]?.instrumentType||'mic';
       const instLabel=firstInst==='cal'?'📏 Caliper':'🔩 Micrometer';
-      html+=`<div style="margin-bottom:14px"><div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:1px;color:var(--accent);margin-bottom:6px">Session ${sNum} <span style="font-family:monospace;font-size:.65rem;color:var(--muted);letter-spacing:0">${instLabel}</span></div>`;
+      html+=`<div style="margin-bottom:14px"><div style="font-family:var(--font-display);font-size:.85rem;letter-spacing:1px;color:var(--accent);margin-bottom:6px">Session ${sNum} <span style="font-family:monospace;font-size:.65rem;color:var(--muted);letter-spacing:0">${instLabel}</span></div>`;
       for(const [rId,round] of Object.entries(rounds)){
         const responses=Object.values(round.responses||{});
         const correct=responses.filter(r=>r.correct).length;
@@ -5373,7 +5417,7 @@ async function adminLoadSimGradebook(classId, container){
     const totalRounds=Object.values(sessions).reduce((a,s)=>a+Object.keys(s.rounds||{}).length,0);
     container.innerHTML+=`
       <div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:10px;color:var(--accent)">📐 Micrometer Sim — ${totalRounds} round${totalRounds!==1?'s':''} total</div>
+        <div style="font-family:var(--font-display);font-size:1rem;letter-spacing:2px;margin-bottom:10px;color:var(--accent)">📐 Micrometer Sim — ${totalRounds} round${totalRounds!==1?'s':''} total</div>
         <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.78rem">
           <thead><tr style="background:var(--panel2)">
             <th style="padding:7px 12px;text-align:left;border:1px solid var(--border)">Student</th>
@@ -5603,11 +5647,11 @@ async function adminLoadClassRoster(){
     el.innerHTML = `
       <div style="margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap">
         <div style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:12px 18px;flex:1;min-width:120px;text-align:center">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent)">${stuEntries.length}</div>
+          <div style="font-family:var(--font-display);font-size:1.8rem;color:var(--accent)">${stuEntries.length}</div>
           <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">STUDENTS</div>
         </div>
         <div style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:12px 18px;flex:1;min-width:120px;text-align:center">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--blue)">${Object.keys(classroom.assignedQuizzes||{}).length}</div>
+          <div style="font-family:var(--font-display);font-size:1.8rem;color:var(--blue)">${Object.keys(classroom.assignedQuizzes||{}).length}</div>
           <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">QUIZZES</div>
         </div>
       </div>
@@ -5767,7 +5811,7 @@ function adminRenderGradebook(){
   // Sim session round-by-round breakdown below main table
   if(hasSimData && _gbData.simSessions){
     html += `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;margin-bottom:12px;color:var(--accent)">📐 Micrometer Simulator — Round Detail</div>`;
+      <div style="font-family:var(--font-display);font-size:.95rem;letter-spacing:2px;margin-bottom:12px;color:var(--accent)">📐 Micrometer Simulator — Round Detail</div>`;
     for(const [sNum, session] of Object.entries(_gbData.simSessions)){
       const rounds = Object.entries(session.rounds||{}).sort((a,b)=>a[1].sentAt-b[1].sentAt);
       if(!rounds.length) continue;
@@ -6289,19 +6333,19 @@ async function adminOpenInstructorProfile(uid, name){
     document.getElementById('adminInstModalBody').innerHTML = `
       <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
         <div style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:12px 18px;flex:1;min-width:100px;text-align:center">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent)">${allIds.length}</div>
+          <div style="font-family:var(--font-display);font-size:1.8rem;color:var(--accent)">${allIds.length}</div>
           <div style="font-family:monospace;font-size:.68rem;color:var(--muted)">CLASSES</div>
         </div>
         <div style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:12px 18px;flex:1;min-width:100px;text-align:center">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--cl)">${Object.keys(ownClassrooms||{}).length}</div>
+          <div style="font-family:var(--font-display);font-size:1.8rem;color:var(--cl)">${Object.keys(ownClassrooms||{}).length}</div>
           <div style="font-family:monospace;font-size:.68rem;color:var(--muted)">HOSTING</div>
         </div>
         <div style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:12px 18px;flex:1;min-width:100px;text-align:center">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--blue)">${Object.keys(coClassrooms||{}).length}</div>
+          <div style="font-family:var(--font-display);font-size:1.8rem;color:var(--blue)">${Object.keys(coClassrooms||{}).length}</div>
           <div style="font-family:monospace;font-size:.68rem;color:var(--muted)">CO-INST</div>
         </div>
       </div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">CLASSROOMS</div>
+      <div style="font-family:var(--font-display);font-size:.95rem;letter-spacing:2px;margin-bottom:10px;color:var(--muted)">CLASSROOMS</div>
       ${classRows}`;
   } catch(e){ document.getElementById('adminInstModalBody').innerHTML = `<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
 }
@@ -7170,7 +7214,7 @@ Be direct and practical. Use plain text, no markdown.`;
       el.innerHTML = `
         <div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r);padding:18px 20px">
           <div style="font-family:monospace;font-size:.83rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px">🤖 Instructor Insights</div>
-          <div style="font-family:'IBM Plex Sans',sans-serif;font-size:.97rem;line-height:1.7;color:var(--text);white-space:pre-line">${esc(summary)}</div>
+          <div style="font-family:var(--font-ui);font-size:.97rem;line-height:1.7;color:var(--text);white-space:pre-line">${esc(summary)}</div>
         </div>`;
     } else if(el) {
       el.innerHTML = '';
@@ -7203,7 +7247,7 @@ function renderPerfStats(quiz, finished, avg, highest, lowest, passPct, passing,
     return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:var(--r);margin-bottom:5px;background:${rowBg};border:${border}">
       <div style="font-family:monospace;font-size:.85rem;color:var(--muted);min-width:22px;text-align:center">${medal || ('#'+s.rank)}</div>
       <div style="flex:1;font-size:.92rem;font-weight:${isTop3?'700':'500'}">${esc(s.name)}</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:${pctColor}">${s.pct}%</div>
+      <div style="font-family:var(--font-display);font-size:1.2rem;color:${pctColor}">${s.pct}%</div>
       <div style="font-family:monospace;font-size:.75rem;color:var(--muted)">${s.score}</div>
     </div>`;
   }).join('');
@@ -7272,7 +7316,7 @@ function renderPerfStats(quiz, finished, avg, highest, lowest, passPct, passing,
         { label:'Highest', val: highest+'%', color:'var(--cl)' },
         { label:'Lowest', val: lowest+'%', color:'var(--wl)' },
       ].map(k=>`<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;text-align:center">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.9rem;color:${k.color};line-height:1">${k.val}</div>
+        <div style="font-family:var(--font-display);font-size:1.9rem;color:${k.color};line-height:1">${k.val}</div>
         <div style="font-family:monospace;font-size:.75rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:3px">${k.label}</div>
       </div>`).join('')}
     </div>
@@ -7427,7 +7471,7 @@ async function loadCdPerfTab(){
     const data = await resp.json();
     const summary = data.content?.[0]?.text||'';
     const el = document.getElementById('cdPerfAISummary');
-    if(el && summary) el.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r);padding:18px 20px"><div style="font-family:monospace;font-size:.83rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px">🤖 Instructor Insights</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:.97rem;line-height:1.7;color:var(--text);white-space:pre-line">${esc(summary)}</div></div>`;
+    if(el && summary) el.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r);padding:18px 20px"><div style="font-family:monospace;font-size:.83rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px">🤖 Instructor Insights</div><div style="font-family:var(--font-ui);font-size:.97rem;line-height:1.7;color:var(--text);white-space:pre-line">${esc(summary)}</div></div>`;
     else if(el) el.innerHTML='';
   } catch(e){ const el=document.getElementById('cdPerfAISummary'); if(el) el.innerHTML=''; }
 }
@@ -7471,12 +7515,12 @@ async function loadClassrooms(){
         <span></span> ${esc(c.name)}
       </div>
       ${c.description ? `<div style="font-size:.82rem;color:var(--muted);margin-bottom:10px">${esc(c.description)}</div>` : ''}
-      <div style="background:var(--bg);border:2px dashed rgba(240,165,0,.35);border-radius:var(--r);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px">
-        <div>
+      <div style="background:var(--bg);border:2px dashed rgba(240,165,0,.35);border-radius:var(--r);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div style="min-width:0">
           <div style="font-family:monospace;font-size:.55rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Student Entry Code</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:8px;color:var(--accent);line-height:1">${c.code}</div>
+          <div style="font-family:var(--font-display);font-size:2rem;letter-spacing:8px;color:var(--accent);line-height:1;word-break:break-all">${c.code}</div>
         </div>
-        <button onclick="event.stopPropagation();copyCode('${c.code}')" style="background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.25);border-radius:var(--r);color:var(--accent);font-family:monospace;font-size:.58rem;letter-spacing:1px;padding:5px 9px;cursor:pointer;transition:background .15s;text-transform:uppercase" onmouseover="this.style.background='rgba(240,165,0,.2)'" onmouseout="this.style.background='rgba(240,165,0,.1)'">Copy</button>
+        <button onclick="event.stopPropagation();copyCode('${c.code}')" style="flex-shrink:0;background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.25);border-radius:var(--r);color:var(--accent);font-family:monospace;font-size:.58rem;letter-spacing:1px;padding:5px 9px;cursor:pointer;transition:background .15s;text-transform:uppercase" onmouseover="this.style.background='rgba(240,165,0,.2)'" onmouseout="this.style.background='rgba(240,165,0,.1)'">Copy</button>
       </div>
       <div class="classroom-card-meta">
         <span>${stuCount} student${stuCount!==1?'s':''}</span>
@@ -8710,7 +8754,7 @@ async function loadExamPerformance(classId, classExamId){
   const topicRows=Object.entries(agg).filter(([,v])=>v.total>0).map(([t,v])=>({t,correct:v.correct,total:v.total,pct:Math.round(v.correct/v.total*100)})).sort((a,b)=>a.pct-b.pct);
   const classPct=totQ?Math.round(totC/totQ*100):0;
   const weak=topicRows.filter(r=>r.pct<70 && r.total>=2).slice(0,5);
-  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;letter-spacing:1px;color:var(--accent)">Class Average: '+classPct+'%</div><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">'+done.length+' student'+(done.length===1?'':'s')+' completed · '+totC+'/'+totQ+' total</div></div>';
+  let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px"><div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:1px;color:var(--accent)">Class Average: '+classPct+'%</div><div style="font-family:monospace;font-size:.72rem;color:var(--muted)">'+done.length+' student'+(done.length===1?'':'s')+' completed · '+totC+'/'+totQ+' total</div></div>';
   if(weak.length){ html+='<div style="background:rgba(204,68,68,.06);border:1px solid rgba(204,68,68,.25);border-radius:var(--r);padding:12px 15px;margin-bottom:12px"><div style="font-family:monospace;font-size:.72rem;text-transform:uppercase;color:var(--wl);margin-bottom:7px">⚠ Class needs the most work on</div>'+weak.map(r=>'<div style="font-weight:700;font-size:.9rem;margin-bottom:3px">'+esc(r.t)+' — <span style="color:'+(r.pct>=50?'#f59e0b':'var(--wl)')+'">'+r.correct+'/'+r.total+' ('+r.pct+'%)</span></div>').join('')+'</div>'; }
   // Flat, ranked list of the SPECIFIC concepts missed across the class on this exam — more
   // actionable than a broad topic name when planning what to actually re-teach.
@@ -8930,7 +8974,7 @@ async function loadQuizBankAndAutoSelect(){
   document.getElementById('quizBuilderPanel').innerHTML = `
     <div style="display:flex;flex-direction:column;align-items:center;padding:32px 30px 20px;text-align:center;gap:16px">
       <div style="font-size:2.5rem">📋</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:3px;color:var(--accent)">Create/Assign a Quiz</div>
+      <div style="font-family:var(--font-display);font-size:1.6rem;letter-spacing:3px;color:var(--accent)">Create/Assign a Quiz</div>
       <div style="font-family:monospace;font-size:.82rem;color:var(--muted);max-width:340px;line-height:1.7">
         Select an existing quiz from the left panel to edit,<br>or click below to build a new one from scratch.
       </div>
@@ -8975,7 +9019,7 @@ function renderBuilderPanel(quiz, id){
       </label>`).join('');
     return `<div style="margin-bottom:14px" id="qbsec-${key}">
       <div style="margin-bottom:8px;padding-bottom:7px;border-bottom:2px solid ${color}55">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:${color};margin-bottom:7px">${label}</div>
+        <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:3px;color:${color};margin-bottom:7px">${label}</div>
         <button type="button" onclick="_qbToggleSection('${key}')" onmouseover="this.style.background='${color}';this.style.color='#0a0c0f'" onmouseout="this.style.background='transparent';this.style.color='${color}'" style="display:inline-block;background:transparent;border:1.5px solid ${color};color:${color};border-radius:6px;font-family:monospace;font-size:.68rem;font-weight:700;letter-spacing:.5px;padding:4px 13px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s">✓ Select all</button>
       </div>
       ${cards}
@@ -9154,7 +9198,7 @@ async function deleteQuiz(id){
   if(!confirm('Delete this quiz?\n\nThis will also unassign it from all classrooms and clear all student progress for this quiz.')) return;
   await _deleteQuizFully(id);
   selectedQuizId = null;
-  document.getElementById('quizBuilderPanel').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:32px 20px 20px;text-align:center;gap:16px"><div style="font-size:2.5rem">📝</div><div style="font-family:Bebas Neue,sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Create/Assign a Quiz</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted);max-width:300px;line-height:1.6">Select an existing quiz from the left panel to edit, or click below to build a new one from scratch.</div><button class="btn btn-primary" style="padding:10px 28px;font-size:.95rem;letter-spacing:1px;margin-top:4px" onclick="startNewQuiz()">+ New Quiz</button></div>';
+  document.getElementById('quizBuilderPanel').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:32px 20px 20px;text-align:center;gap:16px"><div style="font-size:2.5rem">📝</div><div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Create/Assign a Quiz</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted);max-width:300px;line-height:1.6">Select an existing quiz from the left panel to edit, or click below to build a new one from scratch.</div><button class="btn btn-primary" style="padding:10px 28px;font-size:.95rem;letter-spacing:1px;margin-top:4px" onclick="startNewQuiz()">+ New Quiz</button></div>';
   loadQuizBank();
 }
 
@@ -9164,7 +9208,7 @@ async function quickDeleteQuiz(id, title){
   await _deleteQuizFully(id);
   if(selectedQuizId === id){
     selectedQuizId = null;
-    document.getElementById('quizBuilderPanel').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:32px 20px 20px;text-align:center;gap:16px"><div style="font-size:2.5rem">📝</div><div style="font-family:Bebas Neue,sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Create/Assign a Quiz</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted);max-width:300px;line-height:1.6">Select an existing quiz from the left panel to edit, or click below to build a new one from scratch.</div><button class="btn btn-primary" style="padding:10px 28px;font-size:.95rem;letter-spacing:1px;margin-top:4px" onclick="startNewQuiz()">+ New Quiz</button></div>';
+    document.getElementById('quizBuilderPanel').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:32px 20px 20px;text-align:center;gap:16px"><div style="font-size:2.5rem">📝</div><div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent)">Create/Assign a Quiz</div><div style="font-family:monospace;font-size:.78rem;color:var(--muted);max-width:300px;line-height:1.6">Select an existing quiz from the left panel to edit, or click below to build a new one from scratch.</div><button class="btn btn-primary" style="padding:10px 28px;font-size:.95rem;letter-spacing:1px;margin-top:4px" onclick="startNewQuiz()">+ New Quiz</button></div>';
   }
   loadQuizBank();
 }
@@ -10054,7 +10098,7 @@ async function runDistractorTest(){
 
     document.getElementById('dtOptions').innerHTML = options.map((opt,i)=>`
       <div style="background:${opt.correct?'rgba(58,170,102,.08)':'var(--bg)'};border:1px solid ${opt.correct?'var(--correct)':'var(--border)'};border-radius:var(--r);padding:10px 14px;display:flex;gap:10px;align-items:flex-start">
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${opt.correct?'var(--cl)':'var(--muted)'};flex-shrink:0;min-width:22px">${letters[i]}.</span>
+        <span style="font-family:var(--font-display);font-size:1.1rem;color:${opt.correct?'var(--cl)':'var(--muted)'};flex-shrink:0;min-width:22px">${letters[i]}.</span>
         <span style="flex:1;font-size:.9rem;${opt.correct?'color:var(--cl);font-weight:600':''}">${esc(opt.text)}</span>
         ${opt.correct?'<span style="font-family:\'IBM Plex Mono\',monospace;font-size:.65rem;background:rgba(58,170,102,.15);color:var(--cl);border:1px solid var(--correct);border-radius:3px;padding:2px 6px;white-space:nowrap;flex-shrink:0">✓ Correct</span>':''}
       </div>`).join('');
@@ -10432,7 +10476,7 @@ function renderGradeBook(students, quizId, iLog){
       }).join('');
 
       simDiv.innerHTML = `
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--accent);margin-bottom:10px">📐 Micrometer Simulator — ${allRounds.length} Round${allRounds.length!==1?'s':''}</div>
+        <div style="font-family:var(--font-display);font-size:1rem;letter-spacing:2px;color:var(--accent);margin-bottom:10px">📐 Micrometer Simulator — ${allRounds.length} Round${allRounds.length!==1?'s':''}</div>
         <table class="grade-table"><thead><tr>
           <th>Student</th><th>Rounds Correct</th><th>Accuracy</th><th>Rounds Attempted</th>
         </tr></thead><tbody>${statRows}</tbody></table>`;
@@ -10552,7 +10596,7 @@ function renderStudentProgressList(students, elId, integrityMap){
         const unanswered = Math.max(0, tot - s.answeredCount);
         const projected = Math.round(((s.correctCount + unanswered) / tot) * 100);
         const liveColor = projected >= 70 ? 'var(--cl)' : projected >= 50 ? 'var(--accent)' : 'var(--wl)';
-        liveScoreBadge = `<div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:${liveColor};min-width:52px;text-align:right">${projected}%</div>`;
+        liveScoreBadge = `<div style="font-family:var(--font-display);font-size:1.2rem;color:${liveColor};min-width:52px;text-align:right">${projected}%</div>`;
       }
     } else {
       statusColor = 'var(--muted)';
@@ -10813,7 +10857,7 @@ async function openStuClassroomPanel(classroomId, classroomName, instName){
     <div class="modal-box" style="max-width:540px;width:100%;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:18px">
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:2px">${esc(classroomName)}</div>
+          <div style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:2px">${esc(classroomName)}</div>
           <div style="font-family:monospace;font-size:.87rem;color:var(--muted)">Instructor: <span style="color:var(--blue)">${esc(instName)}</span></div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -10955,7 +10999,7 @@ async function openStuQuizReview(){
 
     return `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:var(--r);padding:12px 14px;margin-bottom:8px">
       <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${iconColor};flex-shrink:0">${icon}</span>
+        <span style="font-family:var(--font-display);font-size:1.1rem;color:${iconColor};flex-shrink:0">${icon}</span>
         <div style="font-size:.95rem;font-weight:600;color:var(--text)">${i+1}. ${esc(q.q || q.question || '')}</div>
       </div>
       ${answered ? `<div style="font-size:.85rem;margin-bottom:4px;padding-left:22px">
@@ -10971,7 +11015,7 @@ async function openStuQuizReview(){
 
   const pct = Math.round((correctCount / TQ) * 100);
   const summary = `<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:${pct>=70?'var(--cl)':'var(--wl)'};line-height:1">${pct}%</div>
+    <div style="font-family:var(--font-display);font-size:2.5rem;color:${pct>=70?'var(--cl)':'var(--wl)'};line-height:1">${pct}%</div>
     <div>
       <div style="font-weight:600">${correctCount} of ${TQ} correct</div>
       <div style="font-family:monospace;font-size:.83rem;color:var(--muted)">${pct>=90?'Excellent!':pct>=70?'Passed':'Needs improvement'}</div>
@@ -11046,7 +11090,7 @@ async function loadStudentQuizzes(){
     if(newSec) newSec.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;text-align:center">
         <div style="font-size:2.5rem;margin-bottom:14px">🏫</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;color:var(--blue);margin-bottom:8px">Join a Classroom</div>
+        <div style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:3px;color:var(--blue);margin-bottom:8px">Join a Classroom</div>
         <div style="font-family:monospace;font-size:.8rem;color:var(--muted);margin-bottom:24px;max-width:300px;line-height:1.6">
           Get a 5-letter code from your instructor to access assigned quizzes.
         </div>
@@ -11107,12 +11151,12 @@ async function loadStudentQuizzes(){
         onmouseout="this.style.borderColor='var(--border)';this.querySelector('.leave-btn').style.opacity='0'">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
           <div>
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--text)">${cname}</div>
+            <div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:var(--text)">${cname}</div>
             <div style="font-family:monospace;font-size:.83rem;color:var(--muted);margin-top:2px">Instructor: <span style="color:var(--blue)">${esc(instName)}</span></div>
           </div>
           <div style="text-align:right">
             <div style="font-family:monospace;font-size:.83rem;color:var(--muted)">${assignedCount} quiz${assignedCount!==1?'zes':''}</div>
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:1.5px;color:var(--accent)">${esc(c.classroomCode)}</div>
+            <div style="font-family:var(--font-display);font-size:.9rem;letter-spacing:1.5px;color:var(--accent)">${esc(c.classroomCode)}</div>
           </div>
         </div>
         <div class="leave-btn" style="opacity:0;transition:opacity .2s;margin-top:10px;border-top:1px solid rgba(255,255,255,.06);padding-top:8px;display:flex;justify-content:flex-end">
@@ -11970,7 +12014,7 @@ function stuBuildInlineReview(){
 
     return `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:var(--r);padding:11px 13px;margin-bottom:7px">
       <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:5px">
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;color:${iconColor};flex-shrink:0">${icon}</span>
+        <span style="font-family:var(--font-display);font-size:1.05rem;color:${iconColor};flex-shrink:0">${icon}</span>
         <div style="font-size:.9rem;font-weight:600;color:var(--text)">${i+1}. ${esc(q.q || '')}</div>
       </div>
       ${answered ? `<div style="font-size:.83rem;margin-bottom:3px;padding-left:22px">
@@ -12371,7 +12415,7 @@ async function loadClassroomInstructors(classId){
   const rows = [
     // Host row
     `<div style="background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div style="width:36px;height:36px;border-radius:50%;background:rgba(240,165,0,.15);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1rem;color:var(--accent);flex-shrink:0">
+      <div style="width:36px;height:36px;border-radius:50%;background:rgba(240,165,0,.15);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1rem;color:var(--accent);flex-shrink:0">
         ${esc((hostProfile?.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2))}
       </div>
       <div style="flex:1;min-width:0">
@@ -12383,7 +12427,7 @@ async function loadClassroomInstructors(classId){
     // Co-instructor rows
     ...coProfiles.map(p => `
     <div style="background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div style="width:36px;height:36px;border-radius:50%;background:rgba(74,158,255,.15);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1rem;color:var(--blue);flex-shrink:0">
+      <div style="width:36px;height:36px;border-radius:50%;background:rgba(74,158,255,.15);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1rem;color:var(--blue);flex-shrink:0">
         ${esc(p.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2))}
       </div>
       <div style="flex:1;min-width:0">
@@ -12481,7 +12525,7 @@ async function coInstSearch(query){
     const isAdded = !!existing[i.uid];
     const initials = (i.name || i.email).split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) || '?';
     return `<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;background:var(--panel)">
-      <div style="width:34px;height:34px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:.95rem;flex-shrink:0">${initials}</div>
+      <div style="width:34px;height:34px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:.95rem;flex-shrink:0">${initials}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.name || '—')}</div>
         <div style="font-family:monospace;font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.email)}</div>
@@ -12898,7 +12942,7 @@ function renderSpAssigned(){
           </div>
         </div>
         ${score ? `<div style="text-align:right;flex-shrink:0">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:${Math.round(progress.correctCount/progress.totalCount*100)>=70?'var(--cl)':'var(--wl)'}">${score}</div>
+          <div style="font-family:var(--font-display);font-size:1.4rem;color:${Math.round(progress.correctCount/progress.totalCount*100)>=70?'var(--cl)':'var(--wl)'}">${score}</div>
           <div style="font-family:monospace;font-size:.58rem;color:var(--muted)">${fmtDate(progress.finishedAt)}</div>
         </div>` : ''}
       </div>
@@ -13036,7 +13080,7 @@ async function renderSpHistory(){
           ${isGradebook ? '<div style="font-family:monospace;font-size:.58rem;color:var(--cl)">📋 Gradebook</div>' : ''}
         </div>
         <div style="flex:1;font-family:monospace;font-size:.7rem;color:var(--muted)">${fmtDate(a.finishedAt)}</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:${aPct>=70?'var(--cl)':'var(--wl)'};margin-right:2px">${a.correctCount}/${a.totalCount||a.answeredCount}</div>
+        <div style="font-family:var(--font-display);font-size:1.1rem;color:${aPct>=70?'var(--cl)':'var(--wl)'};margin-right:2px">${a.correctCount}/${a.totalCount||a.answeredCount}</div>
         <span class="grade-pill ${aGradeClass}" style="font-size:.62rem;padding:2px 7px">${aGrade}</span>
         ${retakeGranted && allAttempts.length > 1 ? `<button class="btn btn-sm" style="font-size:.6rem;padding:3px 8px;background:${isGradebook?'var(--cl)':'var(--panel2)'};color:${isGradebook?'#000':'var(--muted)'};border:1px solid ${isGradebook?'var(--cl)':'var(--border)'}" onclick="event.stopPropagation();spSetGradebook('${qid}',${a.attemptNumber},'${spStuUid}')">${isGradebook?'✓ In Gradebook':'Use for Grade'}</button>` : ''}
       </div>`;
@@ -13059,7 +13103,7 @@ async function renderSpHistory(){
         <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
           <span class="grade-pill ${gradeClass}">${grade}</span>
           <div style="text-align:right">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:${latestPct>=70?'var(--cl)':'var(--wl)'}">${latest?.correctCount||0}/${latest?.totalCount||latest?.answeredCount||0}</div>
+            <div style="font-family:var(--font-display);font-size:1.3rem;color:${latestPct>=70?'var(--cl)':'var(--wl)'}">${latest?.correctCount||0}/${latest?.totalCount||latest?.answeredCount||0}</div>
             <div style="font-family:monospace;font-size:.6rem;color:var(--muted)">Latest</div>
           </div>
         </div>
@@ -13575,7 +13619,7 @@ function stuShowAvatarPicker(){
   const initials = (stuSession?.name||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'??';
   grid.innerHTML = AVATAR_STYLES.map(s => {
     const preview = s.id === 'initials'
-      ? `<div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.3rem">${initials}</div>`
+      ? `<div style="width:52px;height:52px;border-radius:50%;background:rgba(74,158,255,.15);color:var(--blue);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1.3rem">${initials}</div>`
       : `<img src="${dicebearUrl(s.id, seed)}" style="width:52px;height:52px;border-radius:50%;background:var(--panel2)" alt="${s.label}">`;
     const isCurrent = !currentPhoto && s.id === (current || 'initials');
     return `<div class="avatar-opt${isCurrent?' selected':''}" data-style="${s.id}" onclick="selectAvatarOpt(this,'${s.id}')">${preview}<span>${s.label}</span></div>`;
@@ -13892,7 +13936,7 @@ function practiceRenderTopicPicker(){
   const groups=sections.map((sec,idx)=>`
     <div id="pxTopicSec_${sec.key}" style="margin-top:14px;${idx===0?'':'display:none'}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${sec.color}55">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:3px;color:${sec.color}">${sec.label}</div>
+        <div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:3px;color:${sec.color}">${sec.label}</div>
         <button onclick="practiceToggleSection('${sec.key}')" id="pxSelAll_${sec.key}"
           style="font-size:.7rem;padding:3px 10px;font-family:monospace;letter-spacing:1px;background:transparent;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;color:var(--muted)">
           SELECT ALL
@@ -14741,7 +14785,7 @@ function _pxRenderBreakdownHTML(comp, storeKey){
   const weakTop=comp.weak.slice(0,3);
   let html='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">'+
-      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.2rem;letter-spacing:1px;color:var(--accent)">'+_qEsc(comp.label)+'</div>'+
+      '<div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:1px;color:var(--accent)">'+_qEsc(comp.label)+'</div>'+
       '<div style="font-family:monospace;font-size:.85rem;font-weight:700;color:'+oc+'">'+comp.overallPct+'% &nbsp;('+comp.totCorrect+'/'+comp.totQ+')</div>'+
     '</div>'+
     '<div style="font-family:monospace;font-size:.72rem;color:var(--muted)">Across '+comp.examCount+' exam'+(comp.examCount===1?'':'s')+'</div>'+
@@ -14891,10 +14935,10 @@ async function renderAllStars(){
   const rowHtml=top.map((r,i)=>{
     const rank=i+1, me=r.uid===stuSession?.uid;
     return '<div style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-bottom:1px solid var(--border);'+(me?'background:rgba(124,58,237,.12);border-radius:8px':'')+'">'+
-      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;color:var(--muted);min-width:26px;text-align:right">'+rank+')</span>'+
+      '<span style="font-family:var(--font-display);font-size:1.05rem;color:var(--muted);min-width:26px;text-align:right">'+rank+')</span>'+
       _allStarBadgeSpan(rank)+
       '<div style="flex:1;min-width:0;font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+(me?' <span style="color:var(--accent);font-size:.72rem;font-weight:700">(you)</span>':'')+'</div>'+
-      '<div style="text-align:right;min-width:52px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.15rem;line-height:1;font-weight:800;color:'+_allStarColor(rank)+'">'+Math.round(r.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.56rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
+      '<div style="text-align:right;min-width:52px"><div style="font-family:var(--font-display);font-size:1.15rem;line-height:1;font-weight:800;color:'+_allStarColor(rank)+'">'+Math.round(r.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.56rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
     '</div>';
   }).join('');
   // "Your standing" block when the student isn't shown in the top 10
@@ -14902,9 +14946,9 @@ async function renderAllStars(){
   if(stuSession?.uid && myRankFull>10){
     const mine=ranked[myRankFull-1];
     standing='<div style="margin-top:12px;padding:10px 12px;border:1.5px dashed var(--accent);border-radius:10px;background:rgba(8,145,178,.06);display:flex;align-items:center;gap:9px">'+
-      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;color:var(--accent);min-width:42px;text-align:right">'+myRankFull+')</span>'+
+      '<span style="font-family:var(--font-display);font-size:1.05rem;color:var(--accent);min-width:42px;text-align:right">'+myRankFull+')</span>'+
       '<div style="flex:1;min-width:0;font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(mine.name||'You')+' <span style="color:var(--accent);font-size:.72rem">(you)</span></div>'+
-      '<div style="text-align:right;min-width:52px"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.15rem;line-height:1;font-weight:800;color:var(--accent)">'+Math.round(mine.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.56rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
+      '<div style="text-align:right;min-width:52px"><div style="font-family:var(--font-display);font-size:1.15rem;line-height:1;font-weight:800;color:var(--accent)">'+Math.round(mine.points).toLocaleString()+'</div><div style="font-family:monospace;font-size:.56rem;color:var(--muted);letter-spacing:1px">PTS</div></div>'+
     '</div>'+
     '<div style="font-size:.8rem;color:var(--muted);text-align:center;margin-top:8px">Rank '+myRankFull+' of '+ranked.length+' · '+(myRankFull-10)+' spot'+((myRankFull-10)===1?'':'s')+' from the top 10 — keep practicing! 💪</div>';
   }
@@ -14929,10 +14973,10 @@ async function _allStarsAdminRender(){
   const rows=ranked.map((r,i)=>{
     const rank=i+1;
     return '<div style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-bottom:1px solid var(--border)">'+
-      '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:var(--muted);min-width:30px;text-align:right">'+rank+'</span>'+
+      '<span style="font-family:var(--font-display);font-size:1rem;color:var(--muted);min-width:30px;text-align:right">'+rank+'</span>'+
       '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:7px">'+_allStarBadgeSpan(rank)+
         '<span style="font-weight:700;font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_qEsc(r.name||'Student')+'</span></div>'+
-      '<span style="min-width:54px;text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:1.05rem;font-weight:800;color:'+_allStarColor(rank)+'">'+Math.round(r.points).toLocaleString()+'</span>'+
+      '<span style="min-width:54px;text-align:right;font-family:var(--font-display);font-size:1.05rem;font-weight:800;color:'+_allStarColor(rank)+'">'+Math.round(r.points).toLocaleString()+'</span>'+
       '<span style="min-width:48px;text-align:right;font-family:monospace;font-size:.78rem;color:var(--text)">'+(typeof r.avgPct==='number'?r.avgPct+'%':'—')+'</span>'+
       '<span style="min-width:54px;text-align:right;font-family:monospace;font-size:.78rem;color:var(--muted)">'+(r.avgSpq!=null?_fmtSpq(r.avgSpq):'—')+'</span>'+
       '<span style="min-width:54px;text-align:right;font-family:monospace;font-size:.78rem;color:var(--muted)">'+(r.completed||0)+'</span>'+
@@ -15611,7 +15655,7 @@ async function renderStudyHome(){
       <div style="flex:1;min-width:120px;background:var(--panel);border:1px solid ${streakColor}55;border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 0 8px ${streakColor}22">
         <div style="font-size:1.6rem;line-height:1">${streakFlame}</div>
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:2px;color:${streakColor};line-height:1">${streakData.streak} Day${streakData.streak!==1?'s':''}</div>
+          <div style="font-family:var(--font-display);font-size:1.6rem;letter-spacing:2px;color:${streakColor};line-height:1">${streakData.streak} Day${streakData.streak!==1?'s':''}</div>
           <div style="font-family:monospace;font-size:.62rem;color:var(--muted)">STUDY STREAK${streakData.best > 1 ? ' &nbsp;·&nbsp; BEST: ' + streakData.best : ''}</div>
         </div>
       </div>
@@ -15629,7 +15673,7 @@ async function renderStudyHome(){
             <div style="display:flex;align-items:center;gap:10px">
               <div style="font-size:1.4rem">📅</div>
               <div>
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:2px;color:${cdColor};line-height:1">
+                <div style="font-family:var(--font-display);font-size:1.6rem;letter-spacing:2px;color:${cdColor};line-height:1">
                   ${daysLeft <= 0 ? 'TODAY!' : daysLeft + ' Day' + (daysLeft!==1?'s':'')}
                 </div>
                 <div style="font-family:monospace;font-size:.62rem;color:var(--muted)">UNTIL TEST &nbsp;·&nbsp; ${new Date(testDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
@@ -15782,7 +15826,7 @@ async function renderStudyHome(){
         onmouseover="this.style.borderColor='var(--accent)';this.style.background='rgba(240,165,0,.04)'"
         onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--panel)'">
         <!-- NEW QUIZ badge removed per instructor request -->
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent);margin-bottom:4px">${esc(room.name || cls.classroomName || 'Classroom')}</div>
+        <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent);margin-bottom:4px">${esc(room.name || cls.classroomName || 'Classroom')}</div>
         ${instructorName ? `<div style="font-family:monospace;font-size:.72rem;color:var(--muted);margin-bottom:8px">Instructor: ${esc(instructorName)}</div>` : ''}
         <div style="display:flex;gap:12px;font-family:monospace;font-size:.72rem;color:var(--muted)">
           <span>📝 ${quizCount} quiz${quizCount!==1?'zes':''}</span>
@@ -15793,7 +15837,7 @@ async function renderStudyHome(){
     if(validCards.length){
       classroomCardsHtml = `<div style="margin-bottom:20px">
         <div style="display:flex;flex-direction:column;align-items:flex-start;margin-bottom:12px;gap:4px">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;color:var(--text)">My Classrooms</div>
+          <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:3px;color:var(--text)">My Classrooms</div>
         <button onclick="showInlineJoinFromStudy()" style="font-family:monospace;font-size:.8rem;font-weight:700;letter-spacing:1px;background:var(--accent);color:#000;border:none;border-radius:var(--r);padding:8px 14px;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">+ JOIN ANOTHER CLASS</button>
         </div>
         <div id="studyInlineJoinArea" style="display:none;margin-bottom:12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px">
@@ -15835,7 +15879,7 @@ async function renderStudyHome(){
         (!v.assignTo || v.assignTo === 'all' || (Array.isArray(v.assignTo) && (v.assignTo.includes(stuName) || v.assignTo.includes(stuUid))))).length;
       const roomName = esc(room.name || cls.classroomName || 'Classroom');
       return `<div class="stu-cls-card" onclick="stuSwitchTab('quizzes')">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:2px;color:var(--accent);margin-bottom:3px">${roomName}</div>
+        <div style="font-family:var(--font-display);font-size:1.05rem;letter-spacing:2px;color:var(--accent);margin-bottom:3px">${roomName}</div>
         ${instructorName ? `<div style="font-family:monospace;font-size:.68rem;color:var(--muted);margin-bottom:5px">${esc(instructorName)}</div>` : ''}
         <div style="font-family:monospace;font-size:.68rem;color:var(--muted)">📝 ${quizCount} quiz${quizCount!==1?'zes':''}</div>
         <div class="stu-cls-enter">Enter Class →</div>
@@ -15872,12 +15916,12 @@ async function renderStudyHome(){
 
     <!-- LEFT: Classrooms Sidebar -->
     <div class="stu-cls-sidebar">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;color:var(--text);margin-bottom:6px">My Classrooms</div>
+      <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:3px;color:var(--text);margin-bottom:6px">My Classrooms</div>
       ${joinAreaHtml}
       <button onclick="showInlineJoinFromStudy()" style="width:100%;font-family:monospace;font-size:.75rem;font-weight:700;letter-spacing:.5px;background:var(--accent);color:#000;border:none;border-radius:var(--r);padding:9px 10px;cursor:pointer;margin-bottom:4px;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">+ JOIN ANOTHER CLASS</button>
       ${sidebarCardsList || `<div style="font-family:monospace;font-size:.7rem;color:var(--muted);text-align:center;padding:12px 4px;line-height:1.7">No classrooms yet.<br>Join one above!</div>`}
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;color:var(--text);margin-bottom:6px">General/Airframe Practicals</div>
+        <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:3px;color:var(--text);margin-bottom:6px">General/Airframe Practicals</div>
         <a href="https://www.youtube.com/watch?v=L0Tmb382NzE&list=PL5P956WXtLtuQ_e-jUkuFp3MRVGWrNja-" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:8px;width:100%;background:#c4302b;border:none;border-radius:var(--r);padding:10px 12px;font-family:monospace;font-weight:700;font-size:.75rem;letter-spacing:.5px;color:#fff;cursor:pointer;text-decoration:none;transition:background .15s" onmouseover="this.style.background='#a02c25'" onmouseout="this.style.background='#c4302b'">
           <span style="font-size:1.1rem">▶️</span>
           <span>PRACTICAL PLAYLIST</span>
@@ -15905,7 +15949,7 @@ async function renderStudyHome(){
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
               <div style="font-size:1.5rem">🔥</div>
               <div style="flex:1">
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:${fire}">PrimeTime</div>
+                <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:${fire}">PrimeTime</div>
                 <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Study the exact areas most likely on YOUR test</div>
               </div>
             </div>
@@ -15918,7 +15962,7 @@ async function renderStudyHome(){
             <div style="display:flex;align-items:center;gap:10px">
               <div style="font-size:1.5rem">🔥</div>
               <div style="flex:1">
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:${fire}">PrimeTime</div>
+                <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:${fire}">PrimeTime</div>
                 <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">No flashcards matched your ${codes.length} code${codes.length!==1?'s':''} yet — check them on the ACS tab.</div>
               </div>
             </div>
@@ -15928,7 +15972,7 @@ async function renderStudyHome(){
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
             <div style="font-size:1.6rem">🔥</div>
             <div style="flex:1">
-              <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:${fire}">PrimeTime Deck</div>
+              <div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:${fire}">PrimeTime Deck</div>
               <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">${n} card${n!==1?'s':''} from the ${codes.length} ACS code${codes.length!==1?'s':''} you missed — your highest-probability review</div>
             </div>
           </div>
@@ -15944,7 +15988,7 @@ async function renderStudyHome(){
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <span style="font-size:1.2rem">⭐</span>
           <div style="flex:1">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">My Starred Cards</div>
+            <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)">My Starred Cards</div>
             <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Review only your toughest cards</div>
           </div>
           <button onclick="fcClearAllStarred()" title="Clear all starred cards" style="background:rgba(204,68,68,.1);color:var(--wl);border:1px solid rgba(204,68,68,.3);border-radius:3px;font-family:monospace;font-size:.65rem;padding:4px 8px;cursor:pointer" onmouseover="this.style.background='rgba(204,68,68,.22)'" onmouseout="this.style.background='rgba(204,68,68,.1)'">🗑 Clear All</button>
@@ -15974,7 +16018,7 @@ async function renderStudyHome(){
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:1.2rem">🎧</span>
           <div style="flex:1">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--blue)">Build a Listening Session</div>
+            <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--blue)">Build a Listening Session</div>
             <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Pick any decks to combine, and skip cards you already know</div>
           </div>
           <div style="font-family:monospace;font-size:.8rem;color:var(--blue)">→</div>
@@ -15986,7 +16030,7 @@ async function renderStudyHome(){
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:1.2rem">🔄</span>
           <div style="flex:1">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--accent)">Build an Auto Cycle Session</div>
+            <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)">Build an Auto Cycle Session</div>
             <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Pick any decks to combine — cards auto-advance on a timer, hands-free</div>
           </div>
           <div style="font-family:monospace;font-size:.8rem;color:var(--accent)">→</div>
@@ -16000,7 +16044,7 @@ async function renderStudyHome(){
 
       <!-- Classroom AMT All-Stars leaderboard -->
       <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1.5px;color:#f0c040;line-height:1.1">🏆 Classroom AMT All-Stars</div>
+        <div style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:1.5px;color:#f0c040;line-height:1.1">🏆 Classroom AMT All-Stars</div>
         <div style="font-size:.8rem;color:var(--muted);margin:5px 0 12px;line-height:1.4">Top 10 students ranked by accuracy, speed, and practice. Finish exams, score high, and move fast to climb the board.</div>
         <div id="studyAllStars"><div style="font-family:monospace;font-size:.8rem;color:var(--muted);text-align:center;padding:16px 0">Loading rankings…</div></div>
       </div>
@@ -16158,7 +16202,7 @@ function renderFlashcard(){
       </div>
     </div>
 
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:10px">
+    <div style="font-family:var(--font-display);font-size:.85rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:10px">
       ${esc(topicLabel)} &nbsp;·&nbsp; ${fcDeck.length} card${fcDeck.length!==1?'s':''} remaining
     </div>
 
@@ -16935,7 +16979,7 @@ function lmFinish(){
   if(!el) return;
   el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:18px;padding:32px 20px;text-align:center">
     <div style="font-size:3rem">🎧</div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:var(--accent)">All Done!</div>
+    <div style="font-family:var(--font-display);font-size:2rem;letter-spacing:3px;color:var(--accent)">All Done!</div>
     <div style="font-family:monospace;font-size:.85rem;color:var(--muted)">You listened to all ${_lmDeck.length} cards.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px">
       <button class="btn btn-primary" onclick="lmReplayAgain()">🔁 Listen Again</button>
@@ -16979,7 +17023,7 @@ function renderListenPlayer(){
     </div>
 
     <!-- Topic label -->
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:10px">
+    <div style="font-family:var(--font-display);font-size:.85rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:10px">
       ${esc(bankLabel ? bankLabel + ' — ' + topicDisplay : topicDisplay)}
     </div>
 
@@ -17007,7 +17051,7 @@ function renderListenPlayer(){
       <!-- Countdown row -->
       <div id="lmCountdownRow" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:18px">
         <div style="font-family:monospace;font-size:.7rem;color:var(--muted)">Answer in</div>
-        <div id="lmCountdown" style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);min-width:40px;text-align:center">${_lmAnswerDelay}s</div>
+        <div id="lmCountdown" style="font-family:var(--font-display);font-size:2rem;color:var(--accent);min-width:40px;text-align:center">${_lmAnswerDelay}s</div>
       </div>
 
       <!-- Answer -->
@@ -17049,6 +17093,7 @@ function renderListenPlayer(){
 function _lmKeyHandler(e){
   if(!_lmDeck.length || _lmStopped) return;
   if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
   if(e.code === 'Space'){ e.preventDefault(); lmPauseResume(); }
   else if(e.code === 'ArrowRight'){ e.preventDefault(); lmSkip(); }
   else if(e.code === 'ArrowLeft'){ e.preventDefault(); lmBack(); }
@@ -17208,7 +17253,7 @@ function acFinish(){
   if(!el) return;
   el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:18px;padding:32px 20px;text-align:center">
     <div style="font-size:3rem">🔄</div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;color:var(--accent)">All Done!</div>
+    <div style="font-family:var(--font-display);font-size:2rem;letter-spacing:3px;color:var(--accent)">All Done!</div>
     <div style="font-family:monospace;font-size:.85rem;color:var(--muted)">You cycled through all ${_acDeck.length} cards.</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px">
       <button class="btn btn-primary" onclick="acReplayAgain()">🔁 Cycle Again</button>
@@ -17244,7 +17289,7 @@ function renderAutoCycle(){
     </div>
 
     <!-- Topic label -->
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:10px">
+    <div style="font-family:var(--font-display);font-size:.85rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:10px">
       ${esc(bankLabel ? bankLabel + ' — ' + topicDisplay : topicDisplay)}
     </div>
 
@@ -17307,6 +17352,7 @@ function renderAutoCycle(){
 function _acKeyHandler(e){
   if(!_acDeck.length || _acStopped) return;
   if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
   if(e.code === 'Space'){ e.preventDefault(); acPauseResume(); }
   else if(e.code === 'ArrowRight'){ e.preventDefault(); acSkip(); }
   else if(e.code === 'ArrowLeft'){ e.preventDefault(); acBack(); }
@@ -17393,7 +17439,7 @@ async function renderListenBuilder(){
     }).join('');
     return `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${color}12;border-bottom:1px solid var(--border)">
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;color:${color};flex:1">${icon} ${label}</span>
+        <span style="font-family:var(--font-display);font-size:1rem;letter-spacing:1.5px;color:${color};flex:1">${icon} ${label}</span>
         <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="lmBuilderSelectAll('${bankId}')">Select All</button>
         <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="lmBuilderSelectNone('${bankId}')">Clear</button>
       </div>
@@ -17406,7 +17452,7 @@ async function renderListenBuilder(){
       <button class="btn btn-ghost btn-sm" onclick="renderStudyHome()">← Topics</button>
       <div style="font-family:monospace;font-size:.65rem;color:var(--blue);background:rgba(74,158,255,.1);border:1px solid rgba(74,158,255,.3);border-radius:3px;padding:3px 8px">🎧 SESSION BUILDER</div>
     </div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:6px">Build a Listening Session</div>
+    <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:6px">Build a Listening Session</div>
     <div style="font-family:monospace;font-size:.72rem;color:var(--muted);text-align:center;margin-bottom:16px">Pick any decks to combine — they'll play together, shuffled, in one session.</div>
 
     <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;cursor:pointer">
@@ -17527,7 +17573,7 @@ async function renderAutoCycleBuilder(){
     }).join('');
     return `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${color}12;border-bottom:1px solid var(--border)">
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1.5px;color:${color};flex:1">${icon} ${label}</span>
+        <span style="font-family:var(--font-display);font-size:1rem;letter-spacing:1.5px;color:${color};flex:1">${icon} ${label}</span>
         <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="acBuilderSelectAll('${bankId}')">Select All</button>
         <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="acBuilderSelectNone('${bankId}')">Clear</button>
       </div>
@@ -17540,7 +17586,7 @@ async function renderAutoCycleBuilder(){
       <button class="btn btn-ghost btn-sm" onclick="renderStudyHome()">← Topics</button>
       <div style="font-family:monospace;font-size:.65rem;color:var(--accent);background:rgba(240,165,0,.1);border:1px solid rgba(240,165,0,.3);border-radius:3px;padding:3px 8px">🔄 SESSION BUILDER</div>
     </div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:6px">Build an Auto Cycle Session</div>
+    <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:6px">Build an Auto Cycle Session</div>
     <div style="font-family:monospace;font-size:.72rem;color:var(--muted);text-align:center;margin-bottom:16px">Pick any decks to combine — they'll auto-advance together, shuffled, in one session.</div>
 
     <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;cursor:pointer">
@@ -18328,7 +18374,7 @@ async function autoSubmitQuiz(){
   if(qArea){
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px';
-    overlay.innerHTML = '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:2rem;letter-spacing:3px;color:#fff">⏱ Time\'s Up!</div><div style="font-family:monospace;font-size:.9rem;color:rgba(255,255,255,.7)">Submitting your quiz...</div>';
+    overlay.innerHTML = '<div style="font-family:var(--font-display);font-size:2rem;letter-spacing:3px;color:#fff">⏱ Time\'s Up!</div><div style="font-family:monospace;font-size:.9rem;color:rgba(255,255,255,.7)">Submitting your quiz...</div>';
     document.body.appendChild(overlay);
     setTimeout(()=>overlay.remove(), 2200);
   }
@@ -19999,7 +20045,7 @@ function acsRenderBridge(codes){
   el.style.display='block';
   el.innerHTML='<div style="background:var(--panel);border:2px solid rgba(74,158,255,.35);border-radius:var(--r);overflow:hidden">'+
     '<div style="padding:14px 18px;background:rgba(74,158,255,.08);border-bottom:1px solid rgba(74,158,255,.2);display:flex;align-items:center;gap:10px">'+
-      '<span style="font-size:1.3rem">📝</span><div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--blue)">Practice What You Missed</div>'+
+      '<span style="font-size:1.3rem">📝</span><div><div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:var(--blue)">Practice What You Missed</div>'+
       '<div style="font-family:monospace;font-size:.7rem;color:var(--muted)">We mapped your '+mapped+' missed code'+(mapped===1?'':'s')+' to '+ordered.length+' study topic'+(ordered.length===1?'':'s')+' — generate a written exam aimed right at them.</div></div></div>'+
     '<div style="padding:14px 18px">'+chips+
       '<button onclick="acsStartExam()" class="btn btn-primary" style="width:100%;margin-top:8px;font-size:.9rem;padding:12px;letter-spacing:.5px">🎯 Generate a Practice Exam on These Areas</button>'+
@@ -20400,7 +20446,7 @@ async function acsRenderAll(){
     el.innerHTML = `<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
       <div style="padding:12px 16px;background:${sectionColors[sec]}18;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
         <span style="font-size:1.2rem">${sectionIcons[sec]}</span>
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:${sectionColors[sec]}">${sec} Test Codes</span>
+        <span style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:${sectionColors[sec]}">${sec} Test Codes</span>
         <span style="margin-left:auto;font-family:monospace;font-size:.75rem;color:var(--muted)">${secCodes.length} code${secCodes.length!==1?'s':''}</span>
       </div>
       <div style="padding:14px">${subjectRows}</div>
@@ -20666,7 +20712,7 @@ function acsRenderPracticals(studentCodes){
     const rowBg = rank <= 3 ? (rank===1?'rgba(255,215,0,.05)':rank===2?'rgba(192,192,192,.05)':'rgba(205,127,50,.05)') : 'transparent';
 
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.05);background:${rowBg}">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--muted);min-width:28px;text-align:center;flex-shrink:0">
+      <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--muted);min-width:28px;text-align:center;flex-shrink:0">
         ${medal || ('<span style="font-size:.85rem">#'+rank+'</span>')}
       </div>
       <div style="flex:1;min-width:0">
@@ -22967,7 +23013,7 @@ function instSimRenderResponses(){
             : r.status === -1
             ? `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted);font-family:monospace;font-size:.75rem">—</td>
                <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);color:var(--muted);font-size:.75rem">⏳</td>`
-            : `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;color:${r.status?'var(--cl)':'var(--wl)'}">${(r.resp.answer||0).toFixed(4)}"</td>
+            : `<td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-family:var(--font-display);font-size:1rem;letter-spacing:1px;color:${r.status?'var(--cl)':'var(--wl)'}">${(r.resp.answer||0).toFixed(4)}"</td>
                <td style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-weight:700;font-size:.85rem;background:${r.status?'rgba(34,197,94,.08)':'rgba(200,50,50,.08)'};color:${r.status?'var(--cl)':'var(--wl)'}">${r.status?'✓ Correct':'✗ Wrong'}</td>`;
           // Integrity flags
           const flags = _instSimIntegrityCache[r.key] || [];
@@ -23082,7 +23128,7 @@ async function loadSimPerfTab(classId, sessionNum, content){
 
     // Stat cards
     const statCard = (val, label, sub='') => `<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;text-align:center">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent)">${val}</div>
+      <div style="font-family:var(--font-display);font-size:2rem;color:var(--accent)">${val}</div>
       <div style="font-family:monospace;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px">${label}</div>
       ${sub?`<div style="font-family:monospace;font-size:.62rem;color:var(--muted)">${sub}</div>`:''}
     </div>`;
@@ -23142,7 +23188,7 @@ async function loadSimPerfTab(classId, sessionNum, content){
       </div>
 
       <div style="margin-bottom:22px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px">ROUND-BY-ROUND ACCURACY</div>
+        <div style="font-family:var(--font-display);font-size:.95rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px">ROUND-BY-ROUND ACCURACY</div>
         <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.82rem">
           <thead><tr style="background:var(--panel2)">
             <th style="${thSt}">Round</th><th style="${thSt}">Reading</th><th style="${thSt}">Responses</th><th style="${thSt}">Accuracy</th><th style="${thSt}">Bar</th>
@@ -23151,7 +23197,7 @@ async function loadSimPerfTab(classId, sessionNum, content){
       </div>
 
       <div style="margin-bottom:22px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px">STUDENT RESULTS & INTEGRITY</div>
+        <div style="font-family:var(--font-display);font-size:.95rem;letter-spacing:2px;color:var(--muted);margin-bottom:10px">STUDENT RESULTS & INTEGRITY</div>
         <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.82rem">
           <thead><tr style="background:var(--panel2)">
             <th style="${thSt}">Student</th><th style="${thSt}">Accuracy</th><th style="${thSt}">Correct</th><th style="${thSt}">Rounds</th><th style="${thSt}">Integrity</th>
@@ -23170,7 +23216,7 @@ async function loadSimPerfTab(classId, sessionNum, content){
       const data = await resp.json();
       const summary = data.content?.[0]?.text||'';
       const aiEl = document.getElementById('cdPerfAISummary');
-      if(aiEl && summary) aiEl.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r);padding:18px 20px"><div style="font-family:monospace;font-size:.83rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px">🤖 Instructor Insights</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:.97rem;line-height:1.7;color:var(--text);white-space:pre-line">${esc(summary)}</div></div>`;
+      if(aiEl && summary) aiEl.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r);padding:18px 20px"><div style="font-family:monospace;font-size:.83rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px">🤖 Instructor Insights</div><div style="font-family:var(--font-ui);font-size:.97rem;line-height:1.7;color:var(--text);white-space:pre-line">${esc(summary)}</div></div>`;
       else if(aiEl) aiEl.innerHTML='';
     }catch(e){ const aiEl=document.getElementById('cdPerfAISummary'); if(aiEl) aiEl.innerHTML=''; }
   }catch(e){ content.innerHTML=`<div class="empty-state" style="color:var(--wl)">Error: ${esc(e.message)}</div>`; }
