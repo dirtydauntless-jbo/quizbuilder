@@ -4316,7 +4316,14 @@ function _qWhen(ts){ return ts?new Date(ts).toLocaleString([], {month:'short',da
 function _qReviewCard(key, r){
   const choices=r.choices||{};
   const canEdit = !!(r.subject && r.qid); // only bank questions (have id) can be edited/persisted
-  const meta=[r.subject,r.topic,(r.qid?'id '+r.qid:''),(r.qid?'':'(AI-generated — fixes this exam, not future regenerations)')].filter(Boolean).join(' · ');
+  // Bank questions carry an id. Everything else is pool/AI-generated — label WHICH kind so it's
+  // obvious at a glance whether this is a reworded variant (tweak + promote via the Variant Pool
+  // Manager) vs a plain from-scratch AI question (fix only applies to this one flagged exam).
+  const srcLabel = r.qid ? ('id '+r.qid)
+    : r.source==='faa-variant' ? 'VARIANT — reworded from bank; edit/promote via Variant Pool Manager'
+    : r.source==='op' ? 'O&P-CONVERTED — edit/promote via Variant Pool Manager'
+    : 'AI-generated — fixes this exam, not future regenerations';
+  const meta=[r.subject,r.topic,'('+srcLabel+')'].filter(Boolean).join(' · ');
   const head='<div style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">'+_qEsc(meta)+'</div>'+
     '<div style="font-family:var(--font-mono);font-size:.68rem;color:var(--accent);margin-bottom:8px">👤 '+_qEsc(r.studentName||'Unknown student')+(r.ts?' &nbsp;·&nbsp; 🕒 '+_qEsc(_qWhen(r.ts)):'')+'</div>'+
     '<div style="font-weight:700;font-size:.9rem;line-height:1.4;margin-bottom:10px">'+_qEsc(r.question)+'</div>';

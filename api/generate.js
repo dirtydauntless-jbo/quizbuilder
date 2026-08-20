@@ -96,6 +96,20 @@ const HIGH_FAA_TOPICS = new Set([
 ]);
 const HIGH_FAA_MIN = 0.75;
 
+// Default share of an OFFICIAL exam's questions drawn from the reworded-variant pool (topics
+// outside FAA_ONLY_TOPICS only). Official exams previously never touched the variant pool at
+// all — only focused-mix exams did — so with 1000+ variants already sitting there, most never
+// got enough real deploys to earn the 5 clean deploys needed to graduate to the jar on their own.
+// 2026-08-20: bumped way up (0.2 → 0.5) to burn down that backlog as fast as possible — dial this
+// back toward 0.2-0.3 once the Variant Pool Manager's pending count has drained to a healthy level.
+const DEFAULT_VAR_PCT = 0.5;
+// Hard per-topic ceiling on the variant pool (jar + pending combined) — once a topic's pool is
+// already this big, generateFaaVariants stops minting brand-new fresh variants for it and serves
+// entirely from reuse, so the pool can't keep growing unbounded. (Tracked per topic, not globally —
+// a true cross-topic total would need a full-tree read on every exam generation, which is too
+// expensive to do live; per-topic is the natural unit the pool is already stored in.)
+const VARIANT_POOL_CEILING = 200;
+
 // ── Shared utils ──────────────────────────────────────────────────────────────
 // Tracks the health of live AI generation so an admin banner can warn when it's down (e.g.,
 // Anthropic credits exhausted / auth). Persistent 4xx flips it unhealthy; success clears it.
@@ -350,7 +364,8 @@ Rules:
 - FAA STYLE & BREVITY (critical): write questions the way the real FAA written test does — short and to the point. The stem must be ONE concise, direct question (aim for 25 words or fewer). Do NOT invent scenarios, personas, or narratives (no "a technician finds…", "the pilot reports…", "during an operational check…", "at sea level with full throttle applied…"). Strip the setup and ask the concept straight.
 - Each question has exactly 3 choices: A, B, C (this matches the real FAA AMT test format)
 - ACCURACY: the marked correct answer MUST be factually correct and supported by the reference text. Re-verify it against the passage before finalizing — never mark a wrong choice as correct.
-- SELF-REFERENCE: if the reference passage refers to itself with vague phrasing like "this handbook," "this manual," or "this publication," do NOT copy that vague phrasing into the question stem — name the actual handbook instead (e.g., "What role does ${handbook} serve...") so the question is understandable on its own, without the reader needing to know what source text it was drawn from.
+- NEVER REFERENCE THE SOURCE DOCUMENT: do not preface or frame the question stem around the handbook itself — no "According to ${handbook}...", "According to the handbook...", "This manual states...", "What role does ${handbook} serve...", or similar. That's a giveaway the question came from a manual instead of testing real knowledge, and the real FAA written test never does it. If the reference passage refers to itself vaguely ("this handbook," "this manual"), drop that framing entirely and ask about the underlying concept directly. The only legitimate exception is a genuine figure reference (e.g., "Refer to Figure 4...") when the passage is describing an actual diagram.
+- NO META/ADMINISTRATIVE QUESTIONS: never write a question about the handbook's own front matter or administrivia — no questions about who to contact or what email address to use for corrections/comments, revision or edition history, publication/printing dates, page or paragraph numbering, the document's stated purpose or intended audience, or "how to use this handbook." Every question must test a real AMT technical, procedural, regulatory, or physical-principle concept a mechanic needs on the job — pinpoint a SPECIFIC mechanism, value, limit, or cause-and-effect relationship (e.g. "What happens to fluid velocity in a converging duct?", "What is the maximum allowable ___ before ___?"), not a vague or self-referential one. If the reference passage you were given is mostly front-matter/administrative text with no real technical content, write about the closest substantive AMT concept for this topic instead of forcing a question out of the administrivia.
 - EXACTLY ONE correct answer: the correct choice must be the ONLY true/defensible one; both wrong choices must be factually FALSE. Never let a distractor be an alternative correct statement or a second valid formula for what is asked (e.g., if the answer is P = V × I, do NOT use P = I² × R as a wrong choice since it is also correct — use a genuinely wrong formula like P = V / I). Before finalizing each question, re-read all three choices and confirm only one is correct.
 - LAW / FORMULA REARRANGEMENTS: never ask an open-ended question whose choices are just different correct rearrangements of the same law. For example, do NOT ask "what is the relationship between voltage, current, and resistance?" with choices V = I × R, I = V / R, R = V / I — all three are correct. Instead ask a question that targets ONE form (e.g., "Which equation is used to find resistance when voltage and current are known?" → only R = V / I is correct, and the other two choices must be WRONG rearrangements such as R = I / V or R = I × V).
 - Prefer focused questions over compound ones ("what is X AND how is it calculated") — compound phrasing tends to make more than one choice partly correct.
@@ -625,8 +640,10 @@ async function generateFaaVariants(topic, qCount, overrides, flaggedMap, seenSet
 
   // Decide how many to generate fresh. If the pool can already cover the request, only trickle
   // a few new candidates until the jar is comfortably stocked (≥4× this topic's per-exam need).
+  // Once the topic's pool has already hit the ceiling, stop minting new ones entirely — reuse only.
   let freshN;
-  if (pool.length >= qCount) freshN = (jar.length >= qCount * 4) ? 0 : Math.max(1, Math.round(qCount * 0.2));
+  if (pool.length >= VARIANT_POOL_CEILING) freshN = 0;
+  else if (pool.length >= qCount) freshN = (jar.length >= qCount * 4) ? 0 : Math.max(1, Math.round(qCount * 0.2));
   else freshN = qCount - pool.length;
   freshN = Math.max(0, Math.min(freshN, qCount));
   const reuseN = qCount - freshN;
@@ -778,14 +795,17 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
   const isFaaOnly = FAA_ONLY_TOPICS.has(topic);
 
   // Calculation-heavy topics → verified bank only (no AI/O&P arithmetic errors).
-  // Otherwise the caller may request a FAA share (focused exam = 0.5), a reworded-FAA-variant
-  // share (0.3), and an O&P share (0.2); any remainder is AI from the 8083.
-  // Default (official exams) = random 20–60% FAA, rest AI.
+  // Otherwise the caller may request a FAA share (focused exam = 0.6), a reworded-FAA-variant
+  // share (0.3), and an O&P share (0.1); any remainder is AI from the 8083.
+  // Default (official exams) = random 20–60% FAA, rest AI — PLUS a default variant slice (see
+  // below) so the 1000+ questions sitting in the variant pool actually get exam exposure instead
+  // of only surfacing on focused-mix exams. Without real deploys they can't rack up the 5 clean
+  // deploys needed to graduate to the jar, and they were sitting there needing manual promotion.
   let faaPct = isFaaOnly ? 1
     : (typeof faaRatioOverride === 'number' ? faaRatioOverride : (0.20 + Math.random() * 0.40));
   // Spec/timing-heavy topics lean harder on the verified bank (less AI exposure)
   if(!isFaaOnly && HIGH_FAA_TOPICS.has(topic)) faaPct = Math.max(faaPct, HIGH_FAA_MIN);
-  const varPct = isFaaOnly ? 0 : (typeof varRatioOverride === 'number' ? varRatioOverride : 0);
+  const varPct = isFaaOnly ? 0 : (typeof varRatioOverride === 'number' ? varRatioOverride : DEFAULT_VAR_PCT);
   const opPct  = isFaaOnly ? 0 : (typeof opRatioOverride === 'number' ? opRatioOverride : 0);
 
   let faaCount = Math.min(Math.round(total * faaPct), bankSize, total);
