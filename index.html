@@ -3793,7 +3793,7 @@ async function masterDashLoad(){
         <input id="vpoolSearch" oninput="_vpoolRender()" class="input" placeholder="Search question text…" style="flex:1;min-width:130px;font-size:.78rem;padding:6px 10px"/>
         <button class="btn btn-ghost btn-sm" onclick="_vpoolLoad()">↻ Refresh</button>
       </div>
-      <div id="vpoolList" style="max-height:320px;overflow-y:auto"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
+      <div id="vpoolList" style="max-height:320px;overflow-y:auto;scroll-behavior:smooth"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, false)}
 
     ${panel('md-leaderboard','All-Stars Leaderboard','🏆',`
@@ -4136,6 +4136,16 @@ function _vpoolRender(){
   if(!rows.length){ list.innerHTML='<div class="empty-state" style="font-size:.8rem">No questions match.</div>'; return; }
   list.innerHTML=rows.slice(0,300).map(r=> r._i===_vpoolEditIdx ? _vpoolEditCard(r) : _vpoolViewCard(r)).join('')
     + (rows.length>300?`<div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted);text-align:center;padding:8px">Showing first 300 of ${rows.length}.</div>`:'');
+  // The edit card (question + 3 choices + explanation + Save/Cancel) is taller than the list's
+  // 320px scroll box, so the Save button can end up clipped below the fold. Grow the box while
+  // editing and snap straight to the card so the buttons are always visible without hunting.
+  if(_vpoolEditIdx!==-1){
+    list.style.maxHeight='620px';
+    const ec=document.getElementById('vpoolEditCard');
+    if(ec) ec.scrollIntoView({block:'nearest'});
+  } else {
+    list.style.maxHeight='320px';
+  }
 }
 function _vpoolViewCard(r){
   const correctText=r.q.choices?(r.q.choices[r.q.correct]||''):'';
@@ -4161,7 +4171,7 @@ function _vpoolViewCard(r){
 }
 function _vpoolEditCard(r){
   const ch=r.q.choices||{}; const keys=['A','B','C'];
-  return `<div style="border:1px solid #f0c040;border-radius:8px;padding:12px 13px;margin-bottom:8px;background:var(--panel2)">
+  return `<div id="vpoolEditCard" style="border:1px solid #f0c040;border-radius:8px;padding:12px 13px;margin-bottom:8px;background:var(--panel2)">
     <div style="font-family:var(--font-mono);font-size:.64rem;color:#f0c040;text-transform:uppercase;margin-bottom:8px">✏️ Editing variant — ${_qEsc(r.subject)} · ${_qEsc(r.q.topic||'')}</div>
     <label class="label" style="font-size:.66rem">Question</label>
     <textarea id="vpEdQ" class="input" style="font-size:.82rem;min-height:60px;margin-bottom:8px">${_qEsc(r.q.question||'')}</textarea>
