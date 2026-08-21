@@ -4316,12 +4316,16 @@ function _qWhen(ts){ return ts?new Date(ts).toLocaleString([], {month:'short',da
 function _qReviewCard(key, r){
   const choices=r.choices||{};
   const canEdit = !!(r.subject && r.qid); // only bank questions (have id) can be edited/persisted
+  // Variant/O&P questions carry a vid (pool location) on reviews submitted after this was added —
+  // those can be tweaked right here. Older reviews (submitted before) won't have a vid; fall back
+  // to pointing the admin at the Variant Pool Manager tab.
+  const canEditVariant = !!(r.vid && r.subject && r.topic && (r.source==='faa-variant' || r.source==='op'));
   // Bank questions carry an id. Everything else is pool/AI-generated — label WHICH kind so it's
   // obvious at a glance whether this is a reworded variant (tweak + promote via the Variant Pool
   // Manager) vs a plain from-scratch AI question (fix only applies to this one flagged exam).
   const srcLabel = r.qid ? ('id '+r.qid)
-    : r.source==='faa-variant' ? 'VARIANT — reworded from bank; edit/promote via Variant Pool Manager'
-    : r.source==='op' ? 'O&P-CONVERTED — edit/promote via Variant Pool Manager'
+    : r.source==='faa-variant' ? ('VARIANT — reworded from bank'+(canEditVariant?'; editable below':'; edit/promote via Variant Pool Manager'))
+    : r.source==='op' ? ('O&P-CONVERTED'+(canEditVariant?'; editable below':'; edit/promote via Variant Pool Manager'))
     : 'AI-generated — fixes this exam, not future regenerations';
   const meta=[r.subject,r.topic,'('+srcLabel+')'].filter(Boolean).join(' · ');
   const head='<div style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">'+_qEsc(meta)+'</div>'+
@@ -4340,7 +4344,8 @@ function _qReviewCard(key, r){
       opts+
       '<div id="qrmsg-'+key+'" style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted);margin:9px 0 8px"></div>'+
       '<div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap">'+
-        (canEdit?'<button onclick="qReviewEdit(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:var(--font-mono);font-size:.7rem;padding:7px 12px;cursor:pointer;margin-right:auto">✏️ Edit question</button>':'')+
+        (canEdit?'<button onclick="qReviewEdit(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:var(--font-mono);font-size:.7rem;padding:7px 12px;cursor:pointer;margin-right:auto">✏️ Edit question</button>'
+          :canEditVariant?'<button onclick="qReviewEditVariant(\''+key+'\')" style="background:transparent;border:1px solid #f0c040;border-radius:6px;color:#f0c040;font-family:var(--font-mono);font-size:.7rem;padding:7px 12px;cursor:pointer;margin-right:auto">✏️ Edit variant</button>':'')+
         '<button onclick="qReviewDismiss(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:var(--font-mono);font-size:.7rem;padding:7px 12px;cursor:pointer">Dismiss (no change)</button>'+
       '</div>'+
     '</div>';
@@ -4354,6 +4359,8 @@ function _qReviewCard(key, r){
     : '<div style="font-family:var(--font-mono);font-size:.68rem;color:var(--muted);margin-top:6px">No change made'+(r.resolvedAt?' · '+_qEsc(_qWhen(r.resolvedAt)):'')+'</div>';
   const editRow = canEdit
     ? '<div style="text-align:right;margin-top:8px"><button onclick="qReviewEdit(\''+key+'\')" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:var(--font-mono);font-size:.7rem;padding:6px 11px;cursor:pointer">✏️ Edit question / answer</button></div>'
+    : canEditVariant
+    ? '<div style="text-align:right;margin-top:8px"><button onclick="qReviewEditVariant(\''+key+'\')" style="background:transparent;border:1px solid #f0c040;border-radius:6px;color:#f0c040;font-family:var(--font-mono);font-size:.7rem;padding:6px 11px;cursor:pointer">✏️ Edit variant</button></div>'
     : '';
   return '<div id="qrcard-'+key+'" style="border:1px solid var(--border);border-radius:8px;padding:13px 14px;margin-bottom:10px;background:var(--panel);opacity:.92">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div style="flex:1">'+head+'</div>'+badge+'</div>'+resInfo+editRow+'</div>';
@@ -4420,6 +4427,81 @@ async function qReviewSaveEdit(key){
     let msg='✓ Saved — question updated for all future exams.';
     if(rg.exams>0){ const parts=[]; if(rg.gained>0)parts.push('+'+rg.gained+' credited'); if(rg.lost>0)parts.push('−'+rg.lost+' removed'); msg+=' Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+(parts.length?' ('+parts.join(', ')+').':'.'); }
     const dup=await _qReviewApplyToDuplicates(h, key, {status:'resolved', adminCorrect:correct});
+    if(dup>0) msg += ' Auto-resolved '+dup+' duplicate flag'+(dup===1?'':'s')+' of this question.';
+    showToast(msg,'success');
+    _qReviewLoad();
+  } catch(e){ showToast('Save failed: '+(e&&e.message||e),'error'); }
+}
+
+// Open an inline editor for a flagged VARIANT/O&P question, right in the review card — edits the
+// live pool entry directly (same data _vpoolEditCard edits) so there's no need to hunt for it in
+// the Variant Pool Manager tab.
+async function qReviewEditVariant(key){
+  const r=await dbGet('questionReviews/'+key).catch(()=>null);
+  if(!r) return;
+  if(!r.vid || !r.subject || !r.topic){ showToast("Can't locate this variant in the pool — try the Variant Pool Manager tab instead.",'error'); return; }
+  const topicKey=_vjSafeKey(r.topic);
+  const q=await dbGet('faaVariants/pool/'+r.subject+'/'+topicKey+'/'+r.vid+'/q').catch(()=>null);
+  if(!q){ showToast('This variant no longer exists in the pool (may have already been deleted).','error'); return; }
+  const cont=document.getElementById('qrcard-'+key);
+  if(!cont) return;
+  const ch=q.choices||{};
+  const letters=Object.keys(ch).length?Object.keys(ch):['A','B','C'];
+  const choiceInputs=letters.map(l=>
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
+      '<label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:.8rem;white-space:nowrap"><input type="radio" name="qrved-correct-'+key+'" value="'+l+'"'+(l===q.correct?' checked':'')+'> <b>'+l+'</b></label>'+
+      '<input type="text" id="qrved-choice-'+key+'-'+l+'" value="'+_qAttr(ch[l]||'')+'" style="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-family:var(--font-mono);font-size:.8rem">'+
+    '</div>').join('');
+  cont.innerHTML=
+    '<div style="font-family:var(--font-mono);font-size:.64rem;color:#f0c040;text-transform:uppercase;margin-bottom:8px">✏️ Editing '+(r.source==='op'?'O&P question':'variant')+' — '+_qEsc([r.subject,r.topic].filter(Boolean).join(' · '))+'</div>'+
+    '<label style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">Question</label>'+
+    '<textarea id="qrvedQ-'+key+'" rows="3" style="width:100%;margin:4px 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-size:.85rem;line-height:1.4;resize:vertical">'+_qEsc(q.question||'')+'</textarea>'+
+    '<label style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">Answer choices — select the radio for the correct one</label>'+
+    '<div style="margin:6px 0 10px">'+choiceInputs+'</div>'+
+    '<label style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">Explanation</label>'+
+    '<textarea id="qrvedExp-'+key+'" rows="2" style="width:100%;margin:4px 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-size:.8rem;line-height:1.4;resize:vertical">'+_qEsc(q.explanation||'')+'</textarea>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'+
+      '<button onclick="_qReviewLoad()" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:var(--font-mono);font-size:.72rem;padding:7px 12px;cursor:pointer">Cancel</button>'+
+      '<button onclick="qReviewSaveVariantEdit(\''+key+'\')" style="border:1px solid #f0c040;border-radius:6px;background:#f0c040;color:#1a1a1a;font-family:var(--font-mono);font-size:.72rem;font-weight:700;padding:7px 14px;cursor:pointer">💾 Save &amp; restore to rotation</button>'+
+    '</div>'+
+    '<div style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted);margin-top:8px">Updates the pool entry (used in future exams), regrades any already-taken exam with this exact wording, and un-retires it — flagging it pulled it from rotation, so it stays out until you save here.</div>';
+}
+
+async function qReviewSaveVariantEdit(key){
+  const r=await dbGet('questionReviews/'+key).catch(()=>null);
+  if(!r || !r.vid || !r.subject || !r.topic){ showToast('Cannot save this variant.','error'); return; }
+  const topicKey=_vjSafeKey(r.topic);
+  const existingQ=await dbGet('faaVariants/pool/'+r.subject+'/'+topicKey+'/'+r.vid+'/q').catch(()=>null);
+  if(!existingQ){ showToast('This variant no longer exists in the pool (may have already been deleted) — nothing to update.','error'); return; }
+  const qEl=document.getElementById('qrvedQ-'+key);
+  const question=(qEl?qEl.value:'').trim();
+  if(!question){ showToast('Question text cannot be empty.','error'); return; }
+  const letters=Object.keys(existingQ.choices||{}).length?Object.keys(existingQ.choices):['A','B','C'];
+  const choices={};
+  for(const l of letters){ const el=document.getElementById('qrved-choice-'+key+'-'+l); choices[l]=(el?el.value:'').trim(); }
+  if(letters.some(l=>!choices[l])){ showToast('Answer choices cannot be empty.','error'); return; }
+  let correct=null;
+  const radios=document.getElementsByName('qrved-correct-'+key);
+  for(const rd of radios){ if(rd.checked){ correct=rd.value; break; } }
+  if(!correct){ showToast('Select the correct answer.','error'); return; }
+  const explanation=((document.getElementById('qrvedExp-'+key)||{}).value||'').trim();
+  const oldHash=_qrHash(r); // hash of the ORIGINALLY-FLAGGED wording, for regrading exams already taken with it
+  try {
+    const newQ={ question, choices, correct, explanation, topic:existingQ.topic||r.topic||'', subject:existingQ.subject||r.subject||'', handbook:existingQ.handbook||'' };
+    await db.ref('faaVariants/pool/'+r.subject+'/'+topicKey+'/'+r.vid+'/q').set(newQ);
+    await db.ref('faaVariants/flagged/'+r.vid).remove().catch(()=>{}); // un-retire — the flag pulled it from rotation, the fix puts it back
+    const updates={};
+    updates['questionReviews/'+key+'/status']='resolved';
+    updates['questionReviews/'+key+'/adminCorrect']=correct;
+    updates['questionReviews/'+key+'/resolvedAt']=Date.now();
+    updates['questionReviews/'+key+'/edited']=true;
+    if(oldHash) updates['answerOverrides/'+oldHash]=correct;
+    await db.ref().update(updates);
+    _pxInvalidateOverrides();
+    let rg = oldHash ? await qReviewApplyRegrade(oldHash, correct) : {students:0,exams:0,gained:0,lost:0};
+    let msg='✓ Variant updated and restored to rotation.';
+    if(rg.exams>0){ const parts=[]; if(rg.gained>0)parts.push('+'+rg.gained+' credited'); if(rg.lost>0)parts.push('−'+rg.lost+' removed'); msg+=' Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+(parts.length?' ('+parts.join(', ')+').':'.'); }
+    const dup=await _qReviewApplyToDuplicates(oldHash, key, {status:'resolved', adminCorrect:correct});
     if(dup>0) msg += ' Auto-resolved '+dup+' duplicate flag'+(dup===1?'':'s')+' of this question.';
     showToast(msg,'success');
     _qReviewLoad();
@@ -14498,6 +14580,7 @@ async function _pxFlagQuestion(q, studentAnswer, btn){
     subject: q.subject || '',
     topic: q.topic || '',
     qid: (q.id != null ? String(q.id) : ''),
+    vid: q._vid || '', // pool location for variant/O&P questions — lets the review card edit it in place
     qhash: _qIdentity(q),
     source: q.source || '',
     question: q.question || '',
