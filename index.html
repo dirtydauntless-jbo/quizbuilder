@@ -4334,8 +4334,8 @@ function _qReviewCard(key, r){
   // obvious at a glance whether this is a reworded variant (tweak + promote via the Variant Pool
   // Manager) vs a plain from-scratch AI question (fix only applies to this one flagged exam).
   const srcLabel = r.qid ? ('id '+r.qid)
-    : r.source==='faa-variant' ? ('VARIANT — reworded from bank'+(canEditVariant?'; editable below':'; edit/promote via Variant Pool Manager'))
-    : r.source==='op' ? ('O&P-CONVERTED'+(canEditVariant?'; editable below':'; edit/promote via Variant Pool Manager'))
+    : r.source==='faa-variant' ? ('VARIANT — reworded from bank'+(canEditVariant?'; edit/promote/retire below':'; edit/promote via Variant Pool Manager'))
+    : r.source==='op' ? ('O&P-CONVERTED'+(canEditVariant?'; edit/promote/retire below':'; edit/promote via Variant Pool Manager'))
     : 'AI-generated — fixes this exam, not future regenerations';
   const meta=[r.subject,r.topic,'('+srcLabel+')'].filter(Boolean).join(' · ');
   const head='<div style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">'+_qEsc(meta)+'</div>'+
@@ -4451,8 +4451,13 @@ async function qReviewEditVariant(key){
   if(!r) return;
   if(!r.vid || !r.subject || !r.topic){ showToast("Can't locate this variant in the pool — try the Variant Pool Manager tab instead.",'error'); return; }
   const topicKey=_vjSafeKey(r.topic);
-  const q=await dbGet('faaVariants/pool/'+r.subject+'/'+topicKey+'/'+r.vid+'/q').catch(()=>null);
+  const [entry,flagged]=await Promise.all([
+    dbGet('faaVariants/pool/'+r.subject+'/'+topicKey+'/'+r.vid).catch(()=>null),
+    dbGet('faaVariants/flagged/'+r.vid).catch(()=>null)
+  ]);
+  const q=entry&&entry.q;
   if(!q){ showToast('This variant no longer exists in the pool (may have already been deleted).','error'); return; }
+  const stage=entry.stage==='jar'?'jar':'pending', cleanDeploys=entry.cleanDeploys||0, isFlagged=!!flagged;
   const cont=document.getElementById('qrcard-'+key);
   if(!cont) return;
   const ch=q.choices||{};
@@ -4462,8 +4467,20 @@ async function qReviewEditVariant(key){
       '<label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:.8rem;white-space:nowrap"><input type="radio" name="qrved-correct-'+key+'" value="'+l+'"'+(l===q.correct?' checked':'')+'> <b>'+l+'</b></label>'+
       '<input type="text" id="qrved-choice-'+key+'-'+l+'" value="'+_qAttr(ch[l]||'')+'" style="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-family:var(--font-mono);font-size:.8rem">'+
     '</div>').join('');
+  const prog=stage==='jar'?'✓ reliable':(cleanDeploys+'/5 clean deploys');
+  const poolBtns=[];
+  if(!isFlagged && stage==='pending') poolBtns.push('<button onclick="qReviewVariantPoolAction(\''+key+'\',\'promote\')" style="'+_vpBtnGo+'">⭐ Promote to jar</button>');
+  if(!isFlagged && stage==='jar')     poolBtns.push('<button onclick="qReviewVariantPoolAction(\''+key+'\',\'demote\')" style="'+_vpBtn+'">↩ Send back to pending</button>');
+  if(!isFlagged) poolBtns.push('<button onclick="qReviewVariantPoolAction(\''+key+'\',\'retire\')" style="'+_vpBtnWarn+'">⚑ Retire (keep out of rotation)</button>');
+  else           poolBtns.push('<button onclick="qReviewVariantPoolAction(\''+key+'\',\'restore\')" style="'+_vpBtn+'">↺ Restore as-is (no edit needed)</button>');
+  poolBtns.push('<button onclick="qReviewVariantPoolAction(\''+key+'\',\'delete\')" style="'+_vpBtnDanger+'">🗑 Delete from pool</button>');
   cont.innerHTML=
-    '<div style="font-family:var(--font-mono);font-size:.64rem;color:#f0c040;text-transform:uppercase;margin-bottom:8px">✏️ Editing '+(r.source==='op'?'O&P question':'variant')+' — '+_qEsc([r.subject,r.topic].filter(Boolean).join(' · '))+'</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'+
+      _vpoolBadge(stage,isFlagged)+
+      '<span style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted)">'+prog+'</span>'+
+      '<span style="font-family:var(--font-mono);font-size:.64rem;color:#f0c040;text-transform:uppercase">'+(r.source==='op'?'O&P question':'Variant')+' — '+_qEsc([r.subject,r.topic].filter(Boolean).join(' · '))+'</span>'+
+    '</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">'+poolBtns.join('')+'</div>'+
     '<label style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">Question</label>'+
     '<textarea id="qrvedQ-'+key+'" rows="3" style="width:100%;margin:4px 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-size:.85rem;line-height:1.4;resize:vertical">'+_qEsc(q.question||'')+'</textarea>'+
     '<label style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">Answer choices — select the radio for the correct one</label>'+
@@ -4474,7 +4491,37 @@ async function qReviewEditVariant(key){
       '<button onclick="_qReviewLoad()" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:var(--font-mono);font-size:.72rem;padding:7px 12px;cursor:pointer">Cancel</button>'+
       '<button onclick="qReviewSaveVariantEdit(\''+key+'\')" style="border:1px solid #f0c040;border-radius:6px;background:#f0c040;color:#1a1a1a;font-family:var(--font-mono);font-size:.72rem;font-weight:700;padding:7px 14px;cursor:pointer">💾 Save &amp; restore to rotation</button>'+
     '</div>'+
-    '<div style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted);margin-top:8px">Updates the pool entry (used in future exams), regrades any already-taken exam with this exact wording, and un-retires it — flagging it pulled it from rotation, so it stays out until you save here.</div>';
+    '<div style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted);margin-top:8px">Saving updates the pool entry (used in future exams), regrades any already-taken exam with this exact wording, and un-retires it — flagging it pulled it from rotation, so it stays out until you save or restore.</div>';
+}
+
+// Promote/demote/retire/restore/delete a flagged variant's pool entry, right from the review card —
+// same actions as the Variant Pool Manager tab (_vpoolAction), just keyed by review key instead of
+// a loaded _vpoolData row since this card may be opened without the pool tab ever being loaded.
+async function qReviewVariantPoolAction(key, action){
+  const r=await dbGet('questionReviews/'+key).catch(()=>null);
+  if(!r || !r.vid || !r.subject || !r.topic){ showToast('Cannot locate this variant.','error'); return; }
+  const topicKey=_vjSafeKey(r.topic);
+  const base='faaVariants/pool/'+r.subject+'/'+topicKey+'/'+r.vid;
+  try{
+    if(action==='promote'){ await db.ref(base+'/stage').set('jar'); showToast('Promoted to the jar.','success'); }
+    else if(action==='demote'){ await db.ref(base+'/stage').set('pending'); showToast('Sent back to pending.','success'); }
+    else if(action==='retire'){ await db.ref('faaVariants/flagged/'+r.vid).set(true); showToast('Retired — excluded from all exams.','success'); }
+    else if(action==='restore'){
+      await db.ref('faaVariants/flagged/'+r.vid).remove();
+      if(r.status==='pending') await db.ref('questionReviews/'+key).update({status:'dismissed',resolvedAt:Date.now(),restoredNoEdit:true});
+      showToast('Restored to rotation, no edit needed.','success');
+    }
+    else if(action==='delete'){
+      if(!confirm('Permanently delete this variant from the pool?')) return;
+      await db.ref(base).remove();
+      await db.ref('faaVariants/flagged/'+r.vid).remove().catch(()=>{});
+      if(r.status==='pending') await db.ref('questionReviews/'+key).update({status:'dismissed',resolvedAt:Date.now()});
+      showToast('Deleted from the pool.','success');
+      _qReviewLoad();
+      return;
+    }
+    qReviewEditVariant(key); // re-render with fresh state so the button row reflects what just changed
+  }catch(e){ showToast('Action failed: '+(e&&e.message||e),'error'); }
 }
 
 async function qReviewSaveVariantEdit(key){
