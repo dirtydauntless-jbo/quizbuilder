@@ -15476,15 +15476,14 @@ async function allStarsRebuild(){
 // Master-admin: retroactively regrade past exams for one question after its answer was corrected
 async function adminRegradeQuestion(){
   if(!_isMasterAdmin){ showToast('Master admin only.','error'); return; }
-  const subj=(document.getElementById('rgSubject')||{}).value;
-  const qid=((document.getElementById('rgQid')||{}).value||'').trim();
+  const qtext=((document.getElementById('rgQText')||{}).value||'').trim();
   const letter=(document.getElementById('rgLetter')||{}).value;
   const msg=document.getElementById('rgMsg');
-  if(!qid){ if(msg){msg.style.color='var(--wl)';msg.textContent='Enter a question ID.';} return; }
-  if(!confirm('Regrade ALL past exams for '+subj+' id '+qid+' against correct answer '+letter+'?')) return;
+  if(!qtext){ if(msg){msg.style.color='var(--wl)';msg.textContent='Paste the exact question text.';} return; }
+  if(!confirm('Regrade ALL past exams matching this question text against correct answer '+letter+'?')) return;
   if(msg){ msg.style.color='var(--muted)'; msg.textContent='Regrading…'; }
   try {
-    const rg=await qReviewApplyRegrade(subj, qid, letter);
+    const rg=await qReviewApplyRegrade(_qHash(qtext), letter);
     if(msg){ msg.style.color='#16a34a'; msg.textContent='✓ Regraded '+rg.exams+' past exam'+(rg.exams===1?'':'s')+' across '+rg.students+' student'+(rg.students===1?'':'s')+' (+'+rg.gained+' credited, −'+rg.lost+' removed).'; }
   } catch(e){ if(msg){ msg.style.color='var(--wl)'; msg.textContent='Failed: '+(e&&e.message||e); } }
 }
