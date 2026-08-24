@@ -15905,6 +15905,11 @@ function practiceReset(){
 // In-memory cache so card flips feel instant — Firebase is source of truth
 const _fcCache = {};  // { topic: Set }
 
+// Stable per-card identity from question text, not array position — so editing a deck
+// (adding/removing/reordering cards) never detaches a student's existing know-it progress
+// from the card it belongs to.
+function _fcId(q){ return _qHash(q && q.q); }
+
 function fcCacheKey(topic){ return topic; }
 
 function fcGetKnown(topic){
@@ -15919,19 +15924,49 @@ function fcGetKnown(topic){
   }catch(e){ _fcCache[topic] = new Set(); return _fcCache[topic]; }
 }
 
+// One-time migration for progress saved under the old array-position identity
+// ("topic_5") into the new content-hash identity ("topic_q1a2b3"), using the
+// CURRENT card order to translate. Anything already hash-based passes through
+// untouched. Self-heals by writing the migrated set back to Firebase.
+function _fcMigrateKnown(rawArr, cardArr, cacheKey){
+  const prefix = cacheKey + '_';
+  let migrated = false;
+  const out = new Set();
+  (rawArr||[]).forEach(id => {
+    if(typeof id !== 'string' || !id.startsWith(prefix)){ return; }
+    const suffix = id.slice(prefix.length);
+    if(/^\d+$/.test(suffix)){
+      const card = cardArr[parseInt(suffix,10)];
+      if(card){ out.add(prefix + _fcId(card)); migrated = true; }
+    } else {
+      out.add(id);
+    }
+  });
+  if(migrated && stuSession?.uid){
+    dbSet('flashcardProgress/' + stuSession.uid + '/' + safeKey(cacheKey), [...out])
+      .catch(e => console.warn('fc migration write failed:', e.message));
+  }
+  return out;
+}
+
 async function fcLoadFromFirebase(){
   // Load all flashcard progress from Firebase into cache
   if(!stuSession?.uid) return;
   try{
     const data = await dbGet('flashcardProgress/' + stuSession.uid) || {};
-    TOPICS.forEach(t => {
-      const arr = data[safeKey(t)] || [];
-      _fcCache[t] = new Set(arr);
-      // Also sync to localStorage as offline backup
-      try{
-        const lsKey = 'fcKnown_' + stuSession.uid + '_' + t;
-        localStorage.setItem(lsKey, JSON.stringify(arr));
-      }catch(e){}
+    const banks = [['general',TOPICS,QB], ['airframe',TOPICS_AIRFRAME,QB_AIRFRAME], ['powerplant',TOPICS_POWERPLANT,QB_POWERPLANT]];
+    banks.forEach(([bankId, topics, qb]) => {
+      topics.forEach(t => {
+        const cacheKey = bankId + '::' + t;
+        const arr = data[safeKey(cacheKey)] || [];
+        const known = _fcMigrateKnown(arr, qb[t]||[], cacheKey);
+        _fcCache[cacheKey] = known;
+        // Also sync to localStorage as offline backup
+        try{
+          const lsKey = 'fcKnown_' + stuSession.uid + '_' + cacheKey;
+          localStorage.setItem(lsKey, JSON.stringify([...known]));
+        }catch(e){}
+      });
     });
   }catch(e){}
 }
@@ -16540,14 +16575,16 @@ async function startFlashcards(topicKey, dme){
   if(topic === '__all__'){
     topicList.forEach(t => {
       const known = fcGetKnown(bankId+'::'+t);
-      (qbMap[t]||[]).forEach((q, i) => {
-        if(!known.has(bankId+'::'+t+'_'+i)) cards.push({q:q.q, a:q.a, topic:t, idx:i, bankId});
+      (qbMap[t]||[]).forEach((q) => {
+        const cid=_fcId(q);
+        if(!known.has(bankId+'::'+t+'_'+cid)) cards.push({q:q.q, a:q.a, topic:t, idx:cid, bankId});
       });
     });
   } else {
     const known = fcGetKnown(bankId+'::'+topic);
-    (qbMap[topic]||[]).forEach((q, i) => {
-      if(!known.has(bankId+'::'+topic+'_'+i)) cards.push({q:q.q, a:q.a, topic, idx:i, bankId});
+    (qbMap[topic]||[]).forEach((q) => {
+      const cid=_fcId(q);
+      if(!known.has(bankId+'::'+topic+'_'+cid)) cards.push({q:q.q, a:q.a, topic, idx:cid, bankId});
     });
   }
 
@@ -17011,9 +17048,9 @@ async function startStarredDeck(...sections){
     const lastUnderscore = withoutBank.lastIndexOf('_');
     if(lastUnderscore < 0) continue;
     const topic = withoutBank.substring(0, lastUnderscore);
-    const idx = parseInt(withoutBank.substring(lastUnderscore + 1));
-    const q = (qbFor(bank)[topic]||[])[idx];
-    if(q) cards.push({q:q.q, a:q.a, topic, idx, bankId: bank});
+    const cid = withoutBank.substring(lastUnderscore + 1);
+    const q = (qbFor(bank)[topic]||[]).find(qq => _fcId(qq) === cid);
+    if(q) cards.push({q:q.q, a:q.a, topic, idx:cid, bankId: bank});
   }
 
   if(!cards.length){
@@ -17058,9 +17095,9 @@ async function startListenStarred(...sections){
     const lastUnderscore = withoutBank.lastIndexOf('_');
     if(lastUnderscore < 0) continue;
     const topic = withoutBank.substring(0, lastUnderscore);
-    const idx = parseInt(withoutBank.substring(lastUnderscore + 1));
-    const q = (qbFor(bank)[topic]||[])[idx];
-    if(q) cards.push({q:q.q, a:q.a, topic, idx, bankId: bank});
+    const cid = withoutBank.substring(lastUnderscore + 1);
+    const q = (qbFor(bank)[topic]||[]).find(qq => _fcId(qq) === cid);
+    if(q) cards.push({q:q.q, a:q.a, topic, idx:cid, bankId: bank});
   }
 
   if(!cards.length){
@@ -17129,13 +17166,13 @@ function primeTimeBuild(codes){
   for(const bankId in banks){
     const qb = banks[bankId];
     for(const topic in qb){
-      (qb[topic]||[]).forEach((q, idx) => {
+      (qb[topic]||[]).forEach((q) => {
         const cc = q.acs || [];
         if(cc.some(c => missed.has(_primeBase(c)))){
           // Keep only the codes that matched what the student missed, so the
           // on-card label shows the relevant code(s), not every tag on the card.
           const hit = cc.filter(c => missed.has(_primeBase(c)));
-          cards.push({ q:q.q, a:q.a, topic, idx, bankId, acs: hit });
+          cards.push({ q:q.q, a:q.a, topic, idx:_fcId(q), bankId, acs: hit });
         }
       });
     }
@@ -17230,10 +17267,10 @@ async function startListenMode(topicKey){
   let cards = [];
   if(topic === '__all__'){
     topicList.forEach(t => {
-      (qbMap[t]||[]).forEach((q,i) => cards.push({q:q.q, a:q.a, topic:t, idx:i, bankId}));
+      (qbMap[t]||[]).forEach((q) => cards.push({q:q.q, a:q.a, topic:t, idx:_fcId(q), bankId}));
     });
   } else {
-    (qbMap[topic]||[]).forEach((q,i) => cards.push({q:q.q, a:q.a, topic, idx:i, bankId}));
+    (qbMap[topic]||[]).forEach((q) => cards.push({q:q.q, a:q.a, topic, idx:_fcId(q), bankId}));
   }
   // Shuffle
   for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
@@ -17579,10 +17616,10 @@ function startAutoCycle(topicKey){
   let cards = [];
   if(topic === '__all__'){
     topicList.forEach(t => {
-      (qbMap[t]||[]).forEach((q,i) => cards.push({q:q.q, a:q.a, topic:t, idx:i, bankId}));
+      (qbMap[t]||[]).forEach((q) => cards.push({q:q.q, a:q.a, topic:t, idx:_fcId(q), bankId}));
     });
   } else {
-    (qbMap[topic]||[]).forEach((q,i) => cards.push({q:q.q, a:q.a, topic, idx:i, bankId}));
+    (qbMap[topic]||[]).forEach((q) => cards.push({q:q.q, a:q.a, topic, idx:_fcId(q), bankId}));
   }
   // Shuffle
   for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
@@ -17826,9 +17863,10 @@ function _lmBuilderCards(){
     const topic = key.substring(sepIdx + 2);
     const qb = _lmBuilderBankMeta(bankId).qb;
     const known = _lmBuilderUnknownOnly ? fcGetKnown(key) : null;
-    (qb[topic]||[]).forEach((q, i) => {
-      if(known && known.has(key+'_'+i)) return;
-      cards.push({ q:q.q, a:q.a, topic, idx:i, bankId });
+    (qb[topic]||[]).forEach((q) => {
+      const cid=_fcId(q);
+      if(known && known.has(key+'_'+cid)) return;
+      cards.push({ q:q.q, a:q.a, topic, idx:cid, bankId });
     });
   }
   return cards;
@@ -17961,9 +17999,10 @@ function _acBuilderCards(){
     const topic = key.substring(sepIdx + 2);
     const qb = _lmBuilderBankMeta(bankId).qb;
     const known = _acBuilderUnknownOnly ? fcGetKnown(key) : null;
-    (qb[topic]||[]).forEach((q, i) => {
-      if(known && known.has(key+'_'+i)) return;
-      cards.push({ q:q.q, a:q.a, topic, idx:i, bankId });
+    (qb[topic]||[]).forEach((q) => {
+      const cid=_fcId(q);
+      if(known && known.has(key+'_'+cid)) return;
+      cards.push({ q:q.q, a:q.a, topic, idx:cid, bankId });
     });
   }
   return cards;
