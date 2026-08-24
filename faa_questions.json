@@ -6041,8 +6041,8 @@
      "B": "Relieved surface stresses.",
      "C": "A slightly rough surface and increased corrosion resistance."
     },
-    "correct": "A",
-    "explanation": "Alodine (Bonderite) chemical conversion coating produces a smooth, adherent chromate film on aluminum that provides both an excellent base for paint adhesion and significantly increased corrosion resistance. (Ref: FAA-H-8083-30B, Ch 6 — Cleaning and Corrosion Control)",
+    "correct": "C",
+    "explanation": "Alodine (Bonderite) chemical conversion coating leaves a slightly rough, adherent chromate film on aluminum that gives paint a good bonding surface while also significantly increasing corrosion resistance. (Ref: FAA-H-8083-30B, Ch 6 — Cleaning and Corrosion Control)",
     "acs": [
      "AM.I.G.K13"
     ]
