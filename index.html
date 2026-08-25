@@ -2694,8 +2694,13 @@ async function doOAuthSignIn(provider){
       showNamePrompt(u.displayName || '', async (chosenName) => {
         showAccessCodeModal(async (code) => {
           let gValidCode = null;
-          try{ gValidCode = await dbGet('config/instructorAccessCode'); }catch(e){}
-          if(!gValidCode || code.trim() !== gValidCode){
+          try{ gValidCode = await dbGet('config/instructorAccessCode'); }catch(e){ console.error('access code fetch failed:', e); }
+          if(!gValidCode){
+            document.getElementById('accessCodeErr').textContent = 'Could not verify access code (connection issue). Please try again.';
+            document.getElementById('accessCodeErr').classList.remove('hidden');
+            return false; // keep modal open
+          }
+          if(code.trim() !== gValidCode){
             document.getElementById('accessCodeErr').textContent = 'Invalid access code. Contact your administrator.';
             document.getElementById('accessCodeErr').classList.remove('hidden');
             return false; // keep modal open
@@ -19193,8 +19198,14 @@ auth.getRedirectResult().then(async result => {
         // New instructor via redirect OAuth — validate code then submit for approval
         const code = prompt('Enter instructor access code to submit your registration:');
         let gValidCode = null;
-        try{ gValidCode = await dbGet('config/instructorAccessCode'); }catch(e){}
-        if(!gValidCode || code?.trim() !== gValidCode){
+        try{ gValidCode = await dbGet('config/instructorAccessCode'); }catch(e){ console.error('access code fetch failed:', e); }
+        if(!gValidCode){
+          alert('Could not verify access code (connection issue). Registration cancelled — please try again.');
+          await auth.signOut();
+          showLanding();
+          return;
+        }
+        if(code?.trim() !== gValidCode){
           alert('Invalid access code. Registration cancelled.');
           await auth.signOut();
           showLanding();
