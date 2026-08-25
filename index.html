@@ -2525,6 +2525,21 @@ async function dbSet(p,v){await db.ref(p).set(v);}
 async function dbUpdate(p,v){await db.ref(p).update(v);}
 async function dbPush(p,v){return db.ref(p).push(v);}
 
+// Retry wrapper for reads made immediately after a fresh sign-in (signInWithPopup
+// especially): the Database SDK's internal auth-token listener can lag a beat behind
+// auth.currentUser being set, so the very next read can see a stale/absent token and
+// get rejected by rules that only need "auth != null". A short retry rides that out
+// without needing to guess at the SDK's internal timing.
+async function dbGetRetry(p, tries, delayMs){
+  tries = tries || 4; delayMs = delayMs || 350;
+  let lastErr;
+  for(let i=0;i<tries;i++){
+    try{ return await dbGet(p); }
+    catch(e){ lastErr = e; if(i < tries-1) await new Promise(r=>setTimeout(r, delayMs*(i+1))); }
+  }
+  throw lastErr;
+}
+
 // ===============================================
 // APP STATE
 // ===============================================
@@ -2649,7 +2664,7 @@ async function doEmailAuth(){
       catch(e){ showErr(errEl, friendlyAuthError(e.code)); return; }
       // Now authenticated — read and validate the access code
       let validCode = null;
-      try{ validCode = await dbGet('config/instructorAccessCode'); }catch(e){}
+      try{ validCode = await dbGetRetry('config/instructorAccessCode'); }catch(e){}
       if(!validCode || accessCode !== validCode){
         try{ await cred.user.delete(); }catch(e){} // remove the orphaned auth account
         await auth.signOut();
@@ -2688,13 +2703,13 @@ async function doOAuthSignIn(provider){
     _oauthInProgress = false;
     const u = result.user;
     let existing = null;
-    try { existing = await dbGet(`instructors/${u.uid}`); } catch(e){ existing = null; }
+    try { existing = await dbGetRetry(`instructors/${u.uid}`); } catch(e){ existing = null; }
     if(!existing){
       // New Google user — ask for name, then access code
       showNamePrompt(u.displayName || '', async (chosenName) => {
         showAccessCodeModal(async (code) => {
           let gValidCode = null;
-          try{ gValidCode = await dbGet('config/instructorAccessCode'); }catch(e){ console.error('access code fetch failed:', e); }
+          try{ gValidCode = await dbGetRetry('config/instructorAccessCode'); }catch(e){ console.error('access code fetch failed:', e); }
           if(!gValidCode){
             document.getElementById('accessCodeErr').textContent = 'Could not verify access code (connection issue). Please try again.';
             document.getElementById('accessCodeErr').classList.remove('hidden');
@@ -19188,7 +19203,7 @@ auth.getRedirectResult().then(async result => {
   } else {
     showScreen('instAuthScreen');
     try{
-      const existing = await dbGet('instructors/' + u.uid);
+      const existing = await dbGetRetry('instructors/' + u.uid);
       if(existing){
         instUser = u;
         instProfile = existing;
@@ -19198,7 +19213,7 @@ auth.getRedirectResult().then(async result => {
         // New instructor via redirect OAuth — validate code then submit for approval
         const code = prompt('Enter instructor access code to submit your registration:');
         let gValidCode = null;
-        try{ gValidCode = await dbGet('config/instructorAccessCode'); }catch(e){ console.error('access code fetch failed:', e); }
+        try{ gValidCode = await dbGetRetry('config/instructorAccessCode'); }catch(e){ console.error('access code fetch failed:', e); }
         if(!gValidCode){
           alert('Could not verify access code (connection issue). Registration cancelled — please try again.');
           await auth.signOut();
