@@ -2702,6 +2702,14 @@ async function doOAuthSignIn(provider){
     const result = await auth.signInWithPopup(p);
     _oauthInProgress = false;
     const u = result.user;
+    // signInWithPopup's promise can resolve slightly ahead of auth.currentUser's
+    // session being fully committed, leaving the Database SDK's token stale for the
+    // reads that immediately follow. Force a fresh ID token to sync it for real,
+    // and flag the rarer case where the session didn't commit at all.
+    try{
+      if(auth.currentUser){ await auth.currentUser.getIdToken(true); }
+      else{ console.warn('auth.currentUser is null right after signInWithPopup — session did not commit'); }
+    }catch(e){ console.warn('post-signin getIdToken(true) failed:', e.message||e); }
     let existing = null;
     try { existing = await dbGetRetry(`instructors/${u.uid}`); } catch(e){ existing = null; }
     if(!existing){
@@ -19182,6 +19190,10 @@ auth.getRedirectResult().then(async result => {
   const u = result.user;
   const role = localStorage.getItem('pendingOAuthRole') || 'instructor';
   try{ localStorage.removeItem('pendingOAuthRole'); localStorage.removeItem('pendingOAuthTime'); }catch(e){}
+  try{
+    if(auth.currentUser){ await auth.currentUser.getIdToken(true); }
+    else{ console.warn('auth.currentUser is null right after getRedirectResult — session did not commit'); }
+  }catch(e){ console.warn('post-signin getIdToken(true) failed:', e.message||e); }
 
   if(role === 'student'){
     stuAuthUser = u;
