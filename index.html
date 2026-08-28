@@ -5775,8 +5775,8 @@ async function adminLoadPending(){
           <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--muted);margin-top:2px">Applied: ${when}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-primary btn-sm" style="background:#16a34a;border-color:#16a34a" onclick="adminApproveInstructor('${esc(uid)}','${name}','${email}')">✓ Approve</button>
-          <button class="btn btn-danger btn-sm" onclick="adminRejectInstructor('${esc(uid)}','${name}')">✕ Reject</button>
+          <button class="btn btn-primary btn-sm" style="background:#16a34a;border-color:#16a34a" onclick="adminApproveInstructor('${esc(uid)}')">✓ Approve</button>
+          <button class="btn btn-danger btn-sm" onclick="adminRejectInstructor('${esc(uid)}')">✕ Reject</button>
         </div>
       </div>`;
     }).join('');
@@ -5785,8 +5785,16 @@ async function adminLoadPending(){
   }
 }
 
-async function adminApproveInstructor(uid, name, email){
+// Look the applicant up fresh by uid rather than trusting name/email passed through
+// the button's onclick attribute — those values are HTML-escaped for display, and a
+// name with an apostrophe or other special character can break (or silently corrupt)
+// an inline onclick string, which is how an instructor's name has ended up blank/wrong
+// after approval before.
+async function adminApproveInstructor(uid){
   if(!_isSuperAdmin) return;
+  const p = await dbGet(`pendingInstructors/${uid}`).catch(()=>null);
+  if(!p){ alert('This application no longer exists.'); adminLoadPending(); return; }
+  const name = p.name || '(no name)', email = p.email || '';
   if(!confirm(`Approve "${name}" as an instructor?\n\nThey will be able to sign in and access instructor features immediately.`)) return;
   try{
     await dbSet(`instructors/${uid}`, { name, email, createdAt: ts(), approvedBy: instUser.uid });
@@ -5797,8 +5805,10 @@ async function adminApproveInstructor(uid, name, email){
   }catch(e){ alert('Error approving: ' + e.message); }
 }
 
-async function adminRejectInstructor(uid, name){
+async function adminRejectInstructor(uid){
   if(!_isSuperAdmin) return;
+  const p = await dbGet(`pendingInstructors/${uid}`).catch(()=>null);
+  const name = p?.name || 'this applicant';
   if(!confirm(`Reject and delete the application from "${name}"?\n\nThey will need to reapply to request access again.`)) return;
   try{
     await dbSet(`pendingInstructors/${uid}`, null);
@@ -11442,9 +11452,9 @@ async function loadStudentQuizzes(){
   if(banner){
     const classroomCardPromises = myClassrooms.map(async c=>{
       const room = await dbGet(`classrooms/${c.classroomId}`);
-      let instName = 'Instructor';
+      let instName = 'Your Instructor';
       if(room?.instructorId){
-        try{ instName = (await dbGet(`instructors/${room.instructorId}`))?.name || 'Instructor'; }catch(e){}
+        try{ instName = (await dbGetRetry(`instructors/${room.instructorId}`, 2, 300))?.name || 'Your Instructor'; }catch(e){}
       }
       const stuUid2 = stuSession?.uid || safeKey(stuSession?.name||'');
       const stuName2 = stuSession?.name || '';
