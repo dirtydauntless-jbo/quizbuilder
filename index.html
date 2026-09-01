@@ -2267,6 +2267,27 @@ setTimeout(function(){
   </div>
 </div>
 
+<!-- Reassign Host Modal (Master Admin only) -->
+<div id="reassignHostModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('reassignHostModal')">
+  <div class="modal">
+    <div class="modal-title">Reassign Host Instructor</div>
+    <div style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+      Search by name or email to set which instructor account hosts this classroom.
+    </div>
+    <label class="label">Search by Name or Email</label>
+    <input class="input" id="hostReassignSearch" type="text" placeholder="e.g. John Smith or john@school.edu"
+      style="margin-bottom:6px"
+      oninput="hostReassignSearch(this.value)"
+      onkeydown="if(event.key==='Enter')hostReassignSearch(this.value)"/>
+    <div id="hostReassignResults" style="margin-bottom:4px;max-height:260px;overflow-y:auto"></div>
+    <div id="hostReassignErr" class="err-msg hidden"></div>
+    <div id="hostReassignOk" style="color:var(--cl);font-family:var(--font-mono);font-size:.78rem;margin-top:6px;display:none"></div>
+    <div style="margin-top:14px">
+      <button class="btn btn-ghost" style="width:100%" onclick="closeModal('reassignHostModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- My Profile Modal (Student) -->
 <div id="stuMyProfileModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('stuMyProfileModal')">
   <div class="modal" style="max-width:460px">
@@ -12748,6 +12769,7 @@ async function loadClassroomInstructors(classId){
         <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--muted)">${esc(hostProfile?.email||'')}</div>
       </div>
       <span style="font-family:var(--font-mono);font-size:.62rem;padding:3px 9px;border-radius:3px;background:rgba(240,165,0,.12);color:var(--accent);border:1px solid rgba(240,165,0,.3)">HOST</span>
+      ${_isMasterAdmin ? `<button class="btn btn-ghost btn-sm" onclick="showReassignHostModal('${classId}')" title="Reassign host (master admin only)">Edit</button>` : ''}
     </div>`,
     // Co-instructor rows
     ...coProfiles.map(p => `
@@ -12929,6 +12951,89 @@ async function removeCoInstructor(classId, coUid){
   await dbSet(`classrooms/${classId}/coInstructors/${coUid}`, null);
   await dbSet(`coInstructorClassrooms/${coUid}/${classId}`, null);
 
+  loadClassroomInstructors(classId);
+}
+
+// ── Reassign host instructor (master admin only — fixes broken/unknown host data) ──
+let _hostReassignClassId = null;
+let _hostReassignCache = null;
+
+function showReassignHostModal(classId){
+  if(!_isMasterAdmin) return;
+  _hostReassignClassId = classId;
+  const inp = document.getElementById('hostReassignSearch');
+  if(inp) inp.value = '';
+  document.getElementById('hostReassignResults').innerHTML = '';
+  document.getElementById('hostReassignErr').classList.add('hidden');
+  document.getElementById('hostReassignOk').style.display = 'none';
+  _hostReassignCache = null;
+  show('reassignHostModal');
+  _hostReassignLoad();
+}
+
+async function _hostReassignLoad(){
+  const resultsEl = document.getElementById('hostReassignResults');
+  resultsEl.innerHTML = '<div style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);padding:8px">Loading instructors...</div>';
+  try {
+    const data = await dbGet('instructors') || {};
+    _hostReassignCache = Object.entries(data)
+      .filter(([, v]) => v && v.email)
+      .map(([uid, v]) => ({ uid, name: v.name || '', email: v.email }));
+    resultsEl.innerHTML = `<div style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);padding:6px 2px">${_hostReassignCache.length} instructor${_hostReassignCache.length!==1?'s':''} found — start typing to filter</div>`;
+  } catch(e) {
+    _hostReassignCache = [];
+    document.getElementById('hostReassignErr').textContent = 'Error loading instructors: ' + e.message;
+    document.getElementById('hostReassignErr').classList.remove('hidden');
+  }
+}
+
+function hostReassignSearch(query){
+  const resultsEl = document.getElementById('hostReassignResults');
+  if(_hostReassignCache === null){
+    resultsEl.innerHTML = '<div style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);padding:8px">Loading...</div>';
+    return;
+  }
+  const q = query.trim().toLowerCase();
+  const matches = q.length < 1
+    ? _hostReassignCache.slice(0, 8)
+    : _hostReassignCache.filter(i => i.name.toLowerCase().includes(q) || i.email.toLowerCase().includes(q)).slice(0, 8);
+
+  if(matches.length === 0){
+    resultsEl.innerHTML = '<div style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);padding:8px">No matching instructor account found.</div>';
+    return;
+  }
+  resultsEl.innerHTML = matches.map(i => {
+    const initials = (i.name || i.email).split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) || '?';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;background:var(--panel)">
+      <div style="width:34px;height:34px;border-radius:50%;background:rgba(240,165,0,.15);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:.95rem;flex-shrink:0">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.name || '—')}</div>
+        <div style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.email)}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="font-size:.72rem;padding:5px 12px;flex-shrink:0" onclick="hostReassignSetById('${i.uid}','${esc(i.name)}')">Set as Host</button>
+    </div>`;
+  }).join('');
+}
+
+async function hostReassignSetById(uid, name){
+  const errEl = document.getElementById('hostReassignErr');
+  const okEl  = document.getElementById('hostReassignOk');
+  errEl.classList.add('hidden');
+  okEl.style.display = 'none';
+  const classId = _hostReassignClassId;
+  if(!classId) return;
+
+  const classroom = await dbGet(`classrooms/${classId}`) || {};
+  const oldUid = classroom.instructorId;
+  if(oldUid === uid){ showErr(errEl, `${name} is already the host.`); return; }
+
+  await dbSet(`classrooms/${classId}/instructorId`, uid);
+  await dbSet(`classrooms/${classId}/instructorName`, name);
+  if(oldUid) await dbSet(`instructorClassrooms/${oldUid}/${classId}`, null);
+  await dbSet(`instructorClassrooms/${uid}/${classId}`, true);
+
+  okEl.textContent = `Host set to ${name}.`;
+  okEl.style.display = 'block';
   loadClassroomInstructors(classId);
 }
 
