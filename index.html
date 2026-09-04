@@ -14180,7 +14180,8 @@ let fcDmeSubmitted = false;// has the current card's typed answer been graded?
 let fcDmeGrading = false;  // grading request in flight
 let fcDmeResult = null;    // {verdict:'correct'|'partial'|'incorrect'|'error', feedback} from last grade
 let fcDmeDraft = '';       // student's typed answer for the current card
-function fcResetDmeCard(){ fcDmeSubmitted = false; fcDmeGrading = false; fcDmeResult = null; fcDmeDraft = ''; }
+let fcDmeRevealed = false; // student skipped grading and just wants to self-rate (like Flip Mode)
+function fcResetDmeCard(){ fcDmeSubmitted = false; fcDmeGrading = false; fcDmeResult = null; fcDmeDraft = ''; fcDmeRevealed = false; }
 
 async function stuSwitchTab(tab){
   if(stuSession?.uid) localStorage.setItem('stuLastTab_' + stuSession.uid, tab);
@@ -16834,14 +16835,22 @@ function renderFlashcard(){
       <div class="fc-text">${esc(card.q)}</div>
     </div>
     <div class="fc-dme-input-wrap">
-      <textarea id="fcDmeInput" class="fc-dme-textarea" placeholder="Type your answer like you're speaking to the DME..." ${fcDmeSubmitted?'disabled':''} oninput="fcDmeDraft=this.value" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fcDmeSubmit();}">${esc(fcDmeDraft)}</textarea>
-      ${!fcDmeSubmitted ? `<button class="btn fc-dme-submit" onclick="fcDmeSubmit()" ${fcDmeGrading?'disabled':''}>${fcDmeGrading?'⏳ Grading…':'✓ Grade My Answer'}</button>` : ''}
+      <textarea id="fcDmeInput" class="fc-dme-textarea" placeholder="Type your answer like you're speaking to the DME..." ${(fcDmeSubmitted||fcDmeRevealed)?'disabled':''} oninput="fcDmeDraft=this.value" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fcDmeSubmit();}">${esc(fcDmeDraft)}</textarea>
+      ${!fcDmeSubmitted && !fcDmeRevealed ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn fc-dme-submit" onclick="fcDmeSubmit()" ${fcDmeGrading?'disabled':''}>${fcDmeGrading?'⏳ Grading…':'✓ Grade My Answer'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="fcDmeReveal()" ${fcDmeGrading?'disabled':''} title="Skip typing — just show the answer and self-rate">👁 Just Show Me the Answer</button>
+      </div>` : ''}
     </div>
     ${fcDmeSubmitted && fcDmeResult ? `
     <div class="fc-dme-result fc-dme-${fcDmeResult.verdict}">
       <div class="fc-dme-verdict">${fcDmeVerdictLabel(fcDmeResult.verdict)}</div>
       <div class="fc-dme-feedback">${esc(fcDmeResult.feedback)}</div>
     </div>
+    <div class="fc-dme-reference">
+      <div class="fc-label">Reference Answer</div>
+      <div class="fc-text">${esc(card.a)}</div>
+    </div>` : ''}
+    ${fcDmeRevealed ? `
     <div class="fc-dme-reference">
       <div class="fc-label">Reference Answer</div>
       <div class="fc-text">${esc(card.a)}</div>
@@ -16868,9 +16877,9 @@ function renderFlashcard(){
 
     <!-- Action buttons — always visible, work before AND after flip. In DME Mode, locked until graded. -->
     <div class="fc-actions" id="fcActions">
-      ${(fcDmeMode && !fcDmeSubmitted) ? '' : `<button class="fc-btn fc-btn-learn" id="fcBtnLearn" onclick="markCard(false)" title="Still Learning (←)">← Still Learning</button>`}
+      ${(fcDmeMode && !fcDmeSubmitted && !fcDmeRevealed) ? '' : `<button class="fc-btn fc-btn-learn" id="fcBtnLearn" onclick="markCard(false)" title="Still Learning (←)">← Still Learning</button>`}
       <button onclick="fcToggleStar()" title="Star this card" style="background:${isStarred?'rgba(240,165,0,.2)':'var(--panel2)'};border:1px solid ${isStarred?'var(--accent)':'var(--border)'};border-radius:var(--r);padding:8px 14px;cursor:pointer;font-size:1.1rem;transition:all .15s;color:${isStarred?'var(--accent)':'var(--muted)'}">${isStarred?'★':'☆'}</button>
-      ${(fcDmeMode && !fcDmeSubmitted) ? '<div class="fc-dme-lock-hint">Grade your answer to continue &nbsp;·&nbsp; or Skip ↓</div>' : `<button class="fc-btn fc-btn-know" id="fcBtnKnow" onclick="markCard(true)" title="Know It (→)">Know It →</button>`}
+      ${(fcDmeMode && !fcDmeSubmitted && !fcDmeRevealed) ? '<div class="fc-dme-lock-hint">Grade your answer to continue &nbsp;·&nbsp; or Skip ↓</div>' : `<button class="fc-btn fc-btn-know" id="fcBtnKnow" onclick="markCard(true)" title="Know It (→)">Know It →</button>`}
     </div>
 
     <!-- Nav row: Back · Skip -->
@@ -16919,6 +16928,14 @@ function fcDmeVerdictLabel(v){
   return v==='correct' ? '✅ Correct' : v==='partial' ? '🟡 Partially Correct' : v==='incorrect' ? '❌ Needs Work' : '⚠️ Grading unavailable';
 }
 
+// Skip typing/AI-grading for this card — reveal the reference answer and unlock self-rating,
+// same idea as flipping a card in Flip Mode.
+function fcDmeReveal(){
+  if(fcDmeGrading || fcDmeSubmitted || fcDmeRevealed) return;
+  fcDmeRevealed = true;
+  renderFlashcard();
+}
+
 async function fcDmeSubmit(){
   if(fcDmeGrading || fcDmeSubmitted) return;
   const ta = document.getElementById('fcDmeInput');
@@ -16954,7 +16971,7 @@ function fcUpdateCounters(){
 
 function markCard(known){
   if(fcAnimating) return;
-  if(fcDmeMode && !fcDmeSubmitted) return; // must grade the typed answer first
+  if(fcDmeMode && !fcDmeSubmitted && !fcDmeRevealed) return; // must grade the typed answer, or reveal it, first
   fcAnimating = true;
 
   // Flash the chosen button
