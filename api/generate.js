@@ -605,6 +605,12 @@ ${JSON.stringify(batch.map(q => ({ question: q.question, choices: q.choices, cor
   // accuracy re-check has actual source material to verify against, not just unaided recall.
   const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
   raw = (await Promise.all(chunk(raw, 10).map(c => qcBatch(c, ref)))).flat();
+  // Runs BEFORE the distinctness/double-answer vets below: those two only ever rewrite the
+  // OTHER choices and never reassign `correct`, so a flatly wrong answer key (the DEFINITION
+  // FLIP failure mode — see vetAnswerAccuracy's comment) has to be fixed here first, or it
+  // survives everything downstream untouched.
+  raw = (await Promise.all(chunk(raw, 10).map(c => vetAnswerAccuracy(c, ref)))).flat();
+  raw = raw.filter(q => q && q.question && q.correct && (q.correct in (q.choices || {})));
   raw = (await Promise.all(chunk(raw, 10).map(c => vetDistinctChoices(c)))).flat();
   // Variants are the highest-risk source for a hidden second correct answer (DEFINITION FLIP
   // in particular manufactures a "which will NOT..." stem, exactly the shape that tends to admit
@@ -771,6 +777,44 @@ For EACH question below:
 - If you find that a WRONG-marked choice is also true (or arguably true) alongside the marked correct one: KEEP the marked correct choice exactly as-is, and REWRITE the other true choice into a clearly FALSE but plausible statement on the same topic — matching its original length, units, and style — so only one choice remains true.
 - If you cannot confidently rewrite it into something unambiguously false (e.g. the question concept itself doesn't logically support a single answer), set that question's "correct" field to "" (empty string) so it will be discarded rather than shipped with a double answer.
 - Do NOT change the question text, the marked correct choice, or the explanation — except remove any "Choice A/B/C"/"option B" letter reference (choice order is randomized later).
+
+Return a JSON array in the SAME order and format, preserving ALL fields present on each item (question, choices, correct, explanation, topic, handbook, source, subject, id, figureNum). No markdown — just the JSON array.
+
+Questions:
+${JSON.stringify(questions)}`;
+
+  try {
+    const arr = parseJSON(await callClaude(prompt, 4096));
+    if (Array.isArray(arr) && arr.length === questions.length) return arr;
+    return questions;
+  } catch { return questions; }
+}
+
+// ── Dedicated "is the marked answer even true" vet (runs BEFORE vetSingleCorrectAnswer) ──
+// qcBatch's own accuracy item (0a) is one line inside an 8-point checklist and, in practice,
+// isn't reliably followed — variants from the DEFINITION FLIP strategy (which manufactures a
+// "which will NOT..." / "EXCEPT" stem and requires re-deriving which original WRONG choice is
+// now right) are the single biggest source of a flatly WRONG marked answer that slips through.
+// vetDistinctChoices and vetSingleCorrectAnswer both structurally TRUST whichever choice is
+// marked "correct" and only ever rewrite the OTHER choices — neither one will ever reassign
+// `correct` to a different letter, so a wrong-but-marked-correct answer that reaches them never
+// gets fixed. This pass's only job is that reassignment: ignore the mark, re-derive the truth
+// independently, and correct it when it's wrong.
+async function vetAnswerAccuracy(questions, refText) {
+  if (!questions.length) return questions;
+
+  const groundingBlock = refText
+    ? `\n\nUse this reference text as ground truth — verify against it, not unaided recall, wherever they conflict:\n\n${refText}\n`
+    : '';
+
+  const prompt = `You are a strict FAA A&P exam fact-checker. Your ONLY job is to verify the marked "correct" choice is actually true, and fix it if it isn't.
+${groundingBlock}
+For EACH question below:
+- IGNORE the current "correct" mark as a hint — it may be wrong. Independently re-derive, from the question stem and the reference text, which single choice (A, B, or C) is the factually true answer.
+- Pay special attention to any stem containing "NOT", "EXCEPT", "LEAST", or similar negation/exclusion wording — these are the questions most likely to have the wrong choice marked, because they were produced by flipping an original question and re-deriving the answer under negation is where mistakes happen. Re-read the reference text specifically for what the stem is now asking (the negated/excluded condition), not what the original un-flipped question asked.
+- If your independently-derived true choice MATCHES the current mark: return the question unchanged.
+- If your independently-derived true choice is DIFFERENT from the current mark: set "correct" to the letter you derived. Do not change the question text or any choice's wording — only the "correct" field changes.
+- If you cannot confidently determine which single choice is true (e.g. the reference text doesn't clearly support any one of them): set "correct" to "" (empty string) so it gets discarded rather than shipped with an unverifiable answer.
 
 Return a JSON array in the SAME order and format, preserving ALL fields present on each item (question, choices, correct, explanation, topic, handbook, source, subject, id, figureNum). No markdown — just the JSON array.
 
