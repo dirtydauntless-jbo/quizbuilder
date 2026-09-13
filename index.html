@@ -3826,6 +3826,10 @@ async function masterDashLoad(){
         <input id="vpoolSearch" oninput="_vpoolRender()" class="input" placeholder="Search question text…" style="flex:1;min-width:130px;font-size:.78rem;padding:6px 10px"/>
         <button class="btn btn-ghost btn-sm" onclick="_vpoolLoad()">↻ Refresh</button>
       </div>
+      <div style="margin-bottom:10px">
+        <button id="vpoolAuditBtn" class="btn btn-sm" style="background:transparent;border:1px solid #cc8a44;color:#e0a44a" onclick="_vpoolAuditNegations()">🔎 Audit NOT/EXCEPT/LEAST answers</button>
+        <span style="font-family:var(--font-mono);font-size:.68rem;color:var(--muted);margin-left:8px">Re-checks every negated-stem question already in the pool against the handbook — flags any that disagree, doesn't change anything by itself.</span>
+      </div>
       <div id="vpoolList" style="max-height:320px;overflow-y:auto;scroll-behavior:smooth"><div class="empty-state" style="font-size:.8rem">Loading…</div></div>
     `, false)}
 
@@ -4108,6 +4112,7 @@ async function _genCostLoad(){
 let _vpoolData=[];       // flattened pool entries {_i,subject,topicKey,vid,q,stage,cleanDeploys,flagged}
 let _vpoolEditIdx=-1;    // index of the row currently being edited (-1 = none)
 let _vpoolDismissed=new Set(); // vids hidden from the list after promote/retire/delete (cleared on Refresh)
+let _vpoolAuditFlags=new Map(); // vid -> {currentCorrect,suggestedCorrect,suggestedText} from the last answer-key audit run
 const _vpBtn      = 'background:transparent;border:1px solid var(--border);border-radius:6px;color:#22b8d8;font-family:var(--font-mono);font-size:.68rem;padding:5px 10px;cursor:pointer';
 const _vpBtnWarn  = 'background:transparent;border:1px solid #cc8a44;border-radius:6px;color:#e0a44a;font-family:var(--font-mono);font-size:.68rem;padding:5px 10px;cursor:pointer';
 const _vpBtnDanger= 'background:transparent;border:1px solid #cc4444;border-radius:6px;color:#e06666;font-family:var(--font-mono);font-size:.68rem;padding:5px 10px;cursor:pointer';
@@ -4123,6 +4128,7 @@ async function _vpoolLoad(){
   if(list) list.innerHTML='<div class="empty-state" style="font-size:.8rem">Loading…</div>';
   _vpoolEditIdx=-1;
   _vpoolDismissed.clear();
+  _vpoolAuditFlags=new Map(); // a fresh load may reflect edits made elsewhere — stale audit results could mislead
   const [pool,flagged]=await Promise.all([dbGet('faaVariants/pool').catch(()=>null),dbGet('faaVariants/flagged').catch(()=>null)]);
   const fl=flagged||{}, p=pool||{}, rows=[];
   for(const subject of Object.keys(p)){
@@ -4165,7 +4171,7 @@ function _vpoolRender(){
   else if(fst==='jar') rows=rows.filter(r=>!r.flagged&&r.stage==='jar');
   else if(fst==='pending') rows=rows.filter(r=>!r.flagged&&r.stage==='pending');
   if(q) rows=rows.filter(r=>((r.q.question||'')+' '+(r.q.topic||'')).toLowerCase().includes(q));
-  rows.sort((a,b)=>(a.flagged?1:0)-(b.flagged?1:0) || (a.stage===b.stage?0:a.stage==='jar'?-1:1) || (b.cleanDeploys-a.cleanDeploys));
+  rows.sort((a,b)=>(_vpoolAuditFlags.has(b.vid)?1:0)-(_vpoolAuditFlags.has(a.vid)?1:0) || (a.flagged?1:0)-(b.flagged?1:0) || (a.stage===b.stage?0:a.stage==='jar'?-1:1) || (b.cleanDeploys-a.cleanDeploys));
   if(!rows.length){ list.innerHTML='<div class="empty-state" style="font-size:.8rem">No questions match.</div>'; return; }
   list.innerHTML=rows.slice(0,300).map(r=> r._i===_vpoolEditIdx ? _vpoolEditCard(r) : _vpoolViewCard(r)).join('')
     + (rows.length>300?`<div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted);text-align:center;padding:8px">Showing first 300 of ${rows.length}.</div>`:'');
@@ -4183,20 +4189,23 @@ function _vpoolRender(){
 function _vpoolViewCard(r){
   const correctText=r.q.choices?(r.q.choices[r.q.correct]||''):'';
   const prog=r.stage==='jar'?'✓ reliable':(r.cleanDeploys+'/5 clean deploys');
+  const audit=_vpoolAuditFlags.get(r.vid);
   const a=[];
   if(!r.flagged && r.stage==='pending') a.push(`<button onclick="_vpoolAction(${r._i},'promote')" style="${_vpBtnGo}">⭐ Promote now</button>`);
   if(!r.flagged && r.stage==='jar')     a.push(`<button onclick="_vpoolAction(${r._i},'demote')" style="${_vpBtn}">↩ Send back</button>`);
-  a.push(`<button onclick="_vpoolEdit(${r._i})" style="${_vpBtn}">✏️ Edit</button>`);
+  a.push(`<button onclick="_vpoolEdit(${r._i})" style="${audit?_vpBtnWarn:_vpBtn}">✏️ ${audit?'Review flagged answer':'Edit'}</button>`);
   if(!r.flagged) a.push(`<button onclick="_vpoolAction(${r._i},'retire')" style="${_vpBtnWarn}">⚑ Retire</button>`);
   else           a.push(`<button onclick="_vpoolAction(${r._i},'restore')" style="${_vpBtn}">↺ Restore</button>`);
   a.push(`<button onclick="_vpoolAction(${r._i},'delete')" style="${_vpBtnDanger}">🗑 Delete</button>`);
-  return `<div style="border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px;background:var(--panel)${r.flagged?';opacity:.65':''}">
+  const auditBanner=audit?`<div style="background:rgba(204,68,68,.1);border:1px solid #cc4444;border-radius:6px;padding:7px 10px;margin-bottom:7px;font-family:var(--font-mono);font-size:.7rem;color:#e06666">⚠ Audit: re-derived answer is <b>${_qEsc(audit.suggestedCorrect)}</b> ("${_qEsc(audit.suggestedText)}") — currently marked ${_qEsc(audit.currentCorrect)}. Not changed — review below.</div>`:'';
+  return `<div style="border:1px solid ${audit?'#cc4444':'var(--border)'};border-radius:8px;padding:11px 13px;margin-bottom:8px;background:var(--panel)${r.flagged?';opacity:.65':''}">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
       ${_vpoolBadge(r.stage,r.flagged)}
       <span style="font-family:var(--font-mono);font-size:.58rem;font-weight:700;padding:2px 6px;border-radius:4px;background:${r.kind==='op'?'rgba(124,58,237,.15)':'rgba(34,184,216,.12)'};color:${r.kind==='op'?'#a78bfa':'#22b8d8'};border:1px solid ${r.kind==='op'?'#7c3aed':'#22b8d8'}">${r.kind==='op'?'O&P':'VARIANT'}</span>
       <span style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted)">${prog}</span>
       <span style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted)">· ${_qEsc(r.subject)} · ${_qEsc(r.q.topic||'')}</span>
     </div>
+    ${auditBanner}
     <div style="font-size:.85rem;margin-bottom:5px">${_qEsc(r.q.question||'')}</div>
     ${Object.keys(r.q.choices||{}).map(k=>`<div style="font-family:var(--font-mono);font-size:.74rem;color:${k===r.q.correct?'var(--cl)':'var(--muted)'};padding:1px 0">${k===r.q.correct?'✓':'·'} ${k}: ${_qEsc(r.q.choices[k])}</div>`).join('')}
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">${a.join('')}</div>
@@ -4204,12 +4213,18 @@ function _vpoolViewCard(r){
 }
 function _vpoolEditCard(r){
   const ch=r.q.choices||{}; const keys=['A','B','C'];
+  const audit=_vpoolAuditFlags.get(r.vid);
+  // Pre-select the audit's suggested letter (choice TEXT is never touched) so reviewing a flagged
+  // mismatch is a glance-and-Save — but nothing is applied until Jaime actually clicks Save.
+  const preCorrect=audit?audit.suggestedCorrect:r.q.correct;
+  const auditNote=audit?`<div style="background:rgba(204,68,68,.1);border:1px solid #cc4444;border-radius:6px;padding:7px 10px;margin-bottom:8px;font-family:var(--font-mono);font-size:.7rem;color:#e06666">⚠ Audit suggests <b>${_qEsc(audit.suggestedCorrect)}</b> instead of the marked ${_qEsc(audit.currentCorrect)} — ${_qEsc(audit.suggestedCorrect)} is pre-selected below. Verify against the handbook, then Save (or leave it on ${_qEsc(audit.currentCorrect)} if the audit is wrong).</div>`:'';
   return `<div id="vpoolEditCard" style="border:1px solid #f0c040;border-radius:8px;padding:12px 13px;margin-bottom:8px;background:var(--panel2)">
     <div style="font-family:var(--font-mono);font-size:.64rem;color:#f0c040;text-transform:uppercase;margin-bottom:8px">✏️ Editing variant — ${_qEsc(r.subject)} · ${_qEsc(r.q.topic||'')}</div>
+    ${auditNote}
     <label class="label" style="font-size:.66rem">Question</label>
     <textarea id="vpEdQ" class="input" style="font-size:.82rem;min-height:60px;margin-bottom:8px">${_qEsc(r.q.question||'')}</textarea>
     ${keys.map(k=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:.74rem;cursor:pointer;white-space:nowrap"><input type="radio" name="vpEdCorrect" value="${k}" ${r.q.correct===k?'checked':''} style="cursor:pointer"/> ${k}</label>
+      <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:.74rem;cursor:pointer;white-space:nowrap"><input type="radio" name="vpEdCorrect" value="${k}" ${preCorrect===k?'checked':''} style="cursor:pointer"/> ${k}</label>
       <input id="vpEd${k}" class="input" style="font-size:.8rem;flex:1" value="${_qEsc(ch[k]||'')}"/>
     </div>`).join('')}
     <label class="label" style="font-size:.66rem;margin-top:4px">Explanation</label>
@@ -4234,7 +4249,7 @@ async function _vpoolEditSave(i){
   const newQ={ question:question.trim(), choices:{A:A.trim(),B:B.trim(),C:C.trim()}, correct, explanation:explanation.trim(), topic:r.q.topic||'', subject:r.q.subject||r.subject, handbook:r.q.handbook||'' };
   try{
     await db.ref('faaVariants/pool/'+r.subject+'/'+r.topicKey+'/'+r.vid+'/q').set(newQ);
-    r.q=newQ; _vpoolEditIdx=-1; _vpoolRender();
+    r.q=newQ; _vpoolAuditFlags.delete(r.vid); _vpoolEditIdx=-1; _vpoolRender();
     showToast('Variant updated.','success');
   }catch(e){ showToast('Save failed: '+(e&&e.message||e),'error'); }
 }
@@ -4255,6 +4270,37 @@ async function _vpoolAction(i,action){
     }
     _vpoolRender();
   }catch(e){ showToast('Action failed: '+(e&&e.message||e),'error'); }
+}
+
+// Re-derive the answer key for every non-retired negated-stem ("NOT"/"EXCEPT"/"LEAST") question
+// already sitting in the pool and flag any that disagree with what's stored. This is the gap the
+// generation-time fix (vetAnswerAccuracy) can't cover on its own: that only runs for variants as
+// they're created, so anything already in the pool from before it existed keeps whatever answer
+// was marked back then. Read-only — never writes an answer, just surfaces mismatches for review
+// (see _vpoolEditCard's audit note): Jaime checks behind any answer-key change before it ships.
+async function _vpoolAuditNegations(){
+  const btn=document.getElementById('vpoolAuditBtn');
+  const candidates=_vpoolData.filter(r=>!r.flagged && /\b(not|except|least)\b/i.test(r.q.question||''));
+  if(!candidates.length){ showToast('No NOT/EXCEPT/LEAST-worded questions in the pool right now.','info'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Auditing 0/'+candidates.length+'…'; }
+  let checked=0, flaggedCount=0;
+  try{
+    const CH=50; // keep each request small so one slow batch can't blow the function timeout
+    for(let i=0;i<candidates.length;i+=CH){
+      const slice=candidates.slice(i,i+CH);
+      const items=slice.map(r=>({vid:r.vid, subject:r.subject, topic:r.q.topic||r.topicKey, question:r.q.question, choices:r.q.choices, correct:r.q.correct}));
+      const res=await fetch('https://classroomamt.vercel.app/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'auditVariants',items})});
+      const data=await res.json().catch(()=>({}));
+      (data.results||[]).forEach(x=>{ _vpoolAuditFlags.set(x.vid,x); flaggedCount++; });
+      checked+=slice.length;
+      if(btn) btn.textContent='Auditing '+checked+'/'+candidates.length+'…';
+      _vpoolRender();
+    }
+    showToast(flaggedCount
+      ? ('⚠ '+flaggedCount+' possible wrong answer key'+(flaggedCount===1?'':'s')+' out of '+checked+' checked — review the flagged rows below.')
+      : ('✓ Checked '+checked+' — all independently re-verified as marked.'), flaggedCount?'error':'success');
+  }catch(e){ showToast('Audit failed: '+(e&&e.message||e),'error'); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🔎 Audit NOT/EXCEPT/LEAST answers'; } _vpoolRender(); }
 }
 
 // ── User Directory — all students & instructors (super admin); admin-rights mgmt (master admin) ──
@@ -8508,10 +8554,20 @@ async function assignLoadList(){
         '</div>'
         : '';
       const examList = s.items.map(it=>{ const dn=it.a.status==='complete';
-        const sc=dn?(it.a.score+'/'+it.a.total+' · '+it.a.pct+'%'):(it.a.status==='in_progress'?'in progress':'not started');
+        const inProg=it.a.status==='in_progress';
+        const sc=dn?(it.a.score+'/'+it.a.total+' · '+it.a.pct+'%'):(inProg?'in progress':'not started');
         const col=dn?(it.a.pct>=70?'var(--cl)':'var(--wl)'):'var(--muted)';
         const tb=dn?examTimeBrief(it.a):''; const tp=dn?examPace(it.a):null;
-        const timeStr=tb?' <span style="font-family:var(--font-mono);font-size:.64rem;color:'+(tp&&tp.flag?'var(--wl)':'var(--muted)')+'" title="'+(tp?tp.label:'')+'">· '+tb+'</span>':'';
+        // Surface the actual start/completion timestamp right on the collapsed row — previously
+        // only visible by clicking into Breakdown (or not at all for in-progress exams), which
+        // meant checking on a student meant opening each assignment one at a time.
+        let timeStr='';
+        if(dn){
+          const parts=[it.a.completedAt?('done '+fmtDateTime(it.a.completedAt)):'', tb].filter(Boolean).join(' · ');
+          timeStr=parts?' <span style="font-family:var(--font-mono);font-size:.64rem;color:'+(tp&&tp.flag?'var(--wl)':'var(--muted)')+'" title="'+(tp?tp.label:'')+'">· '+parts+'</span>':'';
+        } else if(inProg && it.a.startedAt){
+          timeStr=' <span style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted)">· started '+fmtDateTime(it.a.startedAt)+'</span>';
+        }
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="font-size:.8rem">'+esc(_asgExamLabel(it.a))+' <span style="font-family:var(--font-mono);font-size:.66rem;color:var(--muted)">'+(it.a.createdAt?fmtDate(it.a.createdAt):'')+'</span>'+timeStr+'</span><span style="display:flex;gap:8px;align-items:center"><span style="font-family:var(--font-mono);font-size:.76rem;font-weight:700;color:'+col+'">'+sc+'</span>'+(dn?'<button onclick="assignViewResult(\''+it.stuUid+'\',\''+it.aid+'\')" class="btn" style="font-size:.7rem;padding:3px 8px">Breakdown</button>':'')+'</span></div>'; }).join('');
       return '<div class="asg-stu-card" data-name="'+esc((s.name||'').toLowerCase())+'" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer" onclick="var r=document.getElementById(\'asgstu_'+s.uid+'\');if(r){var o=r.style.display===\'none\';r.style.display=o?\'block\':\'none\';this.querySelector(\'.asg-caret\').textContent=o?\'▲\':\'▼\';}">'+
@@ -9081,7 +9137,9 @@ async function loadExamGradebook(classId, classExamId){
     const bar=done?('<div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+_examGradeColor(pct)+'"></div></div>'):('<span style="color:var(--muted);font-family:var(--font-mono);font-size:.72rem">'+(r.a?(r.a.status==='in_progress'?'in progress':'not started'):'not assigned')+'</span>');
     const grade=done?'<span style="font-weight:800;color:'+_examGradeColor(pct)+'">'+_examGrade(pct)+'</span>':'—';
     const _pace=done?examPace(r.a):null;
-    const comp=done?('<div>'+(r.a.completedAt?fmtDate(r.a.completedAt):'done')+'</div>'+(examTimeBrief(r.a)?'<div style="font-size:.62rem;color:'+(_pace&&_pace.flag?'var(--wl)':'var(--muted)')+'" title="'+(_pace?_pace.label:'')+'">'+examTimeBrief(r.a)+'</div>':'')):'—';
+    const comp=done
+      ?('<div>'+(r.a.completedAt?fmtDate(r.a.completedAt):'done')+'</div>'+(examTimeBrief(r.a)?'<div style="font-size:.62rem;color:'+(_pace&&_pace.flag?'var(--wl)':'var(--muted)')+'" title="'+(_pace?_pace.label:'')+'">'+examTimeBrief(r.a)+'</div>':''))
+      :(r.a&&r.a.status==='in_progress'&&r.a.startedAt?'<span style="font-size:.72rem;color:var(--muted)">started '+fmtDateTime(r.a.startedAt)+'</span>':'—');
     const integ=r.integEvents>0?'<span title="'+r.tab+' tab switch(es), '+r.blur+' focus loss(es)" style="color:var(--wl);font-weight:700;cursor:help">⚠ '+r.integEvents+'</span>':(done?'<span style="color:var(--cl)">✓</span>':'—');
     const click=done?(' style="cursor:pointer" onclick="assignViewResult(\''+r.uid+'\',\''+r.aid+'\')" title="Click to review this exam"'):'';
     return '<div'+click+' style="display:grid;grid-template-columns:'+cols+';gap:8px;padding:9px 10px;align-items:center;border-bottom:1px solid var(--border);font-size:.85rem"><span style="font-weight:600;color:'+(done?'var(--blue)':'var(--text)')+'">'+esc(r.name)+'</span><span style="font-family:var(--font-mono);font-weight:700;color:'+(done?_examGradeColor(pct):'var(--muted)')+'">'+score+'</span><span>'+bar+(done?' <span style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">'+pct+'%</span>':'')+'</span><span>'+grade+'</span><span style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">'+comp+'</span><span style="font-family:var(--font-mono);font-size:.78rem">'+integ+'</span></div>';
@@ -15650,7 +15708,9 @@ function pxExtractRef(expl){
 function pxConcept(q){
   let e=String(q.explanation||'').replace(/\s*\(Ref:[^)]*\)\s*$/i,'').replace(/\s*Reference:.*$/i,'').trim();
   const s=e.split(/(?<=\.)\s/)[0]||e;
-  return (s||q.question||'').slice(0,150);
+  const src=s||q.question||'';
+  if(src.length<=150) return src;
+  return src.slice(0,150).replace(/\s+\S*$/,'')+'…';
 }
 // Top-3 weakest topics with what to revisit. Returns {topics:[...]} for rendering/email.
 function pxStudyPlan(questions,answers){

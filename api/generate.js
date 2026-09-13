@@ -828,6 +828,46 @@ ${JSON.stringify(questions)}`;
   } catch { return questions; }
 }
 
+// ── Retroactive answer-key audit for the EXISTING variant pool ──────────────
+// vetAnswerAccuracy (above) only runs when a variant is first generated, so any pool entry
+// created before it existed — or that slipped through it — keeps whatever answer was marked at
+// creation. This re-runs the same independent re-derivation against already-stored pool entries,
+// grouped by topic so each batch of 10 shares one reference-text slice (cheaper + more consistent
+// than re-fetching per question). It NEVER writes anything: Jaime's standing rule is that he
+// checks behind any answer-key change before it goes live, so this only REPORTS which stored
+// answers disagree with a fresh, reference-grounded re-derivation — the Variant Pool Manager
+// surfaces the mismatches for him to review and fix (or dismiss) by hand.
+async function auditVariantAnswers(items, content) {
+  const byTopic = new Map();
+  for (const it of items) {
+    if (!byTopic.has(it.topic)) byTopic.set(it.topic, []);
+    byTopic.get(it.topic).push(it);
+  }
+  // Build every topic's 10-item batches up front, then run them ALL in parallel (same pattern
+  // used everywhere else in this file) — sequential batches here would risk the serverless
+  // function timing out once the pool has any real volume of flagged-topic questions.
+  const jobs = [];
+  for (const [topic, group] of byTopic) {
+    const ref = topicRefSlice(topic, content);
+    for (let i = 0; i < group.length; i += 10) jobs.push({ ref, batch: group.slice(i, i + 10) });
+  }
+  const outcomes = await Promise.all(jobs.map(async ({ ref, batch }) => {
+    const input = batch.map(it => ({ question: it.question, choices: it.choices, correct: it.correct }));
+    let checked;
+    try { checked = await vetAnswerAccuracy(input, ref); } catch { checked = input; }
+    return batch.map((it, j) => {
+      const c = checked[j] || {};
+      if (!c.correct || c.correct === it.correct) return null;
+      return {
+        vid: it.vid, subject: it.subject, topic: it.topic, question: it.question,
+        currentCorrect: it.correct, suggestedCorrect: c.correct,
+        suggestedText: (it.choices || {})[c.correct] || '',
+      };
+    });
+  }));
+  return outcomes.flat().filter(Boolean);
+}
+
 // ── Mix FAA + O&P + AI questions for one topic ───────────────────────────────
 async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRatioOverride, varRatioOverride, overrides, flaggedMap, seenSet) {
   if (total < 1) return [];
@@ -875,7 +915,21 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix, seenIds } = req.body || {};
+  const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix, seenIds, items } = req.body || {};
+
+  // MODE: 'auditVariants' — re-derive the answer key for existing variant-pool entries the
+  // client hands over (no `topics` needed) and report which ones disagree with what's stored.
+  // Read-only: never writes to the pool. See auditVariantAnswers() for why.
+  if (mode === 'auditVariants') {
+    if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'items array required' });
+    try {
+      const results = await auditVariantAnswers(items.slice(0, 300), getContent());
+      return res.status(200).json({ results });
+    } catch (e) {
+      return res.status(500).json({ error: 'Audit failed: ' + (e && e.message || e) });
+    }
+  }
+
   if (!Array.isArray(topics) || !topics.length) return res.status(400).json({ error: 'topics array required' });
   // Topic guard: normalize non-standard requested topics to their canonical area before any
   // bank/content lookup or labeling, so questions are never stamped with an off-standard topic.
