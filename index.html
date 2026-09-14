@@ -8524,6 +8524,10 @@ async function assignLoadList(){
           conceptCount.set(c,(conceptCount.get(c)||0)+1);
         });
       });
+      // A student counts as archived only once EVERY one of their individual assignments has
+      // been archived (bulk action below) — so a fresh assignment to a previously-archived
+      // student naturally brings them back into view instead of needing an explicit unarchive.
+      s.archived=s.items.length>0 && s.items.every(it=>it.a.archived===true);
       s.concepts=[...conceptCount.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([concept,count])=>({concept,count}));
       return s;
     }).sort((a,b)=>{
@@ -8531,8 +8535,12 @@ async function assignLoadList(){
       const aa=a.avg==null?999:a.avg, bb=b.avg==null?999:b.avg; if(aa!==bb) return aa-bb;          // lowest avg next
       return (a.name||'').localeCompare(b.name||'');
     });
+    const archivedCount=students.filter(s=>s.archived).length;
     html+='<div style="font-family:var(--font-mono);font-size:.72rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:'+(groupArr.length?'16px':'0')+' 0 8px">👤 Individual Students <span style="text-transform:none;letter-spacing:0">— '+students.length+' student'+(students.length===1?'':'s')+', sorted by recurring deficiencies</span></div>';
-    html+='<input id="asgStuFilter" oninput="_asgFilterStudents()" placeholder="Filter by student name…" style="width:100%;max-width:340px;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.85rem;box-sizing:border-box;margin-bottom:10px">';
+    html+='<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">';
+    html+='<input id="asgStuFilter" oninput="_asgFilterStudents()" placeholder="Filter by student name…" style="flex:1;min-width:200px;max-width:340px;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-size:.85rem;box-sizing:border-box">';
+    if(archivedCount) html+='<label style="display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:.76rem;color:var(--muted);cursor:pointer;white-space:nowrap"><input type="checkbox" id="asgShowArchived" onchange="_asgFilterStudents()" style="cursor:pointer">📦 Show archived ('+archivedCount+')</label>';
+    html+='</div>';
     html+=students.map(s=>{
       const recSummary = s.recurring.length
         ? '<span style="color:var(--wl)">⚠ Recurring weak: '+s.recurring.slice(0,3).map(x=>esc(x.t)+' ('+x.weak+'×)').join(', ')+'</span>'
@@ -8569,10 +8577,13 @@ async function assignLoadList(){
           timeStr=' <span style="font-family:var(--font-mono);font-size:.64rem;color:var(--muted)">· started '+fmtDateTime(it.a.startedAt)+'</span>';
         }
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="font-size:.8rem">'+esc(_asgExamLabel(it.a))+' <span style="font-family:var(--font-mono);font-size:.66rem;color:var(--muted)">'+(it.a.createdAt?fmtDate(it.a.createdAt):'')+'</span>'+timeStr+'</span><span style="display:flex;gap:8px;align-items:center"><span style="font-family:var(--font-mono);font-size:.76rem;font-weight:700;color:'+col+'">'+sc+'</span>'+(dn?'<button onclick="assignViewResult(\''+it.stuUid+'\',\''+it.aid+'\')" class="btn" style="font-size:.7rem;padding:3px 8px">Breakdown</button>':'')+'</span></div>'; }).join('');
-      return '<div class="asg-stu-card" data-name="'+esc((s.name||'').toLowerCase())+'" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px">'+
+      const archBtn=s.archived
+        ? '<button onclick="event.stopPropagation();assignArchiveStudent(\''+s.uid+'\',false)" class="btn" style="font-size:.68rem;padding:3px 9px">↺ Restore</button>'
+        : '<button onclick="event.stopPropagation();assignArchiveStudent(\''+s.uid+'\',true)" class="btn btn-ghost" style="font-size:.68rem;padding:3px 9px">📦 Archive</button>';
+      return '<div class="asg-stu-card" data-name="'+esc((s.name||'').toLowerCase())+'" data-archived="'+(s.archived?'1':'0')+'" style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:8px'+(s.archived?';opacity:.6':'')+'">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer" onclick="var r=document.getElementById(\'asgstu_'+s.uid+'\');if(r){var o=r.style.display===\'none\';r.style.display=o?\'block\':\'none\';this.querySelector(\'.asg-caret\').textContent=o?\'▲\':\'▼\';}">'+
-          '<div><div style="font-weight:700;font-size:.95rem">'+esc(s.name)+'</div><div style="font-family:var(--font-mono);font-size:.7rem;margin-top:2px">'+recSummary+'</div></div>'+
-          '<div style="display:flex;align-items:center;gap:12px;white-space:nowrap"><span style="font-family:var(--font-mono);font-size:.78rem;color:'+avgCol+';font-weight:700">'+s.examCount+' exam'+(s.examCount===1?'':'s')+' · '+avgStr+'</span><span class="asg-caret" style="font-family:var(--font-mono);color:var(--muted)">▼</span></div>'+
+          '<div><div style="font-weight:700;font-size:.95rem">'+esc(s.name)+(s.archived?' <span style="font-family:var(--font-mono);font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:4px;background:var(--panel2);color:var(--muted);border:1px solid var(--border)">ARCHIVED</span>':'')+'</div><div style="font-family:var(--font-mono);font-size:.7rem;margin-top:2px">'+recSummary+'</div></div>'+
+          '<div style="display:flex;align-items:center;gap:10px;white-space:nowrap"><span style="font-family:var(--font-mono);font-size:.78rem;color:'+avgCol+';font-weight:700">'+s.examCount+' exam'+(s.examCount===1?'':'s')+' · '+avgStr+'</span>'+archBtn+'<span class="asg-caret" style="font-family:var(--font-mono);color:var(--muted)">▼</span></div>'+
         '</div>'+
         '<div id="asgstu_'+s.uid+'" style="display:none;margin-top:10px">'+
           topicTable+
@@ -8584,11 +8595,34 @@ async function assignLoadList(){
     }).join('');
   }
   el.innerHTML=html||'<div style="font-family:var(--font-mono);font-size:.8rem;color:var(--muted)">No exams assigned yet.</div>';
+  _asgFilterStudents(); // archived students start hidden until "Show archived" is checked
 }
-// Live filter for the student-grouped assigned-exam list
+// Live filter for the student-grouped assigned-exam list — name search AND the archived toggle
 function _asgFilterStudents(){
   const q=(document.getElementById('asgStuFilter')?.value||'').trim().toLowerCase();
-  document.querySelectorAll('#assignList .asg-stu-card').forEach(c=>{ c.style.display=(!q||(c.dataset.name||'').includes(q))?'':'none'; });
+  const showArchived=(document.getElementById('asgShowArchived')||{}).checked;
+  document.querySelectorAll('#assignList .asg-stu-card').forEach(c=>{
+    const matchesQ=!q||(c.dataset.name||'').includes(q);
+    const archivedOk=showArchived||c.dataset.archived!=='1';
+    c.style.display=(matchesQ&&archivedOk)?'':'none';
+  });
+}
+// Bulk-flags (or un-flags) every individual assignment this instructor gave this student as
+// archived — hides that student's card from the default Assign-tab list (getting cluttered with
+// old/former students' history) without deleting anything. Class-exam assignments are left alone
+// since those are already organized under their classroom/exam, not this per-student list.
+async function assignArchiveStudent(uid, archive){
+  if(archive && !confirm('Archive this student\'s practice-exam history from the list?\n\nNothing is deleted — use "Show archived" to bring them back, or just assign them something new.')) return;
+  try{
+    const exams=await dbGet('assignedExams/'+uid)||{};
+    const updates={};
+    Object.entries(exams).forEach(([aid,a])=>{
+      if(a && a.assignedBy===instUser.uid && !a.classExamId) updates['assignedExams/'+uid+'/'+aid+'/archived']=archive?true:null;
+    });
+    if(Object.keys(updates).length) await db.ref().update(updates);
+    showToast(archive?'Archived — hidden from the list.':'Restored to the list.','success');
+    assignLoadList();
+  }catch(e){ showToast('Failed: '+(e&&e.message||e),'error'); }
 }
 async function assignViewResult(stuUid,aid){
   const a=await dbGet('assignedExams/'+stuUid+'/'+aid).catch(()=>null);
