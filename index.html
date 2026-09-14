@@ -16680,6 +16680,7 @@ async function renderStudyHome(){
           </div>
           <div style="position:relative;display:flex;gap:6px;align-items:stretch" onmouseover="this.querySelector('.lm-hint').style.opacity='1'" onmouseout="this.querySelector('.lm-hint').style.opacity='0'">
             <button onclick="event.stopPropagation();startPrimeTime()" style="flex:1;background:linear-gradient(135deg,#ff6b2b,#f0a500);border:none;border-radius:var(--r);padding:11px 10px;font-family:var(--font-mono);font-size:.82rem;font-weight:700;color:#000;cursor:pointer" onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">🔥 Study PrimeTime (${n})</button>
+            <button class="btn btn-sm btn-dme" onclick="event.stopPropagation();startPrimeTime(true)" style="flex:0 0 auto;padding:6px 12px" title="DME Mode — type your answer for each PrimeTime card, AI grades it like an oral examiner would">🎙️ DME</button>
             <button class="btn-listen lm-hint" onclick="event.stopPropagation();startListenPrimeTime()" style="opacity:0;transition:opacity .15s;border-radius:var(--r);padding:6px 10px;font-size:.85rem;cursor:pointer" title="Listen mode">🎧</button>
           </div>
         </div>`;
@@ -17424,7 +17425,7 @@ function primeTimeCountSync(){
   return primeTimeBuild(codes).length;
 }
 
-async function startPrimeTime(){
+async function startPrimeTime(dme){
   const codes = await acsLoad();
   if(!codes || !codes.length){
     alert('No ACS codes yet!\n\nGo to the ACS Codes tab and upload your AKTR (written-test results) or type in the codes you missed. PrimeTime then builds a deck of the exact areas most likely to come up on your test.');
@@ -17444,7 +17445,7 @@ async function startPrimeTime(){
   fcSessionKnow = 0; fcSessionLearn = 0; fcSessionSkip = 0;
   fcAnimating = false; fcHistory = [];
   fcTotalCards = cards.length; fcCardNum = 0;
-  fcDmeMode = false; fcResetDmeCard();
+  fcDmeMode = !!dme; fcResetDmeCard();
   document.removeEventListener('keydown', fcKeyHandler);
   document.addEventListener('keydown', fcKeyHandler);
   navPush({ screen:'stuApp', view:'flashcards' });
