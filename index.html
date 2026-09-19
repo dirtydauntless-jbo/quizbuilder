@@ -17448,6 +17448,11 @@ async function startPrimeTime(dme){
   fcDmeMode = !!dme; fcResetDmeCard();
   document.removeEventListener('keydown', fcKeyHandler);
   document.addEventListener('keydown', fcKeyHandler);
+  // This can be launched from the ACS tab (the "Study PrimeTime" button next to Expected
+  // Practicals), not just the Study tab — without switching tabs here, the deck renders into
+  // the Study tab's container while it's still hidden behind the ACS tab, so nothing visibly
+  // happens when the button is clicked.
+  if(typeof stuSwitchTab === 'function') await stuSwitchTab('study');
   navPush({ screen:'stuApp', view:'flashcards' });
   renderFlashcard();
 }
