@@ -1791,12 +1791,12 @@ setTimeout(function(){
     <div class="dme-wrap">
       <div style="margin-bottom:18px">
         <div class="section-head" style="margin:0 0 4px">🛩 DME Locator</div>
-        <div style="font-family:var(--font-mono);font-size:.75rem;color:var(--muted)">Find a Designated Mechanic Examiner near you. Search by state, city, or ZIP code — shows the 10 closest DMEs within 250 miles.</div>
+        <div style="font-family:var(--font-mono);font-size:.75rem;color:var(--muted)">Find a Designated Mechanic Examiner near you, or look one up by name. Search by state, city, or ZIP code shows the closest DMEs within 250 miles.</div>
       </div>
 
       <!-- Search bar -->
       <div class="dme-search-bar">
-        <input id="dmeSearchInput" class="input" placeholder="State, city, or ZIP — e.g. Georgia, Atlanta, 30228"
+        <input id="dmeSearchInput" class="input" placeholder="DME name, state, city, or ZIP — e.g. Smith, Georgia, Atlanta, 30228"
           style="flex:1;min-width:200px"
           onkeydown="if(event.key==='Enter')dmeDoSearch()"/>
         <button class="btn btn-primary" onclick="dmeDoSearch()">Search</button>
@@ -21690,17 +21690,47 @@ async function dmeGeocode(query){
   return null;
 }
 
+// Case-insensitive name match, ranked so an exact/starts-with hit outranks a mid-name substring
+// (e.g. searching "Smith" should put "Smith Aviation" above "John A. Smithson").
+function dmeSearchByName(query){
+  const q = query.trim().toLowerCase();
+  if(!q) return [];
+  const rank = r => {
+    const n = (r.name || '').toLowerCase();
+    if(n === q) return 0;
+    if(n.startsWith(q)) return 1;
+    if(n.includes(q)) return 2;
+    return -1;
+  };
+  return _dmeAllRecords
+    .map(r => ({ r, rk: rank(r) }))
+    .filter(x => x.rk >= 0)
+    .sort((a, b) => a.rk - b.rk || a.r.name.localeCompare(b.r.name))
+    .map(x => x.r);
+}
+
 // ── Search handler ────────────────────────────────────────
 async function dmeDoSearch(){
   const query = document.getElementById('dmeSearchInput').value.trim();
-  if(!query){ dmeSetStatus('Please enter a state, city, or ZIP code.'); return; }
+  if(!query){ dmeSetStatus('Please enter a DME name, state, city, or ZIP code.'); return; }
   if(!_dmeLoaded){ await dmeLoadDoc(); }
   dmeSetStatus('Searching…');
   document.getElementById('dmeResultsList').innerHTML = '<div class="dme-spinner"></div>';
+
+  // Try matching by DME NAME first — a name is never a valid location query, so this never
+  // shadows a real place search (no DME is named e.g. "Georgia" or "30228").
+  const nameMatches = dmeSearchByName(query);
+  if(nameMatches.length){
+    _dmeLastOrigin = null;
+    dmeSetStatus(`Found ${nameMatches.length} DME${nameMatches.length!==1?'s':''} matching "${query}".`);
+    dmeRenderCards(nameMatches.slice(0, DME_MAX_RESULTS));
+    return;
+  }
+
   const origin = await dmeGeocode(query);
   if(!origin){
-    dmeSetStatus('Location not found. Try a different city, state, or ZIP.');
-    document.getElementById('dmeResultsList').innerHTML = '<div class="dme-empty">Location not found.</div>';
+    dmeSetStatus('No DME name matched, and that location was not found. Try a different name, city, state, or ZIP.');
+    document.getElementById('dmeResultsList').innerHTML = '<div class="dme-empty">No matches found.</div>';
     return;
   }
   _dmeLastOrigin = origin;
@@ -21790,8 +21820,11 @@ function dmeUpdateSortButtons(){
   const rateBtn = document.getElementById('dmeSortRatingBtn');
   const activeStyle   = 'font-family:var(--font-mono);font-size:.72rem;letter-spacing:1px;text-transform:uppercase;background:rgba(240,165,0,.15);border:1px solid var(--accent);border-radius:3px;padding:5px 12px;cursor:pointer;color:var(--accent);transition:all .15s';
   const inactiveStyle = 'font-family:var(--font-mono);font-size:.72rem;letter-spacing:1px;text-transform:uppercase;background:var(--panel2);border:1px solid var(--border);border-radius:3px;padding:5px 12px;cursor:pointer;color:var(--muted);transition:all .15s';
+  // Distance sort is meaningless for a name search (no origin, so no miles on any result) — hide
+  // it rather than leave a button that visibly does nothing when clicked.
+  const hasDistance = _dmeLastResults.some(r => r.miles !== undefined);
   if(distBtn){
-    distBtn.style.cssText = (_dmeSortMode === 'distance' || _dmeSortMode === 'distance_desc') ? activeStyle : inactiveStyle;
+    distBtn.style.cssText = ((_dmeSortMode === 'distance' || _dmeSortMode === 'distance_desc') ? activeStyle : inactiveStyle) + ';display:' + (hasDistance ? 'inline-block' : 'none');
     distBtn.textContent = _dmeSortMode === 'distance_desc' ? '⇅ 📏 Furthest First' : '⇅ 📏 Nearest First';
   }
   if(rateBtn){
