@@ -21203,10 +21203,32 @@ async function acsRenderAll(){
 const PRACTICALS_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkQ6CRThW-nFs8mUpQ19snqPe_Q4kJm8eVcIPEoynAPmaWKy9N40Q_IZmdhTr56W_Qm2tOYEn3quvO/pub?gid=0&single=true&output=csv';
 let _practicalsLoaded = false;
 
+// Split ONE CSV line into cells, respecting double-quoted fields — a plain split(',') breaks
+// any row whose Practical name itself contains a comma (e.g. "Convert Decimals to Fractions,
+// Fract to Dec."), shifting every later column over by one and silently dropping that practical
+// (its Occurrences cell becomes non-numeric text, which fails the numeric check below).
+function _splitCSVLine(line) {
+  const out = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
 // Parse CSV rows into PRACTICALS format
 // Expected columns: Practical, Occurrences, DME:...(x4), Primary Skills, All Related Skills, Frequency Tier
 function _parseSheetCSV(csvText) {
-  const lines = csvText.trim().split('\n').map(l => l.split(','));
+  const lines = csvText.trim().split('\n').map(_splitCSVLine);
   // Find header row — look for "Practical" in column B (index 1)
   let headerIdx = -1;
   for(let i = 0; i < lines.length; i++) {
