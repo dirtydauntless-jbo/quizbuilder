@@ -16716,6 +16716,18 @@ async function renderStudyHome(){
         </div>
       </div>
 
+      <!-- Custom Flashcard Deck — pick your own topics across any section -->
+      <div class="starred-box" style="background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.35);cursor:pointer" onclick="renderFlashcardBuilder()">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:1.2rem">🎯</span>
+          <div style="flex:1">
+            <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:#8b5cf6">Build My Own Deck</div>
+            <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">Pick any topics across sections and study just those</div>
+          </div>
+          <div style="font-family:var(--font-mono);font-size:.8rem;color:#8b5cf6">→</div>
+        </div>
+      </div>
+
       <!-- Custom Listening Session — combine any decks, optionally skip known cards -->
       <div class="starred-box" style="background:rgba(74,158,255,.06);border:1px solid rgba(74,158,255,.35);cursor:pointer" onclick="renderListenBuilder()">
         <div style="display:flex;align-items:center;gap:10px">
@@ -16853,7 +16865,7 @@ function renderFlashcard(){
   const bankId2  = sepIdx2 >= 0 ? fcTopic.substring(0, sepIdx2) : 'general';
   const topicPart = sepIdx2 >= 0 ? fcTopic.substring(sepIdx2 + 2) : fcTopic;
   const bankLabel = bankId2.includes('+') ? '' : (bankId2 === 'airframe' ? 'Airframe' : bankId2 === 'powerplant' ? 'Powerplant' : 'General');
-  const topicDisplay = topicPart === '__all__' ? 'All Topics' : (topicPart === '__starred__' ? '★ Starred' : (topicPart === '__primetime__' ? '🔥 PrimeTime' : topicPart));
+  const topicDisplay = topicPart === '__all__' ? 'All Topics' : (topicPart === '__starred__' ? '★ Starred' : (topicPart === '__primetime__' ? '🔥 PrimeTime' : (topicPart === '__custom__' ? '🎯 Custom Deck' : topicPart)));
   const topicLabel = bankLabel ? (bankLabel + ' — ' + topicDisplay) : topicDisplay;
   const total = Math.max(1, fcTotalCards - fcSessionKnow);
   const displayPos = Math.min(fcCardNum + 1, total);
@@ -18086,6 +18098,148 @@ function _acKeyHandler(e){
 }
 
 // ═══════════════════════════════════════════════════════════
+// 🎯 CUSTOM DECK BUILDER — pick any topics across all three banks
+// and study them together as one flip/DME flashcard deck, with an
+// option to skip cards already marked "known".
+// ═══════════════════════════════════════════════════════════
+let _fcBuilderSel = new Set();       // 'bankId::topic' keys chosen for the deck
+let _fcBuilderUnknownOnly = false;   // skip cards already marked known
+
+function _fcBuilderCards(){
+  const cards = [];
+  for(const key of _fcBuilderSel){
+    const sepIdx = key.indexOf('::');
+    const bankId = key.substring(0, sepIdx);
+    const topic = key.substring(sepIdx + 2);
+    const qb = _lmBuilderBankMeta(bankId).qb;
+    const known = _fcBuilderUnknownOnly ? fcGetKnown(key) : null;
+    (qb[topic]||[]).forEach((q) => {
+      const cid=_fcId(q);
+      if(known && known.has(key+'_'+cid)) return;
+      cards.push({ q:q.q, a:q.a, topic, idx:cid, bankId });
+    });
+  }
+  return cards;
+}
+
+function fcBuilderToggle(key){
+  if(_fcBuilderSel.has(key)) _fcBuilderSel.delete(key); else _fcBuilderSel.add(key);
+  fcBuilderUpdateCount();
+}
+
+function fcBuilderSelectAll(bankId){
+  _lmBuilderBankMeta(bankId).topics.forEach(t => _fcBuilderSel.add(bankId+'::'+t));
+  renderFlashcardBuilder();
+}
+
+function fcBuilderSelectNone(bankId){
+  _lmBuilderBankMeta(bankId).topics.forEach(t => _fcBuilderSel.delete(bankId+'::'+t));
+  renderFlashcardBuilder();
+}
+
+function fcBuilderSetUnknownOnly(checked){
+  _fcBuilderUnknownOnly = !!checked;
+  fcBuilderUpdateCount();
+}
+
+function fcBuilderUpdateCount(){
+  const n = _fcBuilderCards().length;
+  const countEl = document.getElementById('fcbCount');
+  if(countEl) countEl.textContent = n + ' card' + (n!==1?'s':'') + ' in this deck';
+  const startBtn = document.getElementById('fcbStartBtn');
+  if(startBtn) startBtn.disabled = (n === 0);
+  const dmeBtn = document.getElementById('fcbDmeBtn');
+  if(dmeBtn) dmeBtn.disabled = (n === 0);
+}
+
+async function renderFlashcardBuilder(){
+  navPush({ screen:'stuApp', view:'flashcards' });
+  const el = document.getElementById('stuStudyView');
+
+  function bankSection(bankId){
+    const { qb, topics, label, icon, color } = _lmBuilderBankMeta(bankId);
+    if(!topics.length) return '';
+    const rows = topics.map(t => {
+      const qs = qb[t]||[];
+      const known = fcGetKnown(bankId+'::'+t);
+      const remaining = qs.length - known.size;
+      const key = bankId+'::'+t;
+      const checked = _fcBuilderSel.has(key) ? ' checked' : '';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox"${checked} onchange="fcBuilderToggle('${esc(key)}')" style="width:16px;height:16px;accent-color:${color};flex-shrink:0">
+        <span style="flex:1;font-family:var(--font-mono);font-size:.78rem;color:var(--text)">${esc(t)}</span>
+        <span style="font-family:var(--font-mono);font-size:.65rem;color:var(--muted)">${qs.length} cards &nbsp;·&nbsp; ${remaining} unknown</span>
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${color}12;border-bottom:1px solid var(--border)">
+        <span style="font-family:var(--font-display);font-size:1rem;letter-spacing:1.5px;color:${color};flex:1">${icon} ${label}</span>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="fcBuilderSelectAll('${bankId}')">Select All</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:.62rem" onclick="fcBuilderSelectNone('${bankId}')">Clear</button>
+      </div>
+      ${rows}
+    </div>`;
+  }
+
+  el.innerHTML = `<div class="study-wrap" style="max-width:640px">
+    <div class="fc-nav">
+      <button class="btn btn-ghost btn-sm" onclick="renderStudyHome()">← Topics</button>
+      <div style="font-family:var(--font-mono);font-size:.65rem;color:#8b5cf6;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:3px;padding:3px 8px">🎯 DECK BUILDER</div>
+    </div>
+    <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:6px">Build My Own Deck</div>
+    <div style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);text-align:center;margin-bottom:16px">Pick any topics across sections — they'll shuffle together into one deck.</div>
+
+    <label style="display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;cursor:pointer">
+      <input type="checkbox" ${_fcBuilderUnknownOnly?'checked':''} onchange="fcBuilderSetUnknownOnly(this.checked)" style="width:16px;height:16px;accent-color:var(--blue)">
+      <span style="font-family:var(--font-mono);font-size:.78rem;color:var(--text)">Skip cards I already know ✓</span>
+    </label>
+
+    ${bankSection('general')}
+    ${bankSection('airframe')}
+    ${bankSection('powerplant')}
+
+    <div style="position:sticky;bottom:0;background:var(--bg);padding:12px 0;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div id="fcbCount" style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted)">0 cards in this deck</div>
+      <div style="display:flex;gap:8px">
+        <button id="fcbStartBtn" class="btn btn-primary" onclick="startCustomDeck()" disabled style="font-weight:700">▶ Start Studying</button>
+        <button id="fcbDmeBtn" class="btn btn-sm btn-dme" onclick="startCustomDeck(true)" disabled style="font-weight:700" title="DME Mode — type your answer, AI grades it like an oral examiner would">🎙️ DME Mode</button>
+      </div>
+    </div>
+  </div>`;
+  fcBuilderUpdateCount();
+}
+
+async function startCustomDeck(dme){
+  const cards = _fcBuilderCards();
+  if(!cards.length) return;
+
+  // Shuffle
+  for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
+
+  const bankIds = new Set();
+  _fcBuilderSel.forEach(key => bankIds.add(key.substring(0, key.indexOf('::'))));
+  fcTopic = [...bankIds].join('+') + '::__custom__';
+  fcDeck = cards;
+  fcCur = 0;
+  fcFlipped = false;
+  fcSessionKnow = 0;
+  fcSessionLearn = 0;
+  fcSessionSkip = 0;
+  fcAnimating = false;
+  fcHistory = [];
+  fcTotalCards = cards.length;
+  fcCardNum = 0;
+  fcDmeMode = !!dme;
+  fcResetDmeCard();
+  await fcLoadStarred();
+  await fcLoadNotes();
+  document.removeEventListener('keydown', fcKeyHandler);
+  document.addEventListener('keydown', fcKeyHandler);
+  navPush({ screen:'stuApp', view:'flashcards' });
+  renderFlashcard();
+}
+
+// ═══════════════════════════════════════════════════════════
 // 🎧 LISTENING SESSION BUILDER — combine any decks across all three
 // banks into one shuffled listen-mode queue, with an option to skip
 // cards already marked "known" (same known-set used by study mode).
@@ -18459,7 +18613,13 @@ document.addEventListener('touchend', function(e){
 
 function renderStudyComplete(topic){
   const el = document.getElementById('stuStudyView');
-  const topicName = topic === '__all__' ? 'All Topics' : topic;
+  const sepIdxC = (topic||'').indexOf('::');
+  const topicPartC = sepIdxC >= 0 ? topic.substring(sepIdxC + 2) : topic;
+  const topicName = topicPartC === '__all__' ? 'All Topics'
+    : topicPartC === '__custom__' ? 'your custom deck'
+    : topicPartC === '__starred__' ? 'your starred cards'
+    : topicPartC === '__primetime__' ? 'PrimeTime'
+    : topicPartC;
   el.innerHTML = `<div class="study-wrap">
     <div class="study-complete">
       <div class="study-complete-icon">🎉</div>
@@ -18480,6 +18640,11 @@ function resetDeck(topicKey){
   const sepIdx = topicKey.indexOf('::');
   const bankId = sepIdx >= 0 ? topicKey.substring(0, sepIdx) : 'general';
   const topic  = sepIdx >= 0 ? topicKey.substring(sepIdx+2) : topicKey;
+  if(topic === '__custom__'){
+    _fcBuilderSel.forEach(key => fcSetKnown(key, new Set()));
+    startCustomDeck(fcDmeMode);
+    return;
+  }
   const topicList = bankId === 'airframe' ? TOPICS_AIRFRAME : bankId === 'powerplant' ? TOPICS_POWERPLANT : TOPICS;
   if(topic === '__all__'){
     topicList.forEach(t => fcSetKnown(bankId+'::'+t, new Set()));
