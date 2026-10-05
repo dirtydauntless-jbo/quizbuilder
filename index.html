@@ -1089,11 +1089,14 @@ setTimeout(function(){
     </div>
     <div id="cd-tab-students" class="tab-pane active" style="padding:20px 22px;display:block" style="padding:20px 22px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-        <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Sort by</div>
-        <div style="display:flex;gap:4px;background:var(--panel2);border:1px solid var(--border);border-radius:var(--r);padding:3px">
-          <button id="stuSortNameBtn" onclick="setStuSort('name')" style="font-family:var(--font-mono);font-size:.65rem;padding:3px 9px;border:none;border-radius:3px;cursor:pointer;background:var(--blue);color:#fff;font-weight:600">A→Z Name</button>
-          <button id="stuSortScoreBtn" onclick="setStuSort('score')" style="font-family:var(--font-mono);font-size:.65rem;padding:3px 9px;border:none;border-radius:3px;cursor:pointer;background:transparent;color:var(--muted)">Avg Score</button>
-          <button id="stuSortJoinBtn" onclick="setStuSort('joined')" style="font-family:var(--font-mono);font-size:.65rem;padding:3px 9px;border:none;border-radius:3px;cursor:pointer;background:transparent;color:var(--muted)">Joined</button>
+        <button class="btn btn-ghost btn-sm" onclick="renumberRosterAlphabetically(selectedClassId)" style="white-space:nowrap" title="Recompute the # for every currently-enrolled student, in alphabetical order by last name">🔤 Renumber A→Z</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Sort by</div>
+          <div style="display:flex;gap:4px;background:var(--panel2);border:1px solid var(--border);border-radius:var(--r);padding:3px">
+            <button id="stuSortNameBtn" onclick="setStuSort('name')" style="font-family:var(--font-mono);font-size:.65rem;padding:3px 9px;border:none;border-radius:3px;cursor:pointer;background:var(--blue);color:#fff;font-weight:600">A→Z Name</button>
+            <button id="stuSortScoreBtn" onclick="setStuSort('score')" style="font-family:var(--font-mono);font-size:.65rem;padding:3px 9px;border:none;border-radius:3px;cursor:pointer;background:transparent;color:var(--muted)">Avg Score</button>
+            <button id="stuSortJoinBtn" onclick="setStuSort('joined')" style="font-family:var(--font-mono);font-size:.65rem;padding:3px 9px;border:none;border-radius:3px;cursor:pointer;background:transparent;color:var(--muted)">Joined</button>
+          </div>
         </div>
       </div>
       <div id="cdStudentList"><div class="empty-state">No students have joined yet. Share the classroom code!</div></div>
@@ -8823,6 +8826,10 @@ async function loadClassroomStudents(classId){
   const el = document.getElementById('cdStudentList');
   document.getElementById('cdStudentCount').textContent = students.length;
 
+  // Fill in a roster # for anyone who doesn't have one yet (new joins), so the
+  // # badge below is never blank without requiring a trip through the Gradebook first.
+  if(students.length) await ensureRosterNumbers(classId, students);
+
   if(!students.length){
     el.innerHTML = `<div class="empty-state">
       No students yet. Share this code with your students:<br>
@@ -8888,6 +8895,9 @@ async function loadClassroomStudents(classId){
         onmouseover="this.style.borderColor='var(--accent)'"
         onmouseout="this.style.borderColor='var(--border)'"
         onclick="openStudentProfileByKey('${stuMapKey}', '${classId}')">
+      <div onclick="event.stopPropagation();editRosterNum('${classId}','${firebaseKey}',${s.rosterNum ?? 'null'},'${esc(displayName)}')"
+        title="Click to edit this student's roster #"
+        style="font-family:var(--font-mono);font-weight:700;font-size:.8rem;color:var(--muted);background:var(--panel2);border:1px solid var(--border);border-radius:3px;min-width:26px;text-align:center;padding:4px 6px;cursor:pointer;flex-shrink:0">${s.rosterNum ?? '—'}</div>
       <div class="stu-avatar" style="background:rgba(74,158,255,.15);color:var(--blue);flex-shrink:0">${esc(initials)}</div>
       <div class="stu-info" style="flex:1;min-width:0;overflow:hidden">
         <div class="stu-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(displayName)}</div>
@@ -10739,7 +10749,7 @@ async function ensureRosterNumbers(classId, students){
 }
 
 async function editRosterNum(classId, stuKey, currentNum, displayName){
-  const input = prompt(`Gradebook # for ${displayName} — match your physical gradebook:`, currentNum != null ? String(currentNum) : '');
+  const input = prompt(`Roster # for ${displayName} — match your physical gradebook:`, currentNum != null ? String(currentNum) : '');
   if(input === null) return;
   const num = parseInt(input, 10);
   if(!Number.isFinite(num) || num <= 0){ alert('Enter a positive whole number.'); return; }
@@ -10751,6 +10761,7 @@ async function editRosterNum(classId, stuKey, currentNum, displayName){
     if(stu) stu.rosterNum = num;
     renderGradeBook(window._currentGrades._rawStudents, window._currentGrades.quizId, window._currentGrades.iLog||{});
   }
+  if(_stuSortClassId === classId) loadClassroomStudents(classId);
 }
 
 // Full reshuffle of the gradebook # column — unlike ensureRosterNumbers (which only fills
