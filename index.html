@@ -10729,22 +10729,33 @@ async function loadClassroomProgress(overrideQuizId){
 
 // Gradebook roster numbers — mirrors an instructor's physical gradebook, where each student
 // has a fixed number (usually assigned alphabetically by last name). Stored per-student so it
-// survives across quizzes/sorts, and stays put once assigned unless the instructor edits it.
+// survives across quizzes/sorts. Runs every time the Students tab or Gradebook loads: if the
+// roster isn't a clean 1..N (a new join has no number yet, or a drop left a gap/left numbers
+// non-contiguous), it silently re-sorts EVERYONE alphabetically — no button needed. A complete,
+// gap-free numbering is left alone even if an instructor manually reordered it to something
+// non-alphabetical, so hand-edits only get overwritten by the thing that actually broke (a
+// roster change), not by every page load.
 async function ensureRosterNumbers(classId, students){
-  const missing = students.filter(s => s.rosterNum == null);
-  if(!missing.length) return;
+  if(!students.length) return;
+  const nums = students.map(s => s.rosterNum);
+  const clean = nums.every(n => n != null) && (() => {
+    const sorted = [...nums].sort((a,b) => a-b);
+    return sorted.every((n,i) => n === i+1);
+  })();
+  if(clean) return;
+
   const lastName = name => { const p=(name||'').trim().split(/\s+/); return (p[p.length-1]||'').toLowerCase(); };
-  const used = new Set(students.filter(s => s.rosterNum != null).map(s => s.rosterNum));
-  const sortedMissing = [...missing].sort((a,b) => lastName(a.name).localeCompare(lastName(b.name)));
+  const firstName = name => { const p=(name||'').trim().split(/\s+/); return (p[0]||'').toLowerCase(); };
+  const sorted = [...students].sort((a,b) => {
+    const an = a.name||a.email||'', bn = b.name||b.email||'';
+    return lastName(an).localeCompare(lastName(bn)) || firstName(an).localeCompare(firstName(bn));
+  });
   const updates = {};
-  let next = 1;
-  for(const s of sortedMissing){
-    while(used.has(next)) next++;
+  sorted.forEach((s,i) => {
     const key = s.uid || safeKey(s.name||'');
-    updates[`${key}/rosterNum`] = next;
-    s.rosterNum = next;
-    used.add(next);
-  }
+    updates[`${key}/rosterNum`] = i + 1;
+    s.rosterNum = i + 1;
+  });
   try{ await dbUpdate(`classroomStudents/${classId}`, updates); }catch(e){}
 }
 
