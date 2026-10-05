@@ -12069,7 +12069,7 @@ function renderStuQ(){
   const groups = getStuSecGroups();
   document.getElementById('aqSecTabs').innerHTML = Object.entries(groups).map(([topic,idxs])=>{
     const allDone = idxs.every(i=>stuAnswers[i]!==null);
-    return `<button class="section-tab ${allDone?'done':''} ${q.topic===topic?'active':''}" onclick="jumpStuSec(${JSON.stringify(topic)})">${topic}</button>`;
+    return `<button class="section-tab ${allDone?'done':''} ${q.topic===topic?'active':''}" onclick="jumpStuSec('${esc(topic)}')">${esc(topic)}</button>`;
   }).join('');
 }
 
