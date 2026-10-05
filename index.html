@@ -8341,9 +8341,10 @@ async function loadClassWideWeakSpots(classId, targetElId, mode){
     }
     const rerun="loadClassWideWeakSpots('"+classId+"',"+(targetElId?"'"+targetElId+"'":'null')+",'select')";
     const allChecked=registry.every(r=>selectedSet.has(r.id)) && includeOther;
+    const toggleHandler='window._classWideSelectedIds=new Set('+(allChecked?'[]':JSON.stringify(registry.map(r=>r.id)))+');window._classWideIncludeOther='+(allChecked?'false':'true')+';'+rerun;
     toggleHtml+='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;margin-bottom:12px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px"><div style="font-family:var(--font-mono);font-size:.7rem;text-transform:uppercase;color:var(--muted)">Select which exams to include</div>'
-      +'<button onclick="window._classWideSelectedIds=new Set('+(allChecked?'[]':JSON.stringify(registry.map(r=>r.id)))+');window._classWideIncludeOther='+(allChecked?'false':'true')+';'+rerun+'" style="font-family:var(--font-mono);font-size:.68rem;background:none;border:1px solid var(--border);border-radius:3px;padding:3px 9px;cursor:pointer;color:var(--muted)">'+(allChecked?'CLEAR ALL':'SELECT ALL')+'</button></div>'
+      +'<button onclick="'+esc(toggleHandler)+'" style="font-family:var(--font-mono);font-size:.68rem;background:none;border:1px solid var(--border);border-radius:3px;padding:3px 9px;cursor:pointer;color:var(--muted)">'+(allChecked?'CLEAR ALL':'SELECT ALL')+'</button></div>'
       +registry.map(r=>{
         const checked=selectedSet.has(r.id);
         const dateStr=r.createdAt?new Date(r.createdAt).toLocaleDateString():'';
