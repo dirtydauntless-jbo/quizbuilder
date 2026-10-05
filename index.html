@@ -7401,7 +7401,7 @@ async function onPerfClassChange(){
     return q ? {...q, id, assignedAt: info.assignedAt || '' } : null;
   }));
   // Sort most recently assigned first
-  const validQuizzes = quizzes.filter(Boolean).sort((a,b)=> b.assignedAt.localeCompare(a.assignedAt));
+  const validQuizzes = quizzes.filter(Boolean).sort((a,b)=> String(b.assignedAt||'').localeCompare(String(a.assignedAt||'')));
   picker.innerHTML = validQuizzes.map(q=>`<option value="${q.id}">${esc(q.title)}</option>`).join('');
   await loadPerfTab();
 }
@@ -7697,7 +7697,7 @@ async function loadCdPerfTab(){
       if(!q && instUser) q = await dbGet(`quizzes/${instUser.uid}/${id}`);
       return q ? { ...q, id, assignedAt: info.assignedAt || '' } : null;
     }));
-    const valid = quizzes.filter(Boolean).sort((a,b) => (b.assignedAt||'').localeCompare(a.assignedAt||''));
+    const valid = quizzes.filter(Boolean).sort((a,b) => String(b.assignedAt||'').localeCompare(String(a.assignedAt||'')));
     let opts = valid.map(q => `<option value="quiz::${q.id}">${esc(q.title)}</option>`).join('');
     // Add sim sessions
     try{
@@ -8750,7 +8750,7 @@ async function loadCdLiveInit(){
       if(!q && instUser) q = await dbGet(`quizzes/${instUser.uid}/${id}`);
       return q ? { ...q, id, assignedAt: info.assignedAt || '' } : null;
     }));
-    const valid = quizzes.filter(Boolean).sort((a,b) => (b.assignedAt||'').localeCompare(a.assignedAt||''));
+    const valid = quizzes.filter(Boolean).sort((a,b) => String(b.assignedAt||'').localeCompare(String(a.assignedAt||'')));
     picker.innerHTML = valid.map(q => `<option value="${q.id}">${esc(q.title)}</option>`).join('');
   }
   loadCdLive();
