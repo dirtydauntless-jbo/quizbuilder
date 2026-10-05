@@ -10728,43 +10728,47 @@ async function loadClassroomProgress(overrideQuizId){
 }
 
 // Gradebook roster numbers — mirrors an instructor's physical gradebook, where each student
-// has a fixed number (usually assigned alphabetically by last name). Stored per-student so it
-// survives across quizzes/sorts. Runs every time the Students tab or Gradebook loads: if the
-// roster isn't a clean 1..N (a new join has no number yet, or a drop left a gap/left numbers
-// non-contiguous), it silently re-sorts EVERYONE alphabetically — no button needed. A complete,
-// gap-free numbering is left alone even if an instructor manually reordered it to something
-// non-alphabetical, so hand-edits only get overwritten by the thing that actually broke (a
-// roster change), not by every page load.
+// has a fixed number. Gaps are allowed and left alone (a drop, or an instructor deliberately
+// bumping someone to a specific number via editRosterNum) — numbers are instructor-owned, not
+// auto-cleaned. The only thing this does automatically is give a brand-new join (no number at
+// all yet) a number, inserting them at their correct alphabetical position among everyone who
+// already has one and shifting that block forward by one so there's never a collision — same
+// insert used by editRosterNum. Use the "Renumber A→Z" button to force a full clean resort.
 async function ensureRosterNumbers(classId, students){
-  if(!students.length) return;
-  const nums = students.map(s => s.rosterNum);
-  const clean = nums.every(n => n != null) && (() => {
-    const sorted = [...nums].sort((a,b) => a-b);
-    return sorted.every((n,i) => n === i+1);
-  })();
-  if(clean) return;
+  const missing = students.filter(s => s.rosterNum == null);
+  if(!missing.length) return;
 
   const lastName = name => { const p=(name||'').trim().split(/\s+/); return (p[p.length-1]||'').toLowerCase(); };
   const firstName = name => { const p=(name||'').trim().split(/\s+/); return (p[0]||'').toLowerCase(); };
-  const sorted = [...students].sort((a,b) => {
-    const an = a.name||a.email||'', bn = b.name||b.email||'';
-    return lastName(an).localeCompare(lastName(bn)) || firstName(an).localeCompare(firstName(bn));
-  });
+  const sortKey = s => lastName(s.name||s.email||'') + '\u0001' + firstName(s.name||s.email||'');
+  const sortedMissing = [...missing].sort((a,b) => sortKey(a).localeCompare(sortKey(b)));
+
+  const numbered = students.filter(s => s.rosterNum != null);
   const updates = {};
-  sorted.forEach((s,i) => {
-    const key = s.uid || safeKey(s.name||'');
-    updates[`${key}/rosterNum`] = i + 1;
-    s.rosterNum = i + 1;
-  });
+  for(const s of sortedMissing){
+    const sKey = sortKey(s);
+    // Correct alphabetical slot: one past the highest-numbered student who sorts before this one.
+    let insertAt = 1;
+    for(const n of numbered) if(sortKey(n).localeCompare(sKey) < 0) insertAt = Math.max(insertAt, n.rosterNum + 1);
+    numbered.forEach(n => {
+      if(n.rosterNum >= insertAt){
+        n.rosterNum += 1;
+        updates[`${n.uid||safeKey(n.name||'')}/rosterNum`] = n.rosterNum;
+      }
+    });
+    s.rosterNum = insertAt;
+    updates[`${s.uid||safeKey(s.name||'')}/rosterNum`] = insertAt;
+    numbered.push(s);
+  }
   try{ await dbUpdate(`classroomStudents/${classId}`, updates); }catch(e){}
 }
 
 // Setting a number that's already taken used to just overwrite one student, leaving two
-// students sharing a number — which ensureRosterNumbers (correctly) treats as "roster is
-// broken" and silently re-sorts away on the very next load, undoing the edit before the
-// instructor could even see it stick. Instead this does a proper reorder: everyone between
-// the student's old spot and their new one shifts over by one to make room, so the result is
-// always a clean, unique 1..N and the manual change actually survives.
+// students sharing a number — which the old auto-cleanup treated as "roster is broken" and
+// silently re-sorted away before the instructor could even see it stick. This does a real
+// insert instead: whoever currently holds that number (and everyone after them) gets bumped
+// up by one to make room. The student's OLD number is simply left open — nobody slides back
+// to fill it — since numbers are instructor-owned and a gap left on purpose is fine.
 async function editRosterNum(classId, stuKey, currentNum, displayName){
   const input = prompt(`Roster # for ${displayName} — match your physical gradebook:`, currentNum != null ? String(currentNum) : '');
   if(input === null) return;
@@ -10773,18 +10777,10 @@ async function editRosterNum(classId, stuKey, currentNum, displayName){
 
   try{
     const roster = await dbGet(`classroomStudents/${classId}`) || {};
-    const oldNum = currentNum != null ? currentNum : null;
     const updates = {};
     for(const [key, s] of Object.entries(roster)){
       if(key === stuKey || !s || s.rosterNum == null) continue;
-      const n = s.rosterNum;
-      if(oldNum == null){
-        if(n >= newNum) updates[`${key}/rosterNum`] = n + 1; // inserting — push the tail back
-      } else if(newNum > oldNum){
-        if(n > oldNum && n <= newNum) updates[`${key}/rosterNum`] = n - 1; // moving later — close the gap behind it
-      } else if(newNum < oldNum){
-        if(n >= newNum && n < oldNum) updates[`${key}/rosterNum`] = n + 1; // moving earlier — make room ahead of it
-      }
+      if(s.rosterNum >= newNum) updates[`${key}/rosterNum`] = s.rosterNum + 1;
     }
     updates[`${stuKey}/rosterNum`] = newNum;
     await dbUpdate(`classroomStudents/${classId}`, updates);
