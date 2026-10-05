@@ -10759,19 +10759,40 @@ async function ensureRosterNumbers(classId, students){
   try{ await dbUpdate(`classroomStudents/${classId}`, updates); }catch(e){}
 }
 
+// Setting a number that's already taken used to just overwrite one student, leaving two
+// students sharing a number — which ensureRosterNumbers (correctly) treats as "roster is
+// broken" and silently re-sorts away on the very next load, undoing the edit before the
+// instructor could even see it stick. Instead this does a proper reorder: everyone between
+// the student's old spot and their new one shifts over by one to make room, so the result is
+// always a clean, unique 1..N and the manual change actually survives.
 async function editRosterNum(classId, stuKey, currentNum, displayName){
   const input = prompt(`Roster # for ${displayName} — match your physical gradebook:`, currentNum != null ? String(currentNum) : '');
   if(input === null) return;
-  const num = parseInt(input, 10);
-  if(!Number.isFinite(num) || num <= 0){ alert('Enter a positive whole number.'); return; }
+  const newNum = parseInt(input, 10);
+  if(!Number.isFinite(newNum) || newNum <= 0){ alert('Enter a positive whole number.'); return; }
+
   try{
-    await dbUpdate(`classroomStudents/${classId}`, { [`${stuKey}/rosterNum`]: num });
+    const roster = await dbGet(`classroomStudents/${classId}`) || {};
+    const oldNum = currentNum != null ? currentNum : null;
+    const updates = {};
+    for(const [key, s] of Object.entries(roster)){
+      if(key === stuKey || !s || s.rosterNum == null) continue;
+      const n = s.rosterNum;
+      if(oldNum == null){
+        if(n >= newNum) updates[`${key}/rosterNum`] = n + 1; // inserting — push the tail back
+      } else if(newNum > oldNum){
+        if(n > oldNum && n <= newNum) updates[`${key}/rosterNum`] = n - 1; // moving later — close the gap behind it
+      } else if(newNum < oldNum){
+        if(n >= newNum && n < oldNum) updates[`${key}/rosterNum`] = n + 1; // moving earlier — make room ahead of it
+      }
+    }
+    updates[`${stuKey}/rosterNum`] = newNum;
+    await dbUpdate(`classroomStudents/${classId}`, updates);
   }catch(e){ alert('Error saving number: ' + (e.message||e.code||e)); return; }
-  if(window._currentGrades){
-    const stu = window._currentGrades._rawStudents.find(s => (s.uid||safeKey(s.name||'')) === stuKey);
-    if(stu) stu.rosterNum = num;
-    renderGradeBook(window._currentGrades._rawStudents, window._currentGrades.quizId, window._currentGrades.iLog||{});
-  }
+
+  // Multiple students' numbers may have shifted, not just this one — reload from scratch
+  // rather than patching individual cached rows.
+  if(selectedClassId === classId && window._currentGrades) loadClassroomProgressAny();
   if(_stuSortClassId === classId) loadClassroomStudents(classId);
 }
 
