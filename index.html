@@ -1140,6 +1140,7 @@ setTimeout(function(){
             <div style="font-family:var(--font-mono);font-size:.65rem;color:var(--muted);margin-top:2px">Scores, progress, and retake controls for all students</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-ghost btn-sm" onclick="renumberRosterAlphabetically(selectedClassId)" style="white-space:nowrap" title="Recompute the # column for every currently-enrolled student, in alphabetical order by last name">🔤 Renumber A→Z</button>
             <button class="btn btn-ghost btn-sm" onclick="grantRetakeAll(selectedClassId,window._currentProgressQuizId)" style="white-space:nowrap">Allow All Retake</button>
             <div style="position:relative;display:inline-block">
               <button class="btn btn-ghost btn-sm" onclick="document.getElementById('gbExportMenu').style.display=document.getElementById('gbExportMenu').style.display==='block'?'none':'block'" style="white-space:nowrap">Export ▾</button>
@@ -10749,6 +10750,42 @@ async function editRosterNum(classId, stuKey, currentNum, displayName){
     if(stu) stu.rosterNum = num;
     renderGradeBook(window._currentGrades._rawStudents, window._currentGrades.quizId, window._currentGrades.iLog||{});
   }
+}
+
+// Full reshuffle of the gradebook # column — unlike ensureRosterNumbers (which only fills
+// gaps for students who've never had a number), this recomputes 1..N for EVERY currently
+// enrolled student in last-name order, so a roster that's drifted after adds/drops (a new
+// student slotted into a low gap number, a dropped student's number left unused, etc.)
+// gets put back in true alphabetical order. Overwrites any numbers an instructor hand-edited.
+async function renumberRosterAlphabetically(classId){
+  if(!classId) return;
+  const students = await dbGet(`classroomStudents/${classId}`) || {};
+  const entries = Object.entries(students);
+  if(!entries.length){ alert('No students in this classroom yet.'); return; }
+  if(!confirm(`Renumber all ${entries.length} students alphabetically by last name (1, 2, 3...)?\n\nThis overwrites the current gradebook # for every student, including any you've hand-edited.`)) return;
+
+  const lastName = name => { const p=(name||'').trim().split(/\s+/); return (p[p.length-1]||'').toLowerCase(); };
+  const firstName = name => { const p=(name||'').trim().split(/\s+/); return (p[0]||'').toLowerCase(); };
+  entries.sort(([,a],[,b]) => {
+    const an = a.name||a.email||'', bn = b.name||b.email||'';
+    return lastName(an).localeCompare(lastName(bn)) || firstName(an).localeCompare(firstName(bn));
+  });
+
+  const updates = {};
+  entries.forEach(([key], i) => { updates[`${key}/rosterNum`] = i + 1; });
+  try{
+    await dbUpdate(`classroomStudents/${classId}`, updates);
+  }catch(e){ alert('Error renumbering: ' + (e.message||e.code||e)); return; }
+
+  _showInstToast(`✓ Renumbered ${entries.length} students alphabetically.`, 3000);
+  if(window._currentGrades){
+    window._currentGrades._rawStudents.forEach(s => {
+      const key = s.uid || safeKey(s.name||'');
+      if(updates[`${key}/rosterNum`] != null) s.rosterNum = updates[`${key}/rosterNum`];
+    });
+    renderGradeBook(window._currentGrades._rawStudents, window._currentGrades.quizId, window._currentGrades.iLog||{});
+  }
+  if(_stuSortClassId === classId) loadClassroomStudents(classId);
 }
 
 let _gbSort = 'score-desc'; // 'name-asc'|'name-desc'|'score-asc'|'score-desc'
