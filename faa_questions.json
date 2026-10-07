@@ -3446,19 +3446,6 @@
     ]
    },
    {
-    "id": "648",
-    "question": "The replacement of a damaged vertical stabilizer with a new identical stabilizer purchased from the aircraft manufacturer is considered a",
-    "choices": {
-     "A": "minor alteration.",
-     "B": "major repair.",
-     "C": "minor repair."
-    },
-    "correct": "C",
-    "explanation": "Replacing a damaged component with a new, identical part from the original manufacturer restores the aircraft to its original type design without introducing any change, which qualifies as a minor repair rather than a major repair or alteration. (Ref: FAA-H-8083-30B, Ch 1 — Aviation Regulations and Definitions)",
-    "acs": [],
-    "acs_flag": "OUT-OF-SUBJECT"
-   },
-   {
     "id": "662",
     "question": "Which of the following is an instance when a special flight permit may not be issued?",
     "choices": {
@@ -8306,6 +8293,20 @@
     },
     "correct": "C",
     "explanation": "Per 14 CFR Part 43, Appendix A, replacing a structural member with an identical replacement part from the original manufacturer is classified as a minor repair because it does not involve a change in design, material, or method of construction from the approved type design. (Ref: FAA-H-8083-30B, Ch 1 — Regulations and Publications)",
+    "acs": [
+     "AM.I.I.K7"
+    ]
+   },
+   {
+    "id": "648",
+    "question": "The replacement of a damaged vertical stabilizer with a new identical stabilizer purchased from the aircraft manufacturer is considered a",
+    "choices": {
+     "A": "minor alteration.",
+     "B": "major repair.",
+     "C": "minor repair."
+    },
+    "correct": "C",
+    "explanation": "Replacing a damaged component with a new, identical part from the original manufacturer restores the aircraft to its original type design without introducing any change, which qualifies as a minor repair rather than a major repair or alteration. (Ref: FAA-H-8083-30B, Ch 1 — Aviation Regulations and Definitions)",
     "acs": [
      "AM.I.I.K7"
     ]

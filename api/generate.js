@@ -611,6 +611,9 @@ ${JSON.stringify(batch.map(q => ({ question: q.question, choices: q.choices, cor
   // survives everything downstream untouched.
   raw = (await Promise.all(chunk(raw, 10).map(c => vetAnswerAccuracy(c, ref)))).flat();
   raw = raw.filter(q => q && q.question && q.correct && (q.correct in (q.choices || {})));
+  // NOT/EXCEPT/LEAST stems are the highest-risk subset of the above — demand a second
+  // independent re-derivation agree before trusting the key (see vetNegatedStemConsistency).
+  raw = await vetNegatedStemConsistency(raw, ref);
   raw = (await Promise.all(chunk(raw, 10).map(c => vetDistinctChoices(c)))).flat();
   // Variants are the highest-risk source for a hidden second correct answer (DEFINITION FLIP
   // in particular manufactures a "which will NOT..." stem, exactly the shape that tends to admit
@@ -826,6 +829,37 @@ ${JSON.stringify(questions)}`;
     if (Array.isArray(arr) && arr.length === questions.length) return arr;
     return questions;
   } catch { return questions; }
+}
+
+// ── Extra agreement check for HIGH-RISK negated stems (NOT/EXCEPT/LEAST/etc.) ──
+// vetAnswerAccuracy above already re-derives the answer independently once, but a stem that
+// negates/excludes a condition is exactly the shape DEFINITION FLIP produces and the single
+// biggest source of a flatly wrong marked answer (see generateFreshVariants' comment on that
+// strategy). For stems matching NEGATION_RE only, run that SAME independent re-derivation a
+// second time and keep the question only if both runs land on the same letter — any
+// disagreement (including either run giving up with "") means we can't be confident which
+// choice is right, so the question is dropped rather than shipped with a possible wrong key.
+const NEGATION_RE = /\b(not|except|least|never|without)\b/i;
+async function vetNegatedStemConsistency(questions, refText) {
+  if (!questions.length) return questions;
+  const risky = [], safe = [];
+  questions.forEach(q => (NEGATION_RE.test(q.question || '') ? risky : safe).push(q));
+  if (!risky.length) return questions;
+
+  const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
+  const chunks = chunk(risky, 10);
+  const [firstPass, secondPass] = await Promise.all([
+    Promise.all(chunks.map(c => vetAnswerAccuracy(c, refText))).then(r => r.flat()),
+    Promise.all(chunks.map(c => vetAnswerAccuracy(c, refText))).then(r => r.flat())
+  ]);
+
+  const kept = [];
+  for (let i = 0; i < risky.length; i++) {
+    const a = firstPass[i], b = secondPass[i];
+    if (a && b && a.correct && a.correct === b.correct) kept.push(a);
+    // disagreement, or either run couldn't confidently resolve it → drop silently
+  }
+  return [...safe, ...kept];
 }
 
 // ── Retroactive answer-key audit for the EXISTING variant pool ──────────────
