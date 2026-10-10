@@ -1527,6 +1527,7 @@ setTimeout(function(){
         <span id="stuRoleTitle" style="display:none;margin-right:7px"></span>
         <span id="stuAllStarBadge" style="display:none;margin-right:7px"></span>
         <span id="stuUserName" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="stuShowMyProfile()" title="View my profile">--</span>
+        <span id="stuProBadge" class="pro-pill" style="display:none;margin-left:7px;cursor:pointer" onclick="stuShowMyProfile()" title="Classroom AMT Pro member">⭐ PRO</span>
       </div>
       <div class="amt-settings-wrap" style="position:relative">
         <button type="button" class="amt-settings-gear" onclick="amtToggleSettingsMenu('stu')" title="Settings">⚙️</button>
@@ -14522,6 +14523,8 @@ function proShowUpgrade(feature){
 function _proApplyUi(){
   document.body.classList.toggle('pro-on', _proEnabled);
   document.body.classList.toggle('is-free', _proEnabled && !isPro());
+  const badge=document.getElementById('stuProBadge');
+  if(badge) badge.style.display=_billingIsPro(_billing)?'inline-block':'none';
   proRenderProfile();
 }
 function proAttach(user){
