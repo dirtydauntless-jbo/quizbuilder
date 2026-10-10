@@ -3,6 +3,7 @@ module.exports.config = { maxDuration: 60 };
 const path = require('path');
 const fs   = require('fs');
 const { AsyncLocalStorage } = require('async_hooks');
+const Billing = require('./_lib/billing');
 
 // ── Per-request token/cost accounting ────────────────────────────────────────
 // callClaude adds each call's usage into the request-scoped store (AsyncLocalStorage isolates
@@ -945,11 +946,25 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix, seenIds, items } = req.body || {};
+  const { topics, count, mode, faaRatio, opRatio, varRatio, focusedMix, seenIds, items, assignId } = req.body || {};
+
+  // Pro gate (only once config/proEnabled is on): Pro subscribers, instructors and admins may
+  // generate freely; free students only for an exam their instructor actually assigned them.
+  if (await Billing.proEnforced()) {
+    const user = await Billing.userFromReq(req);
+    if (!user) return res.status(401).json({ error: 'Please sign in again to generate an exam.' });
+    const access = await Billing.accessFor(user.uid);
+    if (mode === 'auditVariants' && !access.staff) return res.status(403).json({ error: 'Not allowed' });
+    if (!access.pro) {
+      const assigned = typeof assignId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(assignId)
+        ? await Billing.dbGet(`assignedExams/${user.uid}/${assignId}`) : null;
+      if (!assigned) return res.status(402).json({ error: 'FAA written practice exams are a Pro feature.', pro: true });
+    }
+  }
 
   // MODE: 'auditVariants' — re-derive the answer key for existing variant-pool entries the
   // client hands over (no `topics` needed) and report which ones disagree with what's stored.

@@ -11,6 +11,9 @@
       "betaWrittenExam": {
         ".read": true
       },
+      "proEnabled": {
+        ".read": true
+      },
       "instructorAccessCode": {
         ".read": "auth != null"
       },
@@ -24,6 +27,15 @@
         ".read": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         "$uid": {
           ".read": "auth != null && auth.uid === $uid"
+        }
+      }
+    },
+    "billing": {
+      ".read": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        "comp": {
+          ".write": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true"
         }
       }
     },

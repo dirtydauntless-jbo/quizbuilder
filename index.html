@@ -116,7 +116,6 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .amt-settings-divider{height:1px;background:var(--border);margin:6px 2px}
 .amt-menu-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;padding:9px 10px;border-radius:6px;font-size:.88rem;color:var(--text);cursor:pointer;font-family:inherit}
 .amt-menu-item:hover{background:var(--panel2)}
-.amt-menu-soon{margin-left:auto;font-family:var(--font-mono);font-size:.6rem;letter-spacing:.5px;text-transform:uppercase;background:var(--panel2);color:var(--muted);padding:2px 6px;border-radius:8px}
 .btn{font-family:var(--font-mono);font-size:.97rem;letter-spacing:1.5px;text-transform:uppercase;padding:9px 18px;border:none;border-radius:var(--r);cursor:pointer;transition:opacity .2s,transform .1s;white-space:nowrap}
 .btn:active{transform:scale(.97)}
 .btn:disabled{opacity:.35;cursor:default}
@@ -549,6 +548,20 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .bank-card-progress-fill{height:100%;border-radius:2px;transition:width .4s}
 .bank-card-chevron{font-size:1.2rem;transition:transform .25s;opacity:.6}
 .bank-card.open .bank-card-chevron{transform:rotate(180deg)}
+.pro-pill{display:inline-block;padding:1px 7px;border-radius:9px;background:linear-gradient(135deg,#f0a500,#ffcc4d);color:#1a1205;font-family:var(--font-mono);font-size:.62rem;font-weight:800;letter-spacing:.5px;vertical-align:middle}
+.pro-only-badge{display:none;margin-left:6px;padding:1px 6px;border-radius:9px;background:linear-gradient(135deg,#f0a500,#ffcc4d);color:#1a1205;font-family:var(--font-mono);font-size:.56rem;font-weight:800;letter-spacing:.5px;vertical-align:middle;line-height:1.4}
+body.is-free .pro-only-badge{display:inline-block}
+body:not(.pro-on) .pro-menu-item{display:none!important}
+.pro-status-line{font-family:var(--font-mono);font-size:.8rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pro-upgrade-btn{background:linear-gradient(135deg,#f0a500,#ffcc4d);color:#1a1205;border:none;font-weight:700}
+.pro-list{list-style:none;padding:0;margin:12px 0 16px;font-size:.86rem;line-height:1.9}
+.pro-plans{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.pro-plan{position:relative;background:var(--panel2);border:1px solid var(--border);border-radius:var(--r);padding:16px 10px 12px;cursor:pointer;color:var(--text);font-family:var(--font-mono);font-size:.8rem;transition:border-color .15s,box-shadow .15s}
+.pro-plan b{display:block;font-size:1.6rem;font-family:var(--font-display);color:var(--accent)}
+.pro-plan:hover:not(:disabled){border-color:var(--accent);box-shadow:0 0 10px rgba(240,165,0,.2)}
+.pro-plan:disabled{opacity:.55;cursor:wait}
+.pro-plan.best{border-color:rgba(240,165,0,.6)}
+.pro-save{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;font-size:.58rem;font-weight:800;padding:2px 8px;border-radius:9px;white-space:nowrap}
 .starred-box{background:rgba(240,165,0,.06);border:1px solid rgba(240,165,0,.25);border-radius:var(--r);padding:14px 16px;margin-bottom:14px;cursor:pointer;transition:border-color .18s,box-shadow .18s}
 .starred-box:hover{border-color:rgba(240,165,0,.7);box-shadow:0 0 10px rgba(240,165,0,.18)}
 
@@ -720,28 +733,26 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
     account to begin studying. JavaScript is required to use the interactive app.</p>
   </main>
 </noscript>
-<div id="amtTermsModal" class="modal-overlay hidden" onclick="if(event.target===this)amtHideTerms()">
-  <div class="modal" style="max-width:640px;max-height:85vh;overflow-y:auto;text-align:left">
-    <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <span>Terms of Service</span>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="amtHideTerms()" style="font-size:.8rem">Close</button>
+<div id="proUpgradeModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('proUpgradeModal')">
+  <div class="modal" style="max-width:470px;text-align:left">
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px">✈ Classroom AMT <span class="pro-pill" style="font-size:.8rem">PRO</span></div>
+    <div id="proUpgradeFeature" style="font-size:.88rem;color:var(--text)"></div>
+    <ul class="pro-list">
+      <li>🎙️ <b>DME Mode</b> — type your oral answers, AI grades them like an examiner</li>
+      <li>🎧 <b>Listening Mode</b> &amp; 🔄 <b>Auto Cycle</b> — hands-free study</li>
+      <li>⭐ <b>Starred Cards</b> &amp; 🔥 <b>PrimeTime</b> deck</li>
+      <li>🧩 <b>Build your own decks</b></li>
+      <li>🧪 <b>FAA written practice exams</b> — as many as you want</li>
+      <li>📋 <b>My FAA Test Codes</b> (ACS) analysis</li>
+      <li>📐 <b>Measurement Simulator</b></li>
+    </ul>
+    <div class="pro-plans">
+      <button type="button" class="pro-plan" onclick="proCheckout('monthly')"><b>$5</b>per month</button>
+      <button type="button" class="pro-plan best" onclick="proCheckout('yearly')"><span class="pro-save">SAVE 33%</span><b>$40</b>per year</button>
     </div>
-    <div style="font-size:.85rem;line-height:1.65;color:var(--text)">
-      <p style="background:var(--panel2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;font-family:var(--font-mono);font-size:.7rem;color:var(--muted);margin-bottom:16px">
-        Draft — last updated August 2026. This is a starting template, not reviewed by an attorney. Have it reviewed before relying on it, and definitely before Pro billing goes live.
-      </p>
-      <p><b>1. Acceptance of terms.</b> By creating an account or using Classroom AMT ("the Service"), you agree to these Terms. If you don't agree, don't use the Service.</p>
-      <p><b>2. What the Service is.</b> Classroom AMT is a study platform for FAA Aviation Maintenance Technician (A&amp;P) written and oral/practical exam preparation. It is an independent study tool and is not affiliated with, endorsed by, or an official product of the FAA. Practice questions — including AI-generated and reworded items — are for study purposes only and do not guarantee any particular score or outcome on an official FAA exam.</p>
-      <p><b>3. Accounts.</b> You're responsible for the accuracy of the information you provide and for activity under your account. Instructor accounts may be subject to approval. Don't share your login or let someone else use your account.</p>
-      <p><b>4. Acceptable use.</b> Don't misuse the Service — no scraping the question bank for redistribution, no attempting to bypass access controls, no harassment of other users, no uploading unlawful content.</p>
-      <p><b>5. Student data &amp; privacy.</b> Practice results are private to the student by default and are only visible to an instructor if the student explicitly shares them. Instructor-assigned exam results remain visible to the assigning instructor. See your classroom's data-sharing settings for details.</p>
-      <p><b>6. Content ownership.</b> You retain ownership of content you create (custom quizzes, uploaded materials). By posting content you grant Classroom AMT a license to store and display it as needed to operate the Service. FAA reference material is used under fair-use/public-domain principles applicable to U.S. government publications.</p>
-      <p><b>7. Subscriptions &amp; billing.</b> Classroom AMT currently offers a free tier. A paid "Pro" tier is planned; once available, its pricing, billing terms, and refund policy will be presented separately before you're charged, and this section will be updated accordingly.</p>
-      <p><b>8. Disclaimer of warranties.</b> The Service is provided "as is." We don't guarantee the Service will be uninterrupted, error-free, or that any question, explanation, or answer key is 100% accurate — flag anything that looks wrong via the in-app review feature.</p>
-      <p><b>9. Limitation of liability.</b> To the maximum extent permitted by law, Classroom AMT and its operators aren't liable for indirect, incidental, or consequential damages arising from use of the Service, including exam outcomes.</p>
-      <p><b>10. Changes.</b> We may update these Terms as the Service evolves (especially around billing). Continued use after a change means you accept the updated Terms.</p>
-      <p><b>11. Contact.</b> Questions about these Terms? Reach out through your instructor or classroomamt.com.</p>
-    </div>
+    <div id="proUpgradeErr" style="font-family:var(--font-mono);font-size:.75rem;min-height:1.1em;margin-bottom:8px"></div>
+    <div style="font-family:var(--font-mono);font-size:.68rem;color:var(--muted);line-height:1.55;margin-bottom:12px">Always free: flashcards, DME Locator, instructor quizzes &amp; exams your instructor assigns, and classrooms. Secure payment by Stripe. Renews automatically — cancel anytime from My Profile. By subscribing you agree to the <a href="/terms.html" target="_blank" rel="noopener" style="color:var(--accent)">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--accent)">Privacy Policy</a>.</div>
+    <button type="button" class="btn btn-ghost" style="width:100%" onclick="closeModal('proUpgradeModal')">Maybe later</button>
   </div>
 </div>
 <div id="jsLoadingIndicator" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0c0f;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:var(--font-mono);color:#5a6370;font-size:.9rem;letter-spacing:2px">
@@ -938,7 +949,7 @@ setTimeout(function(){
           <div class="amt-settings-divider"></div>
           <button type="button" class="amt-menu-item" onclick="instShowMyProfile();amtCloseSettingsMenus()">👤 My Profile</button>
           <button type="button" class="amt-menu-item" onclick="amtShowTerms()">📄 Terms of Service</button>
-          <button type="button" class="amt-menu-item" onclick="amtUpgradeSoon()">🚀 Upgrade to Pro<span class="amt-menu-soon">Soon</span></button>
+          <button type="button" class="amt-menu-item" onclick="amtShowPrivacy()">🔒 Privacy Policy</button>
           <div class="amt-settings-divider"></div>
           <button type="button" class="amt-menu-item" onclick="confirmSignOut('instructor')" style="color:var(--wl)">🚪 Sign Out</button>
         </div>
@@ -1528,7 +1539,8 @@ setTimeout(function(){
           <div class="amt-settings-divider"></div>
           <button type="button" class="amt-menu-item" onclick="stuShowMyProfile();amtCloseSettingsMenus()">👤 My Profile</button>
           <button type="button" class="amt-menu-item" onclick="amtShowTerms()">📄 Terms of Service</button>
-          <button type="button" class="amt-menu-item" onclick="amtUpgradeSoon()">🚀 Upgrade to Pro<span class="amt-menu-soon">Soon</span></button>
+          <button type="button" class="amt-menu-item" onclick="amtShowPrivacy()">🔒 Privacy Policy</button>
+          <button type="button" class="amt-menu-item pro-menu-item" onclick="proMenuUpgrade()">⭐ Classroom AMT Pro</button>
           <div class="amt-settings-divider"></div>
           <button type="button" class="amt-menu-item i18n-signout" onclick="confirmSignOut('student')" style="color:var(--wl)">Sign Out</button>
         </div>
@@ -1555,15 +1567,15 @@ setTimeout(function(){
     </button>
     <button id="stuTabACS" onclick="stuSwitchTab('acs')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:var(--font-mono);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
-      📋 MY FAA TEST CODES
+      📋 MY FAA TEST CODES<span class="pro-only-badge">PRO</span>
     </button>
     <button id="stuTabQuizzes" onclick="stuSwitchTab('quizzes')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:var(--font-mono);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
       📝 Instructor Quizzes
     </button>
-    <button id="stuTabSim" onclick="stuSwitchTab('sim')"
+    <button id="stuTabSim" onclick="if(requirePro('Measurement Simulator'))stuSwitchTab('sim')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:var(--font-mono);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
-      📐 Measurement Simulator
+      📐 Measurement Simulator<span class="pro-only-badge">PRO</span>
     </button>
     <button id="stuTabDME" onclick="stuSwitchTab('dme')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:var(--font-mono);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
@@ -2297,6 +2309,8 @@ setTimeout(function(){
   <div class="modal" style="max-width:460px">
     <div class="modal-title">My Profile</div>
     <div id="stuMyProfileBody" style="font-family:var(--font-mono);font-size:.85rem"></div>
+
+    <div id="stuProSection" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px;display:none"></div>
 
     <!-- Share my practice results -->
     <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
@@ -3802,6 +3816,28 @@ async function masterDashLoad(){
       </div>
     `, true)}
 
+    ${panel('md-instcode','Instructor Access Code','🔑',`
+      <div style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);margin-bottom:10px;line-height:1.5">The code new instructors enter when they register. Share it only with instructors you trust.</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <span style="font-family:var(--font-mono);font-size:.78rem;color:var(--muted)">Current code:</span>
+        <code id="instCodeCurrent" style="font-family:var(--font-mono);font-size:1.05rem;font-weight:700;color:var(--accent);background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:4px 12px;user-select:all">…</code>
+        <button class="btn btn-ghost btn-sm" onclick="_instCodeCopy()">Copy</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="instCodeNew" placeholder="New access code" autocomplete="off" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2);color:var(--text);font-family:var(--font-mono)">
+        <button class="btn btn-sm" onclick="_instCodeSave()">Change code</button>
+      </div>
+    `, true)}
+
+    ${panel('md-billing','Pro Subscriptions','💳',`
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:var(--font-mono);font-size:.82rem;margin-bottom:10px">
+        <input type="checkbox" id="proEnabledToggle" style="width:16px;height:16px;cursor:pointer" onchange="proAdminToggle()"/>
+        Pro paywall ON — free students are limited to basic flashcards, DME Locator, instructor quizzes/assigned exams &amp; classrooms
+      </label>
+      <div id="proAdminStats" style="font-family:var(--font-mono);font-size:.78rem;color:var(--muted)">Loading…</div>
+      <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted);margin-top:8px">Instructors &amp; admins always get Pro free. Refunds, cancellations &amp; payouts: Stripe dashboard.</div>
+    `, true)}
+
     ${panel('md-qreview','Flagged Questions (Beta Review)','⚑',`
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:var(--font-mono);font-size:.82rem">
@@ -3993,6 +4029,8 @@ async function masterDashLoad(){
   _opSimLoadAdminPanel();
   _qReviewLoad();
   _announceAdminLoad();
+  _proAdminLoad();
+  _instCodeLoad();
   _usersLoad('md');
   allStarsRebuild(); // keep the All-Stars board synced from every student's completed exams
 
@@ -4293,7 +4331,7 @@ async function _vpoolAuditNegations(){
     for(let i=0;i<candidates.length;i+=CH){
       const slice=candidates.slice(i,i+CH);
       const items=slice.map(r=>({vid:r.vid, subject:r.subject, topic:r.q.topic||r.topicKey, question:r.q.question, choices:r.q.choices, correct:r.q.correct}));
-      const res=await fetch('https://classroomamt.vercel.app/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'auditVariants',items})});
+      const res=await fetch('https://classroomamt.vercel.app/api/generate',{method:'POST',headers:await _apiAuthHeaders(),body:JSON.stringify({mode:'auditVariants',items})});
       const data=await res.json().catch(()=>({}));
       (data.results||[]).forEach(x=>{ _vpoolAuditFlags.set(x.vid,x); flaggedCount++; });
       checked+=slice.length;
@@ -5515,16 +5553,17 @@ document.addEventListener('click', function(e){
   if(e.target.closest('.amt-settings-wrap')) return;
   amtCloseSettingsMenus();
 });
-function amtUpgradeSoon(){
-  amtCloseSettingsMenus();
-  if(typeof showToast==='function') showToast('Pro plans are coming soon — stay tuned!','success');
-}
 function amtShowTerms(){
   amtCloseSettingsMenus();
-  const m=document.getElementById('amtTermsModal'); if(m) m.classList.remove('hidden');
+  window.open('/terms.html','_blank','noopener');
 }
-function amtHideTerms(){
-  const m=document.getElementById('amtTermsModal'); if(m) m.classList.add('hidden');
+function amtShowPrivacy(){
+  amtCloseSettingsMenus();
+  window.open('/privacy.html','_blank','noopener');
+}
+function proMenuUpgrade(){
+  amtCloseSettingsMenus();
+  if(isPro() && typeof stuShowMyProfile==='function') stuShowMyProfile(); else proShowUpgrade();
 }
 
 // ── SIM SESSION HISTORY ───────────────────────────────────────────────────
@@ -8160,7 +8199,7 @@ async function _asgGenerateSharedExam(base){
   if(base.mode==='official' && base.subject){ topics=OFFICIAL_TOPICS[base.subject]; count=OFFICIAL_EXAMS[base.subject].count; }
   else { topics=base.topics||[]; count=base.count||topics.length||5; }
   const body={topics,count,...(base.focusedMix?{focusedMix:true}:{})};
-  const res=await fetch('https://classroomamt.vercel.app/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const res=await fetch('https://classroomamt.vercel.app/api/generate',{method:'POST',headers:await _apiAuthHeaders(),body:JSON.stringify(body)});
   const data=await res.json();
   if(!res.ok||!data.questions||!data.questions.length) throw new Error(data.error||'no questions returned');
   return data.questions;
@@ -9802,7 +9841,7 @@ async function generateAndSaveQuiz(id){
 // the given topics — the same source and mix used for student practice exam assignments.
 async function _generateFaaBankQuestions(topics, count){
   const res = await fetch('https://classroomamt.vercel.app/api/generate', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:await _apiAuthHeaders(),
     body: JSON.stringify({ topics, count, focusedMix:true })
   });
   const data = await res.json();
@@ -11256,7 +11295,8 @@ async function initStudentApp(){
   // Restore last tab or default to Study
   const lastTab = stuSession?.uid ? (localStorage.getItem('stuLastTab_' + stuSession.uid) || 'study') : 'study';
   const safeTab = ['study','quizzes','practice','acs','dme'].includes(lastTab) ? lastTab : 'study';
-  stuSwitchTab(safeTab);
+  if(safeTab==='acs') _proReady.then(()=>stuSwitchTab(isPro()?'acs':'study'));
+  else stuSwitchTab(safeTab);
 }
 
 // Background sim listener — starts at login, not just when sim tab is opened.
@@ -14353,6 +14393,7 @@ let fcDmeRevealed = false; // student skipped grading and just wants to self-rat
 function fcResetDmeCard(){ fcDmeSubmitted = false; fcDmeGrading = false; fcDmeResult = null; fcDmeDraft = ''; fcDmeRevealed = false; }
 
 async function stuSwitchTab(tab){
+  if(tab==='acs' && !requirePro('My FAA Test Codes (ACS)')) return;
   if(stuSession?.uid) localStorage.setItem('stuLastTab_' + stuSession.uid, tab);
   if(tab === 'practice') _stuMarkAssignedSeen(); // opening the tab clears the "new exam" badge for good
   document.getElementById('stuQuizListView').classList.toggle('hidden', tab !== 'quizzes');
@@ -14451,6 +14492,179 @@ let _pxAdvanceTimer=null; // pending auto-advance after answering — cleared on
 const PX_AUTO_ADVANCE_MS=1100;
 let _pxRevKey=null, _pxRevSummary=null, _pxRevData=null, _pxRevFilter='all';
 let _pxStarred=new Set(); // indices of questions the student starred during this practice exam
+// ── Pro subscription ──────────────────────────────────────────────────────────
+// billing/{uid} is written only by the server (api/billing.js + api/stripe-webhook.js) from
+// Stripe. config/proEnabled is the master switch: while it's off nothing is locked.
+// These client checks are for UX only — the AI endpoints re-check Pro server-side.
+let _proEnabled=false, _billing=null, _proStaff=false, _proUid=null, _proRefs=[];
+let _proReadyResolve; const _proReady=new Promise(r=>{ _proReadyResolve=r; setTimeout(r,4000); });
+const PRO_STATUSES=['active','trialing','past_due'];
+function _billingIsPro(b){
+  if(!b) return false;
+  if(b.comp===true) return true;
+  if(!PRO_STATUSES.includes(b.status)) return false;
+  return !b.currentPeriodEnd || b.currentPeriodEnd + 3*864e5 > Date.now();
+}
+function isPro(){ return !_proEnabled || _proStaff || _billingIsPro(_billing); }
+function requirePro(feature){
+  if(isPro()) return true;
+  proShowUpgrade(feature);
+  return false;
+}
+function _proEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function proShowUpgrade(feature){
+  const f=document.getElementById('proUpgradeFeature');
+  if(f) f.innerHTML = feature ? '<b>'+_proEsc(feature)+'</b> is part of Classroom AMT Pro.' : 'Unlock every study tool on Classroom AMT.';
+  const e=document.getElementById('proUpgradeErr'); if(e) e.textContent='';
+  document.querySelectorAll('#proUpgradeModal .pro-plan').forEach(b=>b.disabled=false);
+  show('proUpgradeModal');
+}
+function _proApplyUi(){
+  document.body.classList.toggle('pro-on', _proEnabled);
+  document.body.classList.toggle('is-free', _proEnabled && !isPro());
+  proRenderProfile();
+}
+function proAttach(user){
+  const uid=user?user.uid:null;
+  if(uid===_proUid && _proRefs.length) return;
+  _proRefs.forEach(r=>r.off()); _proRefs=[];
+  _proUid=uid; _billing=null; _proStaff=false;
+  const cfgRef=db.ref('config/proEnabled');
+  let cfgLoaded=false, billLoaded=!uid, staffLoaded=!uid;
+  const done=()=>{ if(cfgLoaded&&billLoaded&&staffLoaded) _proReadyResolve(); };
+  cfgRef.on('value', s=>{ _proEnabled=s.val()===true; cfgLoaded=true; _proApplyUi(); done(); }, ()=>{ cfgLoaded=true; done(); });
+  _proRefs.push(cfgRef);
+  if(!uid){ _proApplyUi(); return; }
+  const bRef=db.ref('billing/'+uid);
+  bRef.on('value', s=>{ _billing=s.val(); billLoaded=true; _proApplyUi(); done(); }, ()=>{ billLoaded=true; done(); });
+  _proRefs.push(bRef);
+  Promise.all([
+    dbGet('instructors/'+uid).catch(()=>null),
+    dbGet('config/superAdmins/'+uid).catch(()=>null),
+    dbGet('config/masterAdmins/'+uid).catch(()=>null)
+  ]).then(([i,s,m])=>{ _proStaff=!!i||s===true||m===true; staffLoaded=true; _proApplyUi(); done(); });
+  proHandleReturn();
+}
+async function _apiAuthHeaders(){
+  const h={'Content-Type':'application/json'};
+  try{ const u=auth.currentUser; if(u) h.Authorization='Bearer '+await u.getIdToken(); }catch(e){}
+  return h;
+}
+async function _billingCall(body){
+  const res=await fetch('/api/billing',{method:'POST',headers:await _apiAuthHeaders(),body:JSON.stringify(body)});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error||'Something went wrong. Please try again.');
+  return data;
+}
+async function proCheckout(plan){
+  const errEl=document.getElementById('proUpgradeErr');
+  if(!auth.currentUser){ if(errEl) errEl.textContent='Please sign in first.'; return; }
+  document.querySelectorAll('#proUpgradeModal .pro-plan').forEach(b=>b.disabled=true);
+  if(errEl){ errEl.style.color='var(--muted)'; errEl.textContent='Opening secure checkout…'; }
+  try{
+    const {url}=await _billingCall({action:'checkout',plan});
+    window.location.href=url;
+  }catch(e){
+    if(errEl){ errEl.style.color='var(--wl)'; errEl.textContent=e.message; }
+    document.querySelectorAll('#proUpgradeModal .pro-plan').forEach(b=>b.disabled=false);
+  }
+}
+async function proPortal(btn){
+  const label=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Opening…'; }
+  try{ const {url}=await _billingCall({action:'portal'}); window.location.href=url; }
+  catch(e){ showToast(e.message,'error'); if(btn){ btn.disabled=false; btn.textContent=label; } }
+}
+// Back from Stripe Checkout: confirm with Stripe right away instead of waiting on the webhook.
+let _proReturnHandled=false;
+async function proHandleReturn(){
+  if(_proReturnHandled) return;
+  const p=new URLSearchParams(location.search);
+  const status=p.get('billing'); if(!status) return;
+  _proReturnHandled=true;
+  history.replaceState(null,'',location.pathname+location.hash);
+  if(status==='cancel'){ showToast('Checkout canceled — you were not charged.','info'); return; }
+  if(status!=='success') return;
+  try{
+    const r=await _billingCall({action:'sync',sessionId:p.get('session_id')||undefined});
+    showToast(r.pro?'🎉 Welcome to Classroom AMT Pro! Everything is unlocked.':'Payment received — Pro will unlock in a moment.','success');
+  }catch(e){ showToast('Payment received — Pro will unlock in a moment.','success'); }
+}
+function proRenderProfile(){
+  const el=document.getElementById('stuProSection'); if(!el) return;
+  let preview=false; try{ preview=localStorage.getItem('proPreview')==='1'; }catch(e){}
+  if(!_proEnabled && !_billing && !preview){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='';
+  const b=_billing||{};
+  const date=ms=>new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  let html='<div style="font-weight:700;font-size:.95rem;margin-bottom:6px">💳 Subscription</div>';
+  if(_proStaff){
+    html+='<div class="pro-status-line"><span class="pro-pill">PRO</span> Included with your instructor/admin account.</div>';
+  } else if(b.comp===true){
+    html+='<div class="pro-status-line"><span class="pro-pill">PRO</span> Complimentary Pro access.</div>';
+  } else if(_billingIsPro(b)){
+    const planTxt=b.plan==='yearly'?'Yearly · $40/year':'Monthly · $5/month';
+    const when=b.currentPeriodEnd?(b.cancelAtPeriodEnd?'Ends '+date(b.currentPeriodEnd):'Renews '+date(b.currentPeriodEnd)):'';
+    html+='<div class="pro-status-line"><span class="pro-pill">PRO</span> '+planTxt+(when?' — '+when:'')+'</div>';
+    if(b.status==='past_due') html+='<div style="font-family:var(--font-mono);font-size:.72rem;color:var(--wl);margin:6px 0">Your last payment failed. Update your card to keep Pro.</div>';
+    html+='<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="proPortal(this)">Manage subscription</button>';
+  } else {
+    html+='<div class="pro-status-line">Free plan</div>';
+    html+='<button class="btn btn-sm pro-upgrade-btn" style="width:100%;margin-top:8px" onclick="closeModal(\'stuMyProfileModal\');proShowUpgrade()">⭐ Upgrade to Pro — $5/mo or $40/yr</button>';
+    if(b.customerId) html+='<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px" onclick="proPortal(this)">Billing history</button>';
+  }
+  el.innerHTML=html;
+}
+auth.onAuthStateChanged(u=>proAttach(u));
+
+// Master-admin: view / change the instructor registration access code
+async function _instCodeLoad(){
+  const el=document.getElementById('instCodeCurrent'); if(!el) return;
+  const code=await dbGet('config/instructorAccessCode').catch(()=>null);
+  el.textContent = code==null || code==='' ? '(not set)' : String(code);
+}
+function _instCodeCopy(){
+  const t=(document.getElementById('instCodeCurrent')||{}).textContent||'';
+  if(!t || t.startsWith('(')) return;
+  navigator.clipboard.writeText(t).then(()=>showToast('Access code copied.','success')).catch(()=>{});
+}
+async function _instCodeSave(){
+  const inp=document.getElementById('instCodeNew');
+  const v=(inp&&inp.value||'').trim();
+  if(v.length<4){ showToast('Use at least 4 characters.','error'); return; }
+  if(!confirm('Change the instructor access code to "'+v+'"?\n\nThe old code will stop working for new instructor registrations.')) return;
+  try{ await dbSet('config/instructorAccessCode', v); inp.value=''; showToast('Instructor access code updated.','success'); _instCodeLoad(); }
+  catch(e){ showToast('Failed: '+(e&&e.message||e),'error'); }
+}
+
+// Master-admin Pro switch + subscriber counts
+async function proAdminToggle(){
+  const el=document.getElementById('proEnabledToggle');
+  const on=!!(el&&el.checked);
+  if(on && !confirm('Turn ON the Pro paywall?\n\nFree students will immediately lose DME Mode, Listening, Auto Cycle, Starred, PrimeTime, custom decks, self-started practice exams, ACS codes and the Measurement Simulator.')){ el.checked=false; return; }
+  try{ await dbSet('config/proEnabled', on); showToast('Pro paywall '+(on?'ON':'OFF')+'.','success'); _proAdminLoad(); }
+  catch(e){ showToast('Failed: '+(e&&e.message||e),'error'); if(el) el.checked=!on; }
+}
+async function _proAdminLoad(){
+  const en=document.getElementById('proEnabledToggle');
+  const stats=document.getElementById('proAdminStats');
+  const [cfg, all]=await Promise.all([dbGet('config/proEnabled').catch(()=>null), dbGet('billing').catch(()=>null)]);
+  if(en) en.checked = cfg===true;
+  if(!stats) return;
+  let monthly=0, yearly=0, comp=0, pastDue=0, canceling=0;
+  Object.values(all||{}).forEach(b=>{
+    if(!b) return;
+    if(b.comp===true){ comp++; return; }
+    if(!_billingIsPro(b)) return;
+    if(b.plan==='yearly') yearly++; else monthly++;
+    if(b.status==='past_due') pastDue++;
+    if(b.cancelAtPeriodEnd) canceling++;
+  });
+  const mrr=monthly*5 + yearly*40/12;
+  stats.innerHTML='Active Pro: <b>'+(monthly+yearly)+'</b> ('+monthly+' monthly, '+yearly+' yearly) · est. <b>$'+mrr.toFixed(2)+'</b>/mo'
+    +(comp?' · '+comp+' complimentary':'')+(pastDue?' · <span style="color:var(--wl)">'+pastDue+' past due</span>':'')+(canceling?' · '+canceling+' canceling':'');
+}
+
 let _betaWrittenExam=true; // Beta mode: shows the (Beta) tag + lets students flag answers for review. On unless config disables it.
 // Rate limiting for flag-for-review submissions (server-enforced via questionReviewThrottle; mirrored here for instant UX)
 const PX_FLAG_MIN_INTERVAL=8000; // min ms between submissions (matches the server throttle gap)
@@ -14723,6 +14937,7 @@ async function shareRenderGrants(){
 // opts: {mode:'all'} = every stored question for the topics · {focusedMix:true} = focused FAA-style exam (the server applies the source mix)
 async function pxRunExam(topics, count, label, opts){
   opts = opts || {};
+  if(!_pxAssignId && !(opts.questions && opts.questions.length) && !requirePro('FAA Written Practice Exams')) return;
   const errEl=document.getElementById('pxError');
   document.getElementById('practiceSetup').classList.add('hidden');
   document.getElementById('practiceLoading').classList.remove('hidden');
@@ -14743,8 +14958,8 @@ async function pxRunExam(topics, count, label, opts){
       if(stuSession?.uid && opts.mode!=='all'){ try{ seenIds=await pxLoadSeenIds(); }catch(e){} }
       const res=await fetch('https://classroomamt.vercel.app/api/generate',{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({topics,count,...(opts.mode?{mode:opts.mode}:{}),...(opts.focusedMix?{focusedMix:true}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.varRatio!=null?{varRatio:opts.varRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{}),...(seenIds.length?{seenIds}:{})})
+        headers:await _apiAuthHeaders(),
+        body:JSON.stringify({topics,count,...(_pxAssignId?{assignId:_pxAssignId}:{}),...(opts.mode?{mode:opts.mode}:{}),...(opts.focusedMix?{focusedMix:true}:{}),...(opts.faaRatio!=null?{faaRatio:opts.faaRatio}:{}),...(opts.varRatio!=null?{varRatio:opts.varRatio}:{}),...(opts.opRatio!=null?{opRatio:opts.opRatio}:{}),...(seenIds.length?{seenIds}:{})})
       });
       const data=await res.json();
       if(!res.ok||!data.questions) throw new Error(data.error||'Failed to generate questions');
@@ -16546,12 +16761,12 @@ async function renderStudyHome(){
           <button class="btn btn-sm btn-auto" onclick="startAutoCycle('${bankId}::__all__')"
             style="font-weight:700"
             title="Auto Cycle — hands-free: shows the question, then the answer, then moves on">
-            🔄 Auto Cycle
+            🔄 Auto Cycle<span class="pro-only-badge">PRO</span>
           </button>
           <button class="btn btn-sm btn-dme" onclick="startDmeMode('${bankId}::__all__')"
             style="font-weight:700"
             title="DME Mode — type your answer, AI grades it like an oral examiner would">
-            🎙️ DME Mode
+            🎙️ DME Mode<span class="pro-only-badge">PRO</span>
           </button>
           <button class="btn btn-ghost btn-sm" onclick="resetAllDecksFor('${bankId}')" style="font-size:.65rem">↺ Reset</button>
         </div>
@@ -16728,7 +16943,7 @@ async function renderStudyHome(){
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
               <div style="font-size:1.5rem">🔥</div>
               <div style="flex:1">
-                <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:${fire}">PrimeTime</div>
+                <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:${fire}">PrimeTime<span class="pro-only-badge">PRO</span></div>
                 <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">Study the exact areas most likely on YOUR test</div>
               </div>
             </div>
@@ -16741,7 +16956,7 @@ async function renderStudyHome(){
             <div style="display:flex;align-items:center;gap:10px">
               <div style="font-size:1.5rem">🔥</div>
               <div style="flex:1">
-                <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:${fire}">PrimeTime</div>
+                <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:${fire}">PrimeTime<span class="pro-only-badge">PRO</span></div>
                 <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">No flashcards matched your ${codes.length} code${codes.length!==1?'s':''} yet — check them on the ACS tab.</div>
               </div>
             </div>
@@ -16751,7 +16966,7 @@ async function renderStudyHome(){
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
             <div style="font-size:1.6rem">🔥</div>
             <div style="flex:1">
-              <div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:${fire}">PrimeTime Deck</div>
+              <div style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;color:${fire}">PrimeTime Deck<span class="pro-only-badge">PRO</span></div>
               <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">${n} card${n!==1?'s':''} from the ${codes.length} ACS code${codes.length!==1?'s':''} you missed — your highest-probability review</div>
             </div>
           </div>
@@ -16768,7 +16983,7 @@ async function renderStudyHome(){
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <span style="font-size:1.2rem">⭐</span>
           <div style="flex:1">
-            <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)">My Starred Cards</div>
+            <div style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:2px;color:var(--accent)">My Starred Cards<span class="pro-only-badge">PRO</span></div>
             <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--muted)">Review only your toughest cards</div>
           </div>
           <button onclick="fcClearAllStarred()" title="Clear all starred cards" style="background:rgba(204,68,68,.1);color:var(--wl);border:1px solid rgba(204,68,68,.3);border-radius:3px;font-family:var(--font-mono);font-size:.65rem;padding:4px 8px;cursor:pointer" onmouseover="this.style.background='rgba(204,68,68,.22)'" onmouseout="this.style.background='rgba(204,68,68,.1)'">🗑 Clear All</button>
@@ -16867,6 +17082,7 @@ function fcGetAllKnownFor(topics, qb){
 }
 
 async function startFlashcards(topicKey, dme){
+  if(dme && !requirePro('DME Mode')) return;
   navPush({ screen: 'stuApp', view: 'flashcards' });
   fcTopic = topicKey;
   fcDmeMode = !!dme;
@@ -17102,6 +17318,7 @@ function flipCard(){
 // Switch DME Mode on/off mid-session without losing the current deck or position.
 function fcToggleDmeMode(){
   if(fcAnimating || fcDmeGrading) return;
+  if(!fcDmeMode && !requirePro('DME Mode')) return;
   fcDmeMode = !fcDmeMode;
   fcResetDmeCard();
   fcFlipped = false;
@@ -17132,7 +17349,7 @@ async function fcDmeSubmit(){
   try{
     const r = await fetch('/api/grade-dme', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await _apiAuthHeaders(),
       body: JSON.stringify({ question: card.q, correctAnswer: card.a, studentAnswer: val })
     });
     const data = await r.json();
@@ -17340,6 +17557,7 @@ async function fcShowNote(){ const c=fcDeck[fcCur]; if(!c) return; if(fcHideAllN
 async function fcSetHideAll(v){ fcHideAllNotes=!!v; await fcSaveNoteFlags(); renderFlashcard(); }
 
 async function fcToggleStar(){
+  if(!requirePro('Starred Cards')) return;
   const card = fcDeck[fcCur];
   if(!card) return;
   const key = (card.bankId||'general')+'::'+card.topic+'_'+card.idx;
@@ -17351,6 +17569,7 @@ async function fcToggleStar(){
 }
 
 async function startStarredDeck(...sections){
+  if(!requirePro('Starred Cards')) return;
   // sections = one or more of 'general','airframe','powerplant'
   // if empty defaults to all three
   const banks = sections.length ? sections : ['general','airframe','powerplant'];
@@ -17401,6 +17620,7 @@ async function startStarredDeck(...sections){
 }
 
 async function startListenStarred(...sections){
+  if(!requirePro('Listening Mode')) return;
   if(!window.speechSynthesis){ alert('Your browser does not support text-to-speech. Try Chrome or Edge.'); return; }
   const banks = sections.length ? sections : ['general','airframe','powerplant'];
   const bankSet = new Set(banks);
@@ -17515,6 +17735,7 @@ function primeTimeCountSync(){
 }
 
 async function startPrimeTime(dme){
+  if(!requirePro('PrimeTime')) return;
   const codes = await acsLoad();
   if(!codes || !codes.length){
     alert('No ACS codes yet!\n\nGo to the ACS Codes tab and upload your AKTR (written-test results) or type in the codes you missed. PrimeTime then builds a deck of the exact areas most likely to come up on your test.');
@@ -17547,6 +17768,7 @@ async function startPrimeTime(dme){
 }
 
 async function startListenPrimeTime(){
+  if(!requirePro('PrimeTime')) return;
   if(!window.speechSynthesis){ alert('Your browser does not support text-to-speech. Try Chrome or Edge.'); return; }
   const codes = await acsLoad();
   if(!codes || !codes.length){ if(typeof stuSwitchTab==='function') stuSwitchTab('acs'); return; }
@@ -17583,6 +17805,7 @@ let _lmTopic = null;
 let _lmReplayFn = null;   // no-arg closure that restarts the current listen session — set by whichever start* function kicked it off
 
 async function startListenMode(topicKey){
+  if(!requirePro('Listening Mode')) return;
   if(!window.speechSynthesis){ alert('Your browser does not support text-to-speech. Try Chrome or Edge.'); return; }
   navPush({ screen:'stuApp', view:'flashcards' });
   _lmTopic = topicKey;
@@ -17933,6 +18156,7 @@ let _acTopic = null;
 let _acReplayFn = null;
 
 function startAutoCycle(topicKey){
+  if(!requirePro('Auto Cycle')) return;
   navPush({ screen:'stuApp', view:'flashcards' });
   _acTopic = topicKey;
   _acReplayFn = () => startAutoCycle(topicKey);
@@ -18230,6 +18454,7 @@ function fcBuilderUpdateCount(){
 }
 
 async function renderFlashcardBuilder(){
+  if(!requirePro('Build Your Own Deck')) return;
   navPush({ screen:'stuApp', view:'flashcards' });
   const el = document.getElementById('stuStudyView');
 
@@ -18376,6 +18601,7 @@ function lmBuilderUpdateCount(){
 }
 
 async function renderListenBuilder(){
+  if(!requirePro('Listening Mode')) return;
   if(!window.speechSynthesis){ alert('Your browser does not support text-to-speech. Try Chrome or Edge.'); return; }
   navPush({ screen:'stuApp', view:'flashcards' });
   const el = document.getElementById('stuStudyView');
@@ -18512,6 +18738,7 @@ function acBuilderUpdateCount(){
 }
 
 async function renderAutoCycleBuilder(){
+  if(!requirePro('Auto Cycle')) return;
   navPush({ screen:'stuApp', view:'flashcards' });
   const el = document.getElementById('stuStudyView');
 

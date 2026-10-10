@@ -1,3 +1,4 @@
+const Billing = require('./_lib/billing');
 // DME Mode — grades a student's typed oral-exam answer against the reference answer,
 // the way a Designated Mechanic Examiner would: lenient on phrasing/spelling, strict on concept.
 const MAX_FIELD_LEN = 3000;
@@ -33,9 +34,15 @@ Keep feedback encouraging but honest.`;
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  if (await Billing.proEnforced()) {
+    const user = await Billing.userFromReq(req);
+    if (!user) return res.status(401).json({ error: 'Please sign in again to use DME Mode.' });
+    if (!(await Billing.accessFor(user.uid)).pro) return res.status(402).json({ error: 'DME Mode is a Pro feature.', pro: true });
+  }
 
   const { question, correctAnswer, studentAnswer } = req.body || {};
   if (!question || !correctAnswer || typeof studentAnswer !== 'string') {
