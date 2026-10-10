@@ -30,6 +30,14 @@
         }
       }
     },
+    "termsAcceptance": {
+      ".read": "auth != null && root.child('config/masterAdmins').child(auth.uid).val() === true",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['version','acceptedAt']) && newData.child('version').isString() && newData.child('acceptedAt').isNumber()"
+      }
+    },
     "billing": {
       ".read": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
       "$uid": {

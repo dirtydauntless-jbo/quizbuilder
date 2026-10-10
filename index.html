@@ -733,6 +733,25 @@ body:not(.pro-on) .pro-menu-item{display:none!important}
     account to begin studying. JavaScript is required to use the interactive app.</p>
   </main>
 </noscript>
+<div id="termsAcceptModal" class="modal-overlay hidden" style="z-index:10000">
+  <div class="modal" style="max-width:480px;text-align:left">
+    <div class="modal-title">Welcome to Classroom AMT</div>
+    <div style="font-size:.88rem;line-height:1.6;margin-bottom:12px">Before you start, please review and agree to our terms. Quick summary:</div>
+    <ul style="font-size:.84rem;line-height:1.7;padding-left:20px;margin:0 0 14px">
+      <li>Classroom AMT is a study tool, not the FAA, and doesn't guarantee exam results.</li>
+      <li>Your practice results are private unless you share them with an instructor.</li>
+      <li>Flashcards, instructor quizzes and exams your instructor assigns are free. Pro ($5/mo or $40/yr) is optional and you can cancel anytime.</li>
+      <li>You must be 13 or older; if you're under 18, you need a parent or guardian's permission.</li>
+    </ul>
+    <div style="font-family:var(--font-mono);font-size:.75rem;margin-bottom:12px">Read the full <a href="/terms.html" target="_blank" rel="noopener" style="color:var(--accent)">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--accent)">Privacy Policy</a>.</div>
+    <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-size:.85rem;line-height:1.5;margin-bottom:14px">
+      <input type="checkbox" id="termsAgreeCb" onchange="termsSyncBtn()" style="width:18px;height:18px;margin-top:2px;flex-shrink:0;cursor:pointer">
+      <span>I have read and agree to the Terms of Service and Privacy Policy, and I'm 13 or older (with a parent's permission if under 18).</span>
+    </label>
+    <button type="button" id="termsAgreeBtn" class="btn" style="width:100%" disabled onclick="termsAccept()">Agree &amp; Continue</button>
+    <button type="button" class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="hide('termsAcceptModal');stuLogout()">Sign out instead</button>
+  </div>
+</div>
 <div id="proUpgradeModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('proUpgradeModal')">
   <div class="modal" style="max-width:470px;text-align:left">
     <div class="modal-title" style="display:flex;align-items:center;gap:8px">✈ Classroom AMT <span class="pro-pill" style="font-size:.8rem">PRO</span></div>
@@ -11281,6 +11300,7 @@ function clearNewQuizBadge(){
 
 async function initStudentApp(){
   document.getElementById('stuUserName').textContent = stuSession.name;
+  termsCheck();
   // Apply saved language
   applyLanguage(_currentLang);
   // Small delay so Firebase reads settle before checking for new quizzes
@@ -14619,6 +14639,38 @@ function proRenderProfile(){
   el.innerHTML=html;
 }
 auth.onAuthStateChanged(u=>proAttach(u));
+
+// One-time Terms acceptance. Bump TERMS_VERSION only for a material Terms change — everyone re-accepts once.
+const TERMS_VERSION='2026-10-09';
+async function termsCheck(){
+  const uid=stuSession&&stuSession.uid;
+  if(!uid || (instUser && instUser.uid===uid)) return; // instructor previewing the student view
+  let ok=false;
+  try{ ok=localStorage.getItem('termsAccepted_'+uid)===TERMS_VERSION; }catch(e){}
+  if(ok) return;
+  const rec=await dbGet('termsAcceptance/'+uid).catch(()=>null);
+  if(rec && rec.version===TERMS_VERSION){ try{ localStorage.setItem('termsAccepted_'+uid,TERMS_VERSION); }catch(e){} return; }
+  const cb=document.getElementById('termsAgreeCb'); if(cb) cb.checked=false;
+  termsSyncBtn();
+  show('termsAcceptModal');
+}
+function termsSyncBtn(){
+  const cb=document.getElementById('termsAgreeCb'), btn=document.getElementById('termsAgreeBtn');
+  if(btn) btn.disabled=!(cb&&cb.checked);
+}
+async function termsAccept(){
+  const uid=stuSession&&stuSession.uid; if(!uid) return;
+  const btn=document.getElementById('termsAgreeBtn'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  try{
+    await dbSet('termsAcceptance/'+uid,{version:TERMS_VERSION,acceptedAt:Date.now()});
+    try{ localStorage.setItem('termsAccepted_'+uid,TERMS_VERSION); }catch(e){}
+    hide('termsAcceptModal');
+  }catch(e){
+    showToast('Could not save — please try again.','error');
+  }
+  if(btn) btn.textContent='Agree & Continue';
+  termsSyncBtn();
+}
 
 // Master-admin: view / change the instructor registration access code
 async function _instCodeLoad(){
