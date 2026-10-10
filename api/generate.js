@@ -943,6 +943,36 @@ async function buildTopicQuestions(topic, total, content, faaRatioOverride, opRa
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
+// A free student may generate only the exam an instructor actually assigned them: the assignment
+// must be unfinished, created by an instructor/admin, and the request must stay within its
+// topics (or its subject, for official exams) and question count.
+async function assignmentAllows(a, body) {
+  if (!a || typeof a !== 'object' || a.status === 'complete' || !a.assignedBy) return false;
+  const by = String(a.assignedBy);
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(by)) return false;
+  const [inst, sup, mas] = await Promise.all([
+    Billing.dbGet(`instructors/${by}`), Billing.dbGet(`config/superAdmins/${by}`), Billing.dbGet(`config/masterAdmins/${by}`),
+  ]);
+  if (!inst && sup !== true && mas !== true) return false;
+  if (body.mode === 'all' || body.mode === 'auditVariants') return false;
+  const topics = Array.isArray(body.topics) ? body.topics.map(String) : [];
+  if (!topics.length) return false;
+  const maxCount = Math.min(Number(a.count) || 100, 100);
+  if (!(Number(body.count) >= 1 && Number(body.count) <= maxCount)) return false;
+  if (Array.isArray(a.topics) || (a.topics && typeof a.topics === 'object')) {
+    const allowed = new Set(Object.values(a.topics).map(String));
+    return topics.every(t => allowed.has(t));
+  }
+  if (a.mode === 'official' && a.subject) {
+    const bank = getFaaBank();
+    const other = new Set();
+    for (const [sub, byTopic] of Object.entries(bank)) if (sub !== a.subject) Object.keys(byTopic || {}).forEach(t => other.add(t));
+    const own = new Set(Object.keys(bank[a.subject] || {}));
+    return topics.every(t => own.has(t) || !other.has(t));
+  }
+  return false;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -962,7 +992,9 @@ module.exports = async function handler(req, res) {
     if (!access.pro) {
       const assigned = typeof assignId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(assignId)
         ? await Billing.dbGet(`assignedExams/${user.uid}/${assignId}`) : null;
-      if (!assigned) return res.status(402).json({ error: 'FAA written practice exams are a Pro feature.', pro: true });
+      if (!(await assignmentAllows(assigned, req.body || {}))) {
+        return res.status(402).json({ error: 'FAA written practice exams are a Pro feature.', pro: true });
+      }
     }
   }
 

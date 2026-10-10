@@ -242,7 +242,9 @@
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('practiceShares').child($uid).child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".write": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
-        ".indexOn": ["date"]
+        ".indexOn": [
+          "date"
+        ]
       }
     },
     "practiceExamData": {
@@ -263,7 +265,27 @@
       ".read": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
-        ".write": "auth != null && (auth.uid === $uid || root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)"
+        ".write": "auth != null && (root.child('instructors').child(auth.uid).exists() || root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
+        "$aid": {
+          ".write": "auth != null && auth.uid === $uid && data.exists() && newData.exists() && data.child('status').val() !== 'complete'",
+          "assignedBy": {
+            ".validate": "auth.uid !== $uid || newData.val() === data.val()"
+          },
+          "mode": {
+            ".validate": "auth.uid !== $uid || newData.val() === data.val()"
+          },
+          "subject": {
+            ".validate": "auth.uid !== $uid || newData.val() === data.val()"
+          },
+          "count": {
+            ".validate": "auth.uid !== $uid || newData.val() === data.val()"
+          },
+          "topics": {
+            "$i": {
+              ".validate": "auth.uid !== $uid || newData.val() === data.val()"
+            }
+          }
+        }
       }
     },
     "questionReviews": {
@@ -292,7 +314,9 @@
     },
     "genCostLog": {
       ".read": "auth != null && (root.child('config/superAdmins').child(auth.uid).val() === true || root.child('config/masterAdmins').child(auth.uid).val() === true)",
-      ".indexOn": ["ts"]
+      ".indexOn": [
+        "ts"
+      ]
     },
     "faaVariants": {
       ".read": true,
@@ -325,14 +349,30 @@
       "$uid": {
         ".write": "auth != null && (auth.uid === $uid || root.child('config/masterAdmins').child(auth.uid).val() === true)",
         ".validate": "newData.hasChildren(['name','points']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60 && newData.child('points').isNumber() && newData.child('points').val() >= 0 && newData.child('points').val() <= 100000000 && (!newData.hasChild('avgPct') || (newData.child('avgPct').isNumber() && newData.child('avgPct').val() >= 0 && newData.child('avgPct').val() <= 100)) && (!newData.hasChild('completed') || (newData.child('completed').isNumber() && newData.child('completed').val() >= 0 && newData.child('completed').val() <= 100000)) && (!newData.hasChild('taken') || (newData.child('taken').isNumber() && newData.child('taken').val() >= 0 && newData.child('taken').val() <= 100000)) && (!newData.hasChild('completed') || !newData.hasChild('taken') || newData.child('taken').val() >= newData.child('completed').val()) && (!newData.hasChild('avgSpq') || newData.child('avgSpq').val() === null || (newData.child('avgSpq').isNumber() && newData.child('avgSpq').val() >= 0))",
-        "name":      { ".validate": "newData.isString() && newData.val().length <= 60" },
-        "points":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
-        "avgPct":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
-        "completed": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
-        "taken":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
-        "avgSpq":    { ".validate": "newData.val() === null || (newData.isNumber() && newData.val() >= 0)" },
-        "updatedAt": { ".validate": "newData.isNumber()" },
-        "$other":    { ".validate": false }
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "points": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000"
+        },
+        "avgPct": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "completed": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+        },
+        "taken": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+        },
+        "avgSpq": {
+          ".validate": "newData.val() === null || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     }
   }
