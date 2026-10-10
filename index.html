@@ -552,6 +552,26 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 .pro-only-badge{display:none;margin-left:6px;padding:1px 6px;border-radius:9px;background:linear-gradient(135deg,#f0a500,#ffcc4d);color:#1a1205;font-family:var(--font-mono);font-size:.56rem;font-weight:800;letter-spacing:.5px;vertical-align:middle;line-height:1.4}
 body.is-free .pro-only-badge{display:inline-block}
 body:not(.pro-on) .pro-menu-item{display:none!important}
+body:not(.pro-on) .pro-promo{display:none}
+.pro-promo{width:100%;max-width:640px;box-sizing:border-box;background:linear-gradient(160deg,rgba(240,165,0,.10),rgba(240,165,0,.02) 60%);border:1px solid rgba(240,165,0,.45);border-radius:var(--r);padding:24px 22px;text-align:center;box-shadow:0 0 24px rgba(240,165,0,.08)}
+.pro-promo-kicker{font-family:var(--font-mono);font-size:.7rem;font-weight:800;letter-spacing:2px;color:var(--accent);margin-bottom:8px}
+.pro-promo-head{font-family:var(--font-display);font-size:1.6rem;letter-spacing:1px;line-height:1.2;color:var(--text);margin-bottom:8px}
+.pro-promo-sub{font-family:var(--font-mono);font-size:.78rem;color:var(--muted);line-height:1.6;max-width:500px;margin:0 auto 18px}
+.pro-promo-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left;margin-bottom:12px}
+.pro-promo-tile{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:4px;font-size:.84rem}
+.pro-promo-tile span{font-family:var(--font-mono);font-size:.7rem;color:var(--muted);line-height:1.5}
+.pro-promo-ico{font-size:1.3rem}
+.pro-promo-more{font-family:var(--font-mono);font-size:.68rem;color:var(--muted);margin-bottom:16px}
+.pro-promo-cta{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap}
+.pro-promo-btn{background:linear-gradient(135deg,#f0a500,#ffcc4d);color:#1a1205;border:none;border-radius:var(--r);padding:12px 22px;font-family:var(--font-mono);font-weight:800;font-size:.85rem;cursor:pointer;box-shadow:0 4px 14px rgba(240,165,0,.25)}
+.pro-promo-btn:hover{filter:brightness(1.06)}
+.pro-promo-free{background:none;border:none;color:var(--muted);font-family:var(--font-mono);font-size:.78rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.pro-promo-fine{font-family:var(--font-mono);font-size:.64rem;color:var(--muted);margin-top:12px}
+.pro-home-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:linear-gradient(135deg,rgba(240,165,0,.12),rgba(240,165,0,.03));border:1px solid rgba(240,165,0,.4);border-radius:var(--r);padding:12px 14px;margin-bottom:14px}
+.pro-home-banner .phb-text{flex:1 1 240px;font-size:.85rem;line-height:1.45}
+.pro-home-banner .phb-text span{display:block;font-family:var(--font-mono);font-size:.7rem;color:var(--muted);margin-top:2px}
+.pro-home-banner .phb-x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:4px}
+@media (max-width:560px){.pro-promo-grid{grid-template-columns:1fr}.pro-promo-head{font-size:1.3rem}}
 .pro-status-line{font-family:var(--font-mono);font-size:.8rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pro-upgrade-btn{background:linear-gradient(135deg,#f0a500,#ffcc4d);color:#1a1205;border:none;font-weight:700}
 .pro-list{list-style:none;padding:0;margin:12px 0 16px;font-size:.86rem;line-height:1.9}
@@ -829,8 +849,28 @@ setTimeout(function(){
     <div class="landing-card" onclick="if(typeof showStudentJoin==='function')showStudentJoin()">
       <div class="landing-card-icon">✈</div>
       <div class="landing-card-title" id="i18n-stu-card-title">Student</div>
-      <div class="landing-card-desc" id="i18n-stu-card-desc">FREE space to study FAA Oral and Practical Questions<br><span style="color:var(--muted);font-size:.78rem" id="i18n-stu-card-sub">+ take quizzes assigned by your instructor</span></div>
+      <div class="landing-card-desc" id="i18n-stu-card-desc">FREE oral &amp; practical flashcards, instructor quizzes and assigned exams</div>
+      <div style="color:var(--muted);font-size:.78rem;margin-top:6px;font-family:var(--font-mono)" id="i18n-stu-card-sub">Upgrade to ⭐ PRO anytime</div>
     </div>
+  </div>
+
+  <!-- Pro showcase (shown only while the Pro paywall is on) -->
+  <div class="pro-promo">
+    <div class="pro-promo-kicker">⭐ CLASSROOM AMT PRO</div>
+    <div class="pro-promo-head">One FAA retake costs more than a whole year of Pro.</div>
+    <div class="pro-promo-sub">Retaking a written test runs about $175 at the testing center. Pro is $40 a year. Walk in ready the first time.</div>
+    <div class="pro-promo-grid">
+      <div class="pro-promo-tile"><div class="pro-promo-ico">🎙️</div><b>AI Oral Examiner</b><span>Type your answer and get graded the way a DME would, with feedback on what you missed.</span></div>
+      <div class="pro-promo-tile"><div class="pro-promo-ico">🧪</div><b>Unlimited Written Practice Exams</b><span>General, Airframe &amp; Powerplant, built from real FAA-style questions, as many as you want.</span></div>
+      <div class="pro-promo-tile"><div class="pro-promo-ico">🔥</div><b>PrimeTime Deck</b><span>Enter the test codes you missed and get a deck of exactly what's likely on <i>your</i> oral &amp; practical.</span></div>
+      <div class="pro-promo-tile"><div class="pro-promo-ico">🎧</div><b>Study Hands-Free</b><span>Listening Mode &amp; Auto Cycle read cards out loud. Study on the drive or in the hangar.</span></div>
+    </div>
+    <div class="pro-promo-more">Plus Starred Cards · Build-your-own decks · ACS test-code analysis · Measurement Simulator</div>
+    <div class="pro-promo-cta">
+      <button type="button" class="pro-promo-btn" onclick="proLandingStart()">Get Pro — $5/mo or $40/yr</button>
+      <button type="button" class="pro-promo-free" onclick="if(typeof showStudentJoin==='function')showStudentJoin()">or start free →</button>
+    </div>
+    <div class="pro-promo-fine">Cancel anytime · Secure checkout by Stripe · Instructors get Pro free</div>
   </div>
 </div>
 
@@ -5333,8 +5373,8 @@ const LANG_STRINGS = {
     landing_instructor_title:'Instructor',
     landing_instructor_desc:'Create classrooms, build quizzes, automatic grading, and track student progress in real time',
     landing_student_title:'Student',
-    landing_student_desc:'FREE space to study FAA Oral and Practical Questions',
-    landing_student_sub:'+ take quizzes assigned by your instructor',
+    landing_student_desc:'FREE oral & practical flashcards, instructor quizzes and assigned exams',
+    landing_student_sub:'Upgrade to ⭐ PRO anytime',
     instructor_sign_in:'Instructor Sign In',student_sign_in:'Student Sign In',
     sign_in:'Sign In',create_account:'Create Account',email_address:'Email Address',
     password:'Password',your_name:'Your Name',sign_in_google:'Sign in with Google',
@@ -5369,8 +5409,8 @@ const LANG_STRINGS = {
     landing_instructor_title:'Instructor',
     landing_instructor_desc:'Crea aulas, crea cuestionarios, calificación automática y seguimiento del progreso en tiempo real',
     landing_student_title:'Estudiante',
-    landing_student_desc:'Espacio GRATUITO para estudiar Preguntas Orales y Prácticas de la FAA',
-    landing_student_sub:'+ realiza cuestionarios asignados por tu instructor',
+    landing_student_desc:'Tarjetas GRATUITAS de preguntas orales y prácticas, cuestionarios del instructor y exámenes asignados',
+    landing_student_sub:'Mejora a ⭐ PRO cuando quieras',
     instructor_sign_in:'Inicio de Sesión para Instructores',student_sign_in:'Inicio de Sesión para Estudiantes',
     sign_in:'Iniciar Sesión',create_account:'Crear Cuenta',email_address:'Correo Electrónico',
     password:'Contraseña',your_name:'Tu Nombre',sign_in_google:'Iniciar sesión con Google',
@@ -5405,8 +5445,8 @@ const LANG_STRINGS = {
     landing_instructor_title:'Instructeur',
     landing_instructor_desc:'Créez des salles de classe, des quiz, notation automatique et suivi des progrès en temps réel',
     landing_student_title:'Étudiant',
-    landing_student_desc:'Espace GRATUIT pour étudier les Questions Orales et Pratiques de la FAA',
-    landing_student_sub:'+ passez les quiz assignés par votre instructeur',
+    landing_student_desc:'Fiches GRATUITES de questions orales et pratiques, quiz de l’instructeur et examens assignés',
+    landing_student_sub:'Passez à ⭐ PRO à tout moment',
     instructor_sign_in:'Connexion Instructeur',student_sign_in:'Connexion Étudiant',
     sign_in:'Se Connecter',create_account:'Créer un Compte',email_address:'Adresse Email',
     password:'Mot de Passe',your_name:'Votre Nom',sign_in_google:'Se connecter avec Google',
@@ -5441,8 +5481,8 @@ const LANG_STRINGS = {
     landing_instructor_title:'教师',
     landing_instructor_desc:'创建课堂、建立测验、自动评分并实时跟踪学生进度',
     landing_student_title:'学生',
-    landing_student_desc:'免费学习FAA口头和实践题目的空间',
-    landing_student_sub:'+ 完成教师布置的测验',
+    landing_student_desc:'免费的口试和实操闪卡、教师测验和布置的考试',
+    landing_student_sub:'随时升级到 ⭐ PRO',
     instructor_sign_in:'教师登录',student_sign_in:'学生登录',
     sign_in:'登录',create_account:'创建账号',email_address:'电子邮件地址',
     password:'密码',your_name:'您的姓名',sign_in_google:'使用Google登录',
@@ -11301,6 +11341,7 @@ function clearNewQuizBadge(){
 async function initStudentApp(){
   document.getElementById('stuUserName').textContent = stuSession.name;
   termsCheck();
+  _proConsumeIntent();
   // Apply saved language
   applyLanguage(_currentLang);
   // Small delay so Firebase reads settle before checking for new quizzes
@@ -14640,6 +14681,32 @@ function proRenderProfile(){
 }
 auth.onAuthStateChanged(u=>proAttach(u));
 
+// Landing "Get Pro": sign in / sign up first, then the upgrade popup opens automatically.
+function proLandingStart(){
+  try{ sessionStorage.setItem('proIntent','1'); }catch(e){}
+  if(typeof showStudentJoin==='function') showStudentJoin();
+}
+function _proConsumeIntent(){
+  let intent=false;
+  try{ intent=sessionStorage.getItem('proIntent')==='1'; sessionStorage.removeItem('proIntent'); }catch(e){}
+  if(intent) _proReady.then(()=>{ if(!isPro()) proShowUpgrade(); });
+}
+// Study-home nudge for free students; dismissing hides it for a week.
+function _proHomeBanner(){
+  if(!_proEnabled || isPro()) return '';
+  try{ if(Date.now() < Number(localStorage.getItem('proBannerHideUntil')||0)) return ''; }catch(e){}
+  return '<div class="pro-home-banner" id="proHomeBanner">'
+    +'<div style="font-size:1.4rem">⭐</div>'
+    +'<div class="phb-text"><b>Practice your oral with an AI examiner.</b><span>Pro adds DME Mode, unlimited written practice exams, PrimeTime &amp; more. $5/mo, or $40/yr, less than one test retake.</span></div>'
+    +'<button class="btn btn-sm pro-upgrade-btn" onclick="proShowUpgrade()">See Pro</button>'
+    +'<button class="phb-x" title="Hide for a week" onclick="_proHideBanner()">✕</button>'
+    +'</div>';
+}
+function _proHideBanner(){
+  try{ localStorage.setItem('proBannerHideUntil', String(Date.now()+7*864e5)); }catch(e){}
+  const b=document.getElementById('proHomeBanner'); if(b) b.remove();
+}
+
 // One-time Terms acceptance. Bump TERMS_VERSION only for a material Terms change — everyone re-accepts once.
 const TERMS_VERSION='2026-10-09';
 async function termsCheck(){
@@ -16981,6 +17048,7 @@ async function renderStudyHome(){
     <!-- RIGHT: Flashcard Content -->
     <div class="stu-fc-main">
       ${streakWidget}
+      ${_proHomeBanner()}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <div>
           <div class="section-head" style="margin:0 0 2px 0">✈ Study Oral &amp; Practical Questions</div>
