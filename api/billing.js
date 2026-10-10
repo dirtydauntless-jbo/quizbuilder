@@ -50,7 +50,6 @@ module.exports = async function handler(req, res) {
         subscription_data: { metadata: { uid: user.uid } },
         metadata: { uid: user.uid },
         allow_promotion_codes: 'true',
-        custom_text: { submit: { message: `By subscribing you agree to the Terms of Service (${B.SITE_URL}/terms.html) and Privacy Policy (${B.SITE_URL}/privacy.html). Pro renews automatically until you cancel; cancel anytime from your profile.` } },
         success_url: `${origin}/?billing=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/?billing=cancel`,
       });
