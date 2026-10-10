@@ -1623,7 +1623,7 @@ setTimeout(function(){
     </button>
     <button id="stuTabPractice" onclick="stuSwitchTab('practice')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:var(--font-mono);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
-      🧪 FAA WRITTEN PRACTICE EXAMS <span id="betaTag" style="color:var(--accent);font-weight:700;letter-spacing:0">(Beta)</span><span id="stuAssignedBadge" title="Practice exams assigned by your instructor" style="display:none;margin-left:7px;background:#cc4444;color:#fff;border-radius:11px;padding:1px 8px;font-size:.7rem;font-weight:700;letter-spacing:0;vertical-align:middle">0</span>
+      🧪 FAA WRITTEN PRACTICE EXAMS <span id="betaTag" style="color:var(--accent);font-weight:700;letter-spacing:0">(Beta)</span><span class="pro-only-badge">PRO</span><span id="stuAssignedBadge" title="Practice exams assigned by your instructor" style="display:none;margin-left:7px;background:#cc4444;color:#fff;border-radius:11px;padding:1px 8px;font-size:.7rem;font-weight:700;letter-spacing:0;vertical-align:middle">0</span>
     </button>
     <button id="stuTabACS" onclick="stuSwitchTab('acs')"
       style="flex:1;padding:14px 12px;border:none;cursor:pointer;font-family:var(--font-mono);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:var(--panel2);color:var(--muted);border-bottom:3px solid transparent">
@@ -5558,7 +5558,12 @@ function applyLanguage(lang){
   // Student nav
   ls('stuTabStudy','nav_study');
   ls('stuTabQuizzes','nav_quizzes');
-  ls('stuTabACS','nav_faa');
+  const acsTab=document.getElementById('stuTabACS');
+  if(acsTab){
+    acsTab.textContent='📋 '+t('nav_faa');
+    const pb=document.createElement('span'); pb.className='pro-only-badge'; pb.textContent='PRO';
+    acsTab.appendChild(pb);
+  }
   ls('stuTabDME','nav_dme');
   // Sign out buttons
   document.querySelectorAll('.i18n-signout').forEach(el=>{ el.textContent=t('sign_out'); });
