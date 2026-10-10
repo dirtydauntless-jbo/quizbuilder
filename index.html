@@ -553,6 +553,16 @@ input,textarea,select,[contenteditable="true"],[contenteditable=""]{caret-color:
 body.is-free .pro-only-badge{display:inline-block}
 body:not(.pro-on) .pro-menu-item{display:none!important}
 body:not(.pro-on) .pro-promo{display:none}
+.stu-pro-cta-wrap{margin-top:14px}
+.stu-pro-cta{position:relative;display:inline-block;overflow:hidden;padding:7px 14px;border-radius:999px;background:linear-gradient(135deg,#f0a500,#ffd25e 50%,#f0a500);background-size:200% 200%;color:#1a1205;font-family:var(--font-mono);font-size:.72rem;font-weight:800;letter-spacing:0;line-height:1.35;cursor:pointer;box-shadow:0 0 0 1px rgba(255,210,94,.5),0 4px 16px rgba(240,165,0,.35);animation:stuProGlow 2.8s ease-in-out infinite;transition:transform .15s}
+.stu-pro-cta::before{content:'✨ '}
+.stu-pro-cta::after{content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.65),transparent);transform:skewX(-20deg);animation:stuProShine 3.2s ease-in-out infinite}
+.stu-pro-cta:hover{transform:translateY(-2px) scale(1.04)}
+@keyframes stuProGlow{0%,100%{background-position:0% 50%;box-shadow:0 0 0 1px rgba(255,210,94,.5),0 4px 14px rgba(240,165,0,.3)}50%{background-position:100% 50%;box-shadow:0 0 0 1px rgba(255,210,94,.8),0 4px 22px rgba(240,165,0,.6)}}
+@keyframes stuProShine{0%,55%{left:-60%}100%{left:130%}}
+@media (min-width:600px){.stu-pro-cta{white-space:nowrap}}
+@media (prefers-reduced-motion:reduce){.stu-pro-cta,.stu-pro-cta::after{animation:none}}
+body:not(.pro-on) .stu-pro-cta-wrap{display:none}
 .pro-promo{width:100%;max-width:640px;box-sizing:border-box;background:linear-gradient(160deg,rgba(240,165,0,.10),rgba(240,165,0,.02) 60%);border:1px solid rgba(240,165,0,.45);border-radius:var(--r);padding:24px 22px;text-align:center;box-shadow:0 0 24px rgba(240,165,0,.08)}
 .pro-promo-kicker{font-family:var(--font-mono);font-size:.7rem;font-weight:800;letter-spacing:2px;color:var(--accent);margin-bottom:8px}
 .pro-promo-head{font-family:var(--font-display);font-size:1.6rem;letter-spacing:1px;line-height:1.2;color:var(--text);margin-bottom:8px}
@@ -850,7 +860,7 @@ setTimeout(function(){
       <div class="landing-card-icon">✈</div>
       <div class="landing-card-title" id="i18n-stu-card-title">Student</div>
       <div class="landing-card-desc" id="i18n-stu-card-desc">FREE oral &amp; practical flashcards, instructor quizzes and assigned exams</div>
-      <div style="color:var(--muted);font-size:.78rem;margin-top:6px;font-family:var(--font-mono)" id="i18n-stu-card-sub">Upgrade to ⭐ PRO anytime</div>
+      <div class="stu-pro-cta-wrap"><span class="stu-pro-cta" id="i18n-stu-card-sub" role="button" tabindex="0" onclick="event.stopPropagation();proLandingStart()" onkeydown="if(event.key==='Enter'){event.stopPropagation();proLandingStart()}">Upgrade to ⭐ PRO anytime</span></div>
     </div>
   </div>
 
