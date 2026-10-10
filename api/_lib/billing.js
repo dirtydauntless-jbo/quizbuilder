@@ -16,6 +16,8 @@ const PLANS = {
 // past_due keeps access while Stripe retries the card; 3-day grace covers webhook lag at renewal.
 const PRO_STATUSES = new Set(['active', 'trialing', 'past_due']);
 const GRACE_MS = 3 * 24 * 60 * 60 * 1000;
+// Required by Stripe Managed Payments (Stripe collects/remits sales tax). SaaS — personal use.
+const TAX_CODE = 'txcd_10103000';
 
 function dbUrl(path) {
   const secret = process.env.FIREBASE_DB_SECRET || '';
@@ -102,13 +104,18 @@ async function stripe(method, path, params) {
 async function getPriceId(planKey) {
   const plan = PLANS[planKey];
   if (!plan) throw new Error('Unknown plan');
-  const found = await stripe('GET', 'prices', { 'lookup_keys[]': plan.lookupKey, active: 'true', limit: 1 });
-  if (found.data && found.data[0]) return found.data[0].id;
+  const found = await stripe('GET', 'prices', { 'lookup_keys[]': plan.lookupKey, active: 'true', limit: 1, 'expand[]': 'data.product' });
+  if (found.data && found.data[0]) {
+    const product = found.data[0].product;
+    if (product && product.id && !product.tax_code) await stripe('POST', `products/${product.id}`, { tax_code: TAX_CODE });
+    return found.data[0].id;
+  }
   const products = await stripe('GET', 'products/search', { query: "metadata['app']:'classroomamt_pro'" }).catch(() => ({ data: [] }));
   const product = (products.data && products.data[0]) || await stripe('POST', 'products', {
     name: 'Classroom AMT Pro',
     description: 'DME Mode, Listening Mode, Auto Cycle, Starred Cards, PrimeTime, custom decks, FAA written practice exams, ACS codes, and the Measurement Simulator.',
     metadata: { app: 'classroomamt_pro' },
+    tax_code: TAX_CODE,
   });
   const price = await stripe('POST', 'prices', {
     product: product.id, currency: 'usd', unit_amount: plan.amount,
